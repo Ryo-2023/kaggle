@@ -1,0 +1,201 @@
+{
+  "schema_version": "offline-training-v1-short-pilot-evidence-v1",
+  "generated_at": "2026-07-18",
+  "branch": "feature/offline-training-short-pilot",
+  "base_commit": "e69ef63f9024c0c877fd9630f45036ff385867ea",
+  "worktree": "pokemon-tcg-ai-battle-short-pilot",
+  "run_id": "offline-short-pilot-actual-20260718-r1",
+  "smoke_run_id": "offline-short-pilot-smoke-actual-20260718-r1",
+  "champion_before_and_after": "Rule Agent v0 (unchanged)",
+  "promotion_before_and_after": "NO_DECISION (unchanged)",
+  "decision": "GO_LONG_RUN",
+  "decision_is_promotion_decision": false,
+  "smoke_actual_collection": {
+    "config": "configs/offline_training_v1/short_pilot_smoke_actual.json",
+    "episodes": 2,
+    "decisions": 52,
+    "candidates": 218,
+    "actual_cabt": "ACTUAL_CABT_RUN",
+    "privacy_violations": 0,
+    "status": "PASS",
+    "dataset_jsonl_sha256": "56926b97c87fb34846b92d4cc3fc7a06349486655dd709aad575cf7e27772e4c",
+    "standalone_validate_run": {"valid": true, "row_count": 52, "binding_count": 52, "candidate_count": 218, "duplicate_decision_count": 0}
+  },
+  "pilot_actual_collection": {
+    "config": "configs/offline_training_v1/pilot.json (games=128, source=actual, base_seed=2000)",
+    "episodes": 128,
+    "games_requested": 128,
+    "games_committed": 128,
+    "decisions": 5864,
+    "candidates": 37642,
+    "actual_cabt": "ACTUAL_CABT_RUN",
+    "performance_eligible": true,
+    "dataset_status": "ACTUAL_TRAINING",
+    "privacy_violations": 0,
+    "duplicate_decision_count": 0,
+    "collector_split": {"train_episodes": 102, "validation_episodes": 26, "split_overlap_count": 0},
+    "collection_wall_clock_seconds": 38.1,
+    "dataset_jsonl_sha256": "d6be2973d4021a7df40be3523b6976e80ee2c628e48cf89fa12eaf1821cfb06e",
+    "standalone_validate_run": {"valid": true, "row_count": 5864, "binding_count": 5864, "candidate_count": 37642, "duplicate_decision_count": 0}
+  },
+  "dataset_build": {
+    "record_count": 5727,
+    "shard_count": 23,
+    "split_episode_counts": {"train": 102, "validation": 13, "test": 13},
+    "split_decision_counts": {"train": 4274, "validation": 562, "test": 891},
+    "split_fractions": {"train": 0.8, "validation": 0.1, "test": 0.1},
+    "split_seed": 12345,
+    "duplicate_conflict_count_quarantined": 137,
+    "manifest_hash": "261c0f58e9df8b00183ee3ba06d26868e203aa822f302551c5a2f1d5dac7659e",
+    "reproducibility_check": "build-dataset re-run with --force produced an identical manifest_hash"
+  },
+  "training": {
+    "config": "configs/offline_training_v1/pilot.json",
+    "epochs": 20,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "grad_clip": 1.0,
+    "patience": 5,
+    "seed": 7,
+    "hidden_dims": [128, 64],
+    "max_batch_decisions": 512,
+    "device_resolved": "cuda",
+    "bf16": true,
+    "train_loss_curve": [1.5016840696334839, 1.4568257464302912, 1.3974697722329035, 1.338740799162123, 1.2556897269354925, 1.185082369380527, 1.106206523047553, 1.035733116997613, 0.9759429030948215, 0.9315034415986803, 0.8708408011330498, 0.8248790038956536, 0.7773744066556295, 0.7218999266624451, 0.6735779113239713, 0.6305560337172614, 0.6007754471566942, 0.5664010710186429, 0.5341453618473477, 0.5072978436946869],
+    "val_nll_curve": [1.4217050600253143, 1.3737265877865272, 1.3152859280311322, 1.2472535313985775, 1.173701970876987, 1.1008343398763436, 1.0340740466994252, 0.9733467259508186, 0.9173734889206158, 0.8638424715063979, 0.8108753410181446, 0.7586232049191438, 0.7073638210834552, 0.657877633070111, 0.6117926467224165, 0.5709295089119059, 0.5353124128453306, 0.5042709772228544, 0.477222983088758, 0.45437127436852],
+    "val_top1_curve": [0.6494661921708185, 0.6886120996441281, 0.7135231316725978, 0.7241992882562278, 0.7348754448398577, 0.7526690391459074, 0.7722419928825622, 0.8149466192170819, 0.8629893238434164, 0.8843416370106761, 0.8861209964412812, 0.8879003558718861, 0.902135231316726, 0.9145907473309609, 0.9163701067615658, 0.9199288256227758, 0.9288256227758007, 0.9288256227758007, 0.9359430604982206, 0.9377224199288257],
+    "early_stop_triggered": false,
+    "early_stop_reason": "not triggered: val_nll improved monotonically every epoch, patience=5 never exceeded, ran the full configured 20 epochs",
+    "best_checkpoint_epoch": 19,
+    "last_checkpoint_epoch": 19,
+    "model_hash": "9ed2268e09a9bf52d84b508ddc552d88514c50fae0f1894caa3337d2615d4a70",
+    "model_purpose": "NEURAL_ACTUAL_TRAINED",
+    "checkpoint_best_pt_sha256": "7428400fcb206664e78933be0406e29c134ec25b752a636bf666c2c4f0097787",
+    "checkpoint_last_pt_sha256": "36d8b263f804ca76133ef76d3fc852ee5450e0f6a1d1bce4e887f9f4e0516170"
+  },
+  "resume_drill": {
+    "method": "SIGINT sent to the training subprocess only after a bounded (20s deadline, 0.05s interval) poll of run_manifest.json observed phase_statuses.train == RUNNING -- no fixed sleep",
+    "interrupted_exit_code": 130,
+    "manifest_after_signal": {"train": "INTERRUPTED", "error_summary": "signal 2"},
+    "resume_command": "python scripts/run_offline_training_v1.py resume --run-dir runs/offline-training-v1/offline-short-pilot-actual-20260718-r1",
+    "resume_result": "train completed to epoch 20/20, then export, evaluate, screen, package, verify all ran and completed within the same resume invocation",
+    "resume_count_final": 4,
+    "resume_wall_clock_seconds": 74.1
+  },
+  "offline_evaluation": {
+    "split": "test",
+    "neural_student_v1": {"top1": 0.9393939393939394, "nll": 0.6028758404157054},
+    "linear_student_v0_baseline": {"top1": 0.9113355780022446},
+    "neural_minus_linear_top1": 0.0280583613917448
+  },
+  "screening_fixture_harness": {
+    "note": "the pipeline's built-in `screen` phase is a synthetic fixture harness by design; it measures legality/fallback only, never win/loss (docs/offline-training-v1.md). It is not the real-match evaluation used for this pilot's Rule-v0 comparison -- see paired_evaluation below.",
+    "legal_action_rate": 1.0,
+    "fallback_rate": 0.0,
+    "verdict": "INSUFFICIENT_EVIDENCE (expected, by design)"
+  },
+  "export_and_package": {
+    "export_path_pattern": "runs/offline-training-v1/offline-short-pilot-actual-20260718-r1/export/neural-student-v1.json",
+    "package_archive_sha256": "0aab9654dd55b4b3fc412d3a82f55df40fd0f0575625e95388e9ed13d4528997",
+    "package_member_count": 18,
+    "dist_publish_note": "dist/kaggle/neural-student-v1/ is a single shared, non-run-scoped publish path hardcoded in cli.py's _publish_dist(); it is overwritten by ANY subsequent full offline-training pipeline run in this worktree, including ones executed by the test suite (e.g. tests/test_offline_training_v1.py::test_signal_interruption_and_resume). It must not be treated as stable pilot evidence. The run-scoped package directory under runs/offline-training-v1/<run-id>/package/ is authoritative and was confirmed unchanged (model_hash matches run_manifest.json) after the full regression suite ran."
+  },
+  "clean_room_verify": {
+    "verified": true,
+    "executed_cases": 8,
+    "legal_cases": 8,
+    "illegal_cases": 0,
+    "exception_cases": 0,
+    "fallback_cases": 2,
+    "fallback_cases_note": "2 of 8 cases intentionally exercise the missing-model fallback lane inside the same clean-room subprocess; this is a deliberate negative test, not an unexpected fallback.",
+    "legal_action_rate": 1.0
+  },
+  "new_evaluation_glue_code": {
+    "reason": "no existing tool could run a real Rule-v0-vs-neural-Student-v1 actual-cabt match: the pipeline's own `screen` command is a fixture-only legality harness (never measures win/loss even when actual cabt is available), and the existing `student` challenger in scripts/run_actual_agent_viability.py targets the older linear C4 (StudentV0Model) artifact format, not neural-student-v1.",
+    "change": "added a `neural_student` challenger to the evaluation-only actual-cabt viability harness (src/mage_ptcg/evaluation/actual_agents.py, scripts/run_actual_agent_viability.py) that loads a neural-student-v1 export via NeuralRuntimePolicy with a deterministic Rule Agent v0 fallback, mirroring the safety-boundary logic already used by the independent Kaggle package's own main.py template.",
+    "safety_boundary_preserved": "main.py (the actual Kaggle submission entrypoint) was not modified. The new factory lives only in mage_ptcg.evaluation.actual_agents, a module explicitly documented as not imported by main.py, so this evaluation glue does not make the neural Student reachable from the submission surface's default agent.",
+    "tests_added": 5,
+    "tests_passing": "26/26 in tests/test_actual_agent_viability.py; 56/56 combined with tests/test_offline_training_v1.py",
+    "tdd_followed": true
+  },
+  "preflight_100_match_seed7000": {
+    "command": "python scripts/run_actual_agent_viability.py --challenger neural_student --neural-model <run>/package/neural-student-v1/models/neural-student-v1.json --games 100 --base-seed 7000 --canonical-base e69ef63f9024c0c877fd9630f45036ff385867ea --output <run>/evaluation/preflight_100_seed7000.json",
+    "attempted_games": 100,
+    "completed_games": 100,
+    "champion_wins": 50,
+    "challenger_wins": 50,
+    "draws": 0,
+    "invalid_actions": 0,
+    "crashes": 0,
+    "timeouts": 0,
+    "challenger_fallback_count": 0,
+    "legal_action_rate_champion": 1.0,
+    "legal_action_rate_challenger": 1.0,
+    "gate_status": "CLEAN_PASS",
+    "match_latency_seconds": {"p50": 0.1395105, "p95": 0.71500265, "max": 0.867066},
+    "challenger_decision_latency_ms": {"p50": 3.111701500529307, "p95": 10.665869348486012, "max": 92.83847900223918},
+    "wall_clock_seconds": 33.0
+  },
+  "paired_evaluation_seed8000": {
+    "attempted_games": 100,
+    "completed_games": 100,
+    "champion_wins": 69,
+    "challenger_wins": 31,
+    "draws": 0,
+    "invalid_actions": 0,
+    "crashes": 0,
+    "timeouts": 0,
+    "challenger_fallback_count": 0,
+    "gate_status": "CLEAN_PASS",
+    "wall_clock_seconds": 31.2
+  },
+  "paired_evaluation_combined": {
+    "seeds": [7000, 8000],
+    "total_games": 200,
+    "champion_wins": 119,
+    "challenger_wins": 81,
+    "draws": 0,
+    "challenger_win_rate": 0.405,
+    "challenger_win_rate_95ci_wilson": [0.339, 0.474],
+    "champion_seat0_win_rate": 0.6,
+    "champion_seat1_win_rate": 0.59,
+    "interpretation": "no strong first/second-player bias once aggregated across both seeds (~59-60% for the champion regardless of seat); the champion's overall edge over the pilot-scale Student is the dominant, fairly seat-independent signal. The between-seed spread (50/100 vs 31/100) is within plausible binomial noise for n=100 each and is exactly why a single-seed measurement would have been misleading.",
+    "crashes_total": 0,
+    "timeouts_total": 0,
+    "invalid_actions_total": 0,
+    "challenger_fallback_count_total": 0
+  },
+  "decision_reasoning": {
+    "go_long_run_because": [
+      "every mechanical gate passed with zero pipeline-level failures across ~330 real actual-cabt games run in this pilot (2 smoke + 128 collection + 100 preflight + 100 paired-eval): 0 crash, 0 timeout, 0 invalid action, 0 illegal action, 0 unexpected fallback",
+      "offline metrics show a reasonable, unambiguous sign that learning worked: monotonic loss/validation improvement over 20 epochs, 93.9% top-1 fidelity beating the linear baseline by 2.8 points",
+      "the pilot Student never silently degraded to Rule Agent v0 in live play (fallback_count=0 across 200 paired-evaluation games); every decision was a genuine model inference",
+      "the observed 40.5% live win rate against Rule Agent v0 (95% CI [33.9%, 47.4%]) is a real, non-trivial gap but not a catastrophic collapse, and is consistent with the known compounding-error limitation of small-scale behavior cloning (128 games, compact model, 20 epochs) rather than an infrastructure defect"
+    ],
+    "not_go_long_run_reservations": [
+      "GO_LONG_RUN is not a Champion promotion signal: Rule Agent v0 still wins the majority of paired games in this pilot",
+      "the long run's success criteria should explicitly target closing this win-rate gap (more collected games, more epochs/capacity, or both), not merely reproducing the pilot at larger scale"
+    ]
+  },
+  "tests": {
+    "focused_new_tests": "26/26 passed (tests/test_actual_agent_viability.py)",
+    "focused_offline_training_and_viability": "56/56 passed (tests/test_actual_agent_viability.py + tests/test_offline_training_v1.py)",
+    "full_regression_command": "PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /usr/bin/python3 -m pytest -q -p no:cacheprovider",
+    "full_regression_note": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 is required in this environment: without it, a system-wide ROS `launch_testing` pytest plugin auto-loads and fails collection with ModuleNotFoundError on an unrelated repo module before any test runs. This is a pre-existing environment quirk documented at docs/evidence/offline-training-v1.md:36, not something introduced by this pilot.",
+    "full_regression_result": "1022 passed, 1 failed, 5 warnings in 159.02s",
+    "full_regression_failure": {
+      "test": "tests/test_collect_offline_training_v1_evidence.py::test_run_command_safe_timeout_and_child_cleanup",
+      "assertion": "pid_file.exists() is False after a 0.5s timeout on a subprocess expected to write its pid file immediately",
+      "confirmed_pre_existing_and_unrelated": "reproduced identically (3/3 runs) both in this pilot worktree and in the completely untouched original worktree (~/kaggle/pokemon-tcg-ai-battle, 0 uncommitted changes) at the same base commit e69ef63f9024c0c877fd9630f45036ff385867ea. This pilot's diff never touches scripts/collect_offline_training_v1_evidence.py or its test file. Interpreted as an environment-specific timing issue (0.5s timeout too tight for child-process startup latency in this sandbox), not a regression introduced by this pilot.",
+      "action_taken": "none -- left unfixed as out of scope for this pilot; reported transparently rather than hidden, skipped, or loosened"
+    }
+  },
+  "git_diff_check": "clean (git diff --check exit 0)",
+  "not_executed_in_this_pilot": [
+    "Kaggle submission",
+    "long-running production-scale offline training",
+    "Champion promotion",
+    "making the Student the default submission agent",
+    "production.json profile (2048 games)"
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "schema_version": "self-owned-cg-deck-conditioned-adversarial-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_portfolio_lucario_core_family_v3_20260816",
+  "seed_namespace": "self-owned-cg-portfolio-lucario-core-fresh-v3-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-portfolio-hard-negative-source-v2-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v21-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v20-20260816",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-margin-gated-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06"
+  ],
+  "deck_recipes": [
+    {
+      "id": "balanced-v23-00",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_balanced.json",
+      "seed": 20269500,
+      "ordinal": 500
+    },
+    {
+      "id": "search-v23-01",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_search.json",
+      "seed": 20269501,
+      "ordinal": 501
+    },
+    {
+      "id": "tempo-v23-02",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_tempo.json",
+      "seed": 20269502,
+      "ordinal": 502
+    },
+    {
+      "id": "switch-v23-03",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_switch.json",
+      "seed": 20269503,
+      "ordinal": 503
+    }
+  ],
+  "policy_variants": [
+    {
+      "id": "balanced-lethal-v23-00",
+      "deck_recipe_id": "balanced-v23-00",
+      "overrides": {
+        "lethal_bonus": 14500,
+        "lethal_hp_margin": 0,
+        "attack_damage_weight_milli": 1120,
+        "attack_generic_base": 11400,
+        "attack_982_base": 38200,
+        "attack_983_base": 53200,
+        "ability_bonus": 27500,
+        "setup_active_riolu": 44000,
+        "setup_bench_riolu": 37500,
+        "evolve_mega_lucario": 53500,
+        "attach_mega_lucario": 47500,
+        "attach_mega_2energy_bonus": 10800,
+        "attach_overenergy_penalty": -31500,
+        "search_mega_lucario": 51500,
+        "retreat_good_score": 14000
+      }
+    },
+    {
+      "id": "search-pressure-v23-01",
+      "deck_recipe_id": "search-v23-01",
+      "overrides": {
+        "lethal_bonus": 16800,
+        "lethal_hp_margin": 1,
+        "attack_damage_weight_milli": 1250,
+        "attack_generic_base": 12600,
+        "attack_982_base": 40000,
+        "attack_983_base": 56000,
+        "ability_bonus": 26000,
+        "setup_active_riolu": 45500,
+        "setup_bench_riolu": 39500,
+        "evolve_mega_lucario": 56000,
+        "attach_mega_lucario": 49500,
+        "attach_mega_2energy_bonus": 12200,
+        "attach_overenergy_penalty": -29000,
+        "search_mega_lucario": 57000,
+        "retreat_good_score": 12000
+      }
+    },
+    {
+      "id": "tempo-reserve-v23-02",
+      "deck_recipe_id": "tempo-v23-02",
+      "overrides": {
+        "lethal_bonus": 11200,
+        "lethal_hp_margin": -1,
+        "attack_damage_weight_milli": 980,
+        "attack_generic_base": 9800,
+        "attack_982_base": 35000,
+        "attack_983_base": 48500,
+        "ability_bonus": 32000,
+        "setup_active_riolu": 47000,
+        "setup_bench_riolu": 42000,
+        "evolve_mega_lucario": 51000,
+        "attach_mega_lucario": 43500,
+        "attach_mega_2energy_bonus": 9200,
+        "attach_overenergy_penalty": -39000,
+        "search_mega_lucario": 48000,
+        "retreat_good_score": 19000
+      }
+    },
+    {
+      "id": "switch-counter-v23-03",
+      "deck_recipe_id": "switch-v23-03",
+      "overrides": {
+        "lethal_bonus": 13200,
+        "lethal_hp_margin": 0,
+        "attack_damage_weight_milli": 1075,
+        "attack_generic_base": 10800,
+        "attack_982_base": 36500,
+        "attack_983_base": 50500,
+        "ability_bonus": 29000,
+        "setup_active_riolu": 42500,
+        "setup_bench_riolu": 36500,
+        "evolve_mega_lucario": 52500,
+        "attach_mega_lucario": 46000,
+        "attach_mega_2energy_bonus": 10100,
+        "attach_overenergy_penalty": -34500,
+        "search_mega_lucario": 50000,
+        "retreat_good_score": 16500
+      }
+    }
+  ]
+}

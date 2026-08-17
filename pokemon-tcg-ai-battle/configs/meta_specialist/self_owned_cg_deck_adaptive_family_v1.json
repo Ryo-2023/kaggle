@@ -1,0 +1,30 @@
+{
+  "schema_version": "self-owned-cg-deck-adaptive-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_deck_adaptive_family_v1_20260816",
+  "seed_namespace": "self-owned-cg-deck-adaptive-v1-fresh-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-action-conditioned-v2-lucario-20260816/promoted",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-cross-lineage-v18-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted"
+  ],
+  "deck_recipes": [
+    {"id": "fire-adaptive-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 203086001, "ordinal": 600},
+    {"id": "dark-adaptive-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 203086002, "ordinal": 601},
+    {"id": "lightning-adaptive-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 203086003, "ordinal": 602},
+    {"id": "grass-adaptive-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_grass.json", "seed": 203086004, "ordinal": 603},
+    {"id": "water-adaptive-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 203086005, "ordinal": 604},
+    {"id": "psychic-adaptive-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_psychic.json", "seed": 203086006, "ordinal": 605}
+  ],
+  "policy_variants": [
+    {"id": "fire-greedy-00", "deck_recipe_id": "fire-adaptive-00", "overrides": {"attack_lethal_bonus": 30000, "attack_damage_weight_milli": 1400, "play_pokemon_bonus": 18000}},
+    {"id": "dark-reserve-01", "deck_recipe_id": "dark-adaptive-01", "overrides": {"attach_reserve_penalty": -16000, "retreat_damaged_bonus": 18000, "search_stage_bonus": 22000}},
+    {"id": "lightning-tempo-02", "deck_recipe_id": "lightning-adaptive-02", "overrides": {"play_supporter_bonus": 24000, "play_item_bonus": 15000, "attack_energy_efficiency_bonus": 4000}},
+    {"id": "grass-evolve-03", "deck_recipe_id": "grass-adaptive-03", "overrides": {"evolve_bonus": 36000, "setup_stage_bonus": 20000, "search_stage_bonus": 24000}},
+    {"id": "water-control-04", "deck_recipe_id": "water-adaptive-04", "overrides": {"retreat_damaged_bonus": 24000, "attack_energy_efficiency_bonus": 6000, "end_penalty": -70000}},
+    {"id": "psychic-lethal-05", "deck_recipe_id": "psychic-adaptive-05", "overrides": {"attack_lethal_bonus": 30000, "play_supporter_bonus": 20000, "attack_damage_weight_milli": 1300}}
+  ]
+}

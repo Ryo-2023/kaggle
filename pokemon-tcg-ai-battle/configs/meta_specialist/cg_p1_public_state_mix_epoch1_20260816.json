@@ -1,0 +1,107 @@
+{
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "deck_recipes": [
+    {
+      "id": "public-state-mix-deck-a",
+      "ordinal": 0,
+      "seed": 202608160101,
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v7_c06_neighborhood.json"
+    },
+    {
+      "id": "public-state-mix-deck-b",
+      "ordinal": 0,
+      "seed": 202608160102,
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v7_c06_neighborhood.json"
+    },
+    {
+      "id": "public-state-mix-deck-c",
+      "ordinal": 0,
+      "seed": 202608160103,
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json"
+    },
+    {
+      "id": "public-state-mix-deck-d",
+      "ordinal": 0,
+      "seed": 202608160104,
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json"
+    },
+    {
+      "id": "public-state-mix-deck-e",
+      "ordinal": 0,
+      "seed": 202608160105,
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json"
+    },
+    {
+      "id": "public-state-mix-deck-f",
+      "ordinal": 0,
+      "seed": 202608160106,
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json"
+    }
+  ],
+  "policy_variants": [
+    {
+      "deck_recipe_id": "public-state-mix-deck-a",
+      "id": "prize-behind-pressure",
+      "overrides": {
+        "behind_attack_bonus": 12000,
+        "prize_gap_threshold": 1,
+        "target_low_hp_bonus": 4000
+      }
+    },
+    {
+      "deck_recipe_id": "public-state-mix-deck-b",
+      "id": "ahead-lethal-conserve",
+      "overrides": {
+        "ahead_lethal_bonus": 12000,
+        "overkill_penalty": -10000,
+        "prize_gap_threshold": 1
+      }
+    },
+    {
+      "deck_recipe_id": "public-state-mix-deck-c",
+      "id": "damaged-board-retreat",
+      "overrides": {
+        "damaged_active_retreat_bonus": 12000,
+        "bench_ready_switch_bonus": 8000,
+        "target_high_damage_bonus": 3000
+      }
+    },
+    {
+      "deck_recipe_id": "public-state-mix-deck-d",
+      "id": "target-pressure",
+      "overrides": {
+        "target_low_hp_bonus": 9000,
+        "target_high_damage_bonus": 8000,
+        "prize_gap_threshold": 2
+      }
+    },
+    {
+      "deck_recipe_id": "public-state-mix-deck-e",
+      "id": "race-and-stability",
+      "overrides": {
+        "behind_attack_bonus": 7000,
+        "damaged_active_retreat_bonus": 7000,
+        "target_high_damage_bonus": 5000,
+        "prize_gap_threshold": 1
+      }
+    },
+    {
+      "deck_recipe_id": "public-state-mix-deck-f",
+      "id": "conservative-visible-board",
+      "overrides": {
+        "ahead_lethal_bonus": 7000,
+        "overkill_penalty": -6000,
+        "damaged_active_retreat_bonus": 5000,
+        "target_low_hp_bonus": 5000,
+        "prize_gap_threshold": 2
+      }
+    }
+  ],
+  "public_scan_roots": [
+    "runs",
+    "submissions"
+  ],
+  "schema_version": "cg-p1-public-state-mix-plan-v1",
+  "seed_namespace": "cg-p1-public-state-mix-epoch1-seed-20260816",
+  "source_epoch": "cg-p1-public-state-mix-epoch1-20260816"
+}

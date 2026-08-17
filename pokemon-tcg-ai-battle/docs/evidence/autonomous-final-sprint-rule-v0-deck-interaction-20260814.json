@@ -1,0 +1,94 @@
+{
+  "schema_version": "final-sprint-rule-v0-deck-interaction-screen-v1",
+  "date": "2026-08-14",
+  "purpose": "Submission-compatible Rule v0 fixed-policy deck interaction screen after the policy×deck 2×2",
+  "policy": {
+    "id": "rule-v0-root-deck",
+    "sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+    "runner_sha256": "99cbc5f062e053aa07ea40fab1751f1a66e793defb4c9fb167bb5016d0e4d6cf",
+    "test_sha256": "47a3e23dfbab405f77a178412869f511d9aac1e249e5ceda2b4c968cc7f7f7a2"
+  },
+  "evaluation": {
+    "evaluator_sha256": "0cbac2789e08758d14783922c5c7145f25701a47d978b3d9df9d132aec4eed84",
+    "broad_config_sha256": "832273ff656280d2556c9df09a9a3db9f2564a181be78a3e658509d3b396209b",
+    "pool_manifest_sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca",
+    "opponent_count": 24,
+    "games_per_seat": 2,
+    "both_seats": true,
+    "fault_inclusive_denominator": true,
+    "native_behavior_labels_saved": false,
+    "authority": {
+      "training": false,
+      "promotion": false,
+      "submission": false
+    }
+  },
+  "screen_48": {
+    "opponent_count": 12,
+    "base_seed": 23200000,
+    "workers": 1,
+    "parent": {
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-submission-deck-screen-v1-20260814/parent-root-48-serial-v2",
+      "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+      "summary_sha256": "b8146fee7603f445c60ff85da75aac423491447198dbca60cc15fd49581f4d58",
+      "manifest_sha256": "be4f1dd9915ac60d0cd051dd0592c9a3a660d8bd026cfcb7c7cb827bf851a2fb",
+      "ledger_sha256": "b4df7ac54d342803e3b07b01b8df471c9ffaeef718a72e42d6b7f15d09169d11",
+      "wdlf": "3-0-45-0",
+      "score_rate": 0.0625
+    },
+    "ae3075": {
+      "candidate_id": "ae3075c2e0960eb5bbbcc3b3032dfeef7e3b83ddb9f995447506d9a502243ccb",
+      "deck_sha256": "95fecbb5041f1781b197ff5ba5e81adff5bec4605301b6d82bca7beb0fe919ef",
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-submission-deck-screen-v1-20260814/ae3075-archaludon-48-serial-v1",
+      "summary_sha256": "5146501ad29655bfcdc509320046eed1282732c2ec4b810fc649343a3d38d908",
+      "manifest_sha256": "be4f1dd9915ac60d0cd051dd0592c9a3a660d8bd026cfcb7c7cb827bf851a2fb",
+      "ledger_sha256": "bad4bf8598f482f3387484ff1f306592e2da973743c0c1d9519aca4a1fd74438",
+      "wdlf": "10-0-38-0",
+      "score_rate": 0.20833333333333334,
+      "delta_vs_parent_points": 14.583333333333334
+    },
+    "b92a3b55": {
+      "candidate_id": "b92a3b55c5fa3485670e3d3a7b6212e8d9c28cd9605a2e5ca813e04a832a7e9d",
+      "deck_sha256": "499c68d84a072b251d6bea616f1ca83e3185a81b321ea479d34a0f7f3d87c274",
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-submission-deck-screen-v1-20260814/b92-archaludon-48-serial-v1",
+      "summary_sha256": "508683a9d79d7951f5a4281934a81419a352e3bb5cd77fdd30923fe957700490",
+      "manifest_sha256": "ce33cf642417d1121235b9146b7069aff39973393cc1a3ccce3b0202f0f90ec6",
+      "ledger_sha256": "3aa51e9bb7246602ef8ea208f55ce8ff0397f42e9226f3ba57ea3346152d3167",
+      "status": "AGENT_INVALID_CLOSED",
+      "wdlf": "0-0-0-48",
+      "reason": "All 48 serial games returned AGENT_INVALID with cabt terminal result unavailable; not scored as performance. The deck is 60 rows and validates structurally, but this Rule v0 runtime/deck combination is not an admissible screen arm."
+    }
+  },
+  "common24_96": {
+    "base_seed": 23210000,
+    "workers": 1,
+    "parent": {
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-submission-deck-screen-v1-20260814/parent-common24-96-serial-v1",
+      "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+      "summary_sha256": "02ae029be0584e07df2df929a67be4acddbea7eae55d7f96db36fa0bb9f726b1",
+      "manifest_sha256": "0a2e4a35d8947ee501b63b214f69a880f7ebd2f1af6f559643061e5c65248f5a",
+      "ledger_sha256": "b3b15fd8f654308f0648a9fcc7a6d89ce9e5915807df26a47bf3d7e1374a47c4",
+      "wdlf": "20-0-76-0",
+      "score_rate": 0.20833333333333334
+    },
+    "ae3075": {
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-submission-deck-screen-v1-20260814/ae3075-common24-96-serial-v1",
+      "summary_sha256": "dcf38e305e65fd165b1dbcb43a92ae2df247a3e17c7d95682434c7fdef23790e",
+      "manifest_sha256": "0a2e4a35d8947ee501b63b214f69a880f7ebd2f1af6f559643061e5c65248f5a",
+      "ledger_sha256": "db321c14e68e28c3ba068f785de255dd4314489998d5feeac3b4884104cfe39d",
+      "wdlf": "8-0-88-0",
+      "score_rate": 0.08333333333333333,
+      "delta_vs_parent_points": -12.5,
+      "status": "COMMON24_STOP"
+    }
+  },
+  "diagnostics": {
+    "initial_parallel_parent_root": "runs/final-sprint-autonomous/final-sprint-rule-v0-submission-deck-screen-v1-20260814/parent-root-48",
+    "initial_parallel_summary_sha256": "402282c385b1dfa86d6ccf7de58fad5487b979b960e42cfa89e81d76e0832db8",
+    "initial_parallel_result": "47 DONE, 1 FAULT; the only fault was aristophanivan_probabilistic seat0 repetition1 seed23200041",
+    "fault_detail": "DeckValidationError: deck must contain exactly 60 cards, got 0",
+    "diagnosis": "The opponent deck file is a real 60-row file with the same SHA as root deck. A fresh workers=1 probe at seed23200041 completed DONE, so the initial fault is classified as a transient parallel-path fault and the initial root is excluded rather than repaired or scored.",
+    "submission_promotion": "ae3075 is not promoted: its 48-game local positive reversed on the full common24 96-game guardrail.",
+    "next_action": "Stop this candidate/surface; do not run 384. Keep P0=Rule v0 and D0=root deck until a new, non-overlapping candidate surface is selected."
+  }
+}

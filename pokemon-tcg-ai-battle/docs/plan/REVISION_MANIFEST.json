@@ -1,0 +1,190 @@
+{
+  "package": "MAGE_PTCG_v5_complete_20260712",
+  "created_at": "2026-07-12T11:28:05",
+  "strategy": "bootstrap-kernel-first-self-hosting",
+  "source_files": {
+    "ai_orchestrator_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/ai_orchestrator_implementation_plan.md",
+      "sha256": "e13f9612135298ca4bf6894096c3d29a0c9a7fb219eece6c7071d2e86388c139",
+      "bytes": 29511
+    },
+    "design/00_overall_plan.md": {
+      "uploaded_path": "/mnt/data/00_overall_plan(3).md",
+      "sha256": "f34701e0ab6edbf93cb51d59bd30eb7934df64332ea788c44ad4d4893e3ac7f8",
+      "bytes": 9151
+    },
+    "design/01_domain_knowledge_and_deck_strategy_plan.md": {
+      "uploaded_path": "/mnt/data/01_domain_knowledge_and_deck_strategy_plan(1).md",
+      "sha256": "739edade5d0572e77638bc83e2ab62cfc543ee076965bdfa9b42d38e3a10df7b",
+      "bytes": 8031
+    },
+    "design/02_structured_public_belief_and_solver_plan.md": {
+      "uploaded_path": "/mnt/data/02_structured_public_belief_and_solver_plan(1).md",
+      "sha256": "8d33538e9f0d80a3940b41429d2e80385241f0e7fc33f5f3df1b6e97a3b0155b",
+      "bytes": 8981
+    },
+    "design/03_machine_learning_teacher_student_plan.md": {
+      "uploaded_path": "/mnt/data/03_machine_learning_teacher_student_plan(1).md",
+      "sha256": "727a32cb771fa182f83a58b55fd329403b24ab4c8cc813f2abd5d4c8d2e3e34d",
+      "bytes": 9230
+    },
+    "design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": {
+      "uploaded_path": "/mnt/data/04_kaggle_competition_intelligence_and_joint_optimization_plan(1).md",
+      "sha256": "7e7fa9e87d2125b226993a3b2ac0a9411d1925bb270d940b225dadda0304e817",
+      "bytes": 9138
+    },
+    "design/05_evaluation_submission_and_strategy_plan.md": {
+      "uploaded_path": "/mnt/data/05_evaluation_submission_and_strategy_plan(1).md",
+      "sha256": "c1f24f37ebcfea792e29262ff7ce8732bcb21dead0d1ea5e839bf70ae750a067",
+      "bytes": 8571
+    },
+    "implementation/00_overall_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/00_overall_implementation_plan(2).md",
+      "sha256": "66e56db4040fd2f92323882197885cb4e46e88d6130c18c5b8f34e79929d5091",
+      "bytes": 9271
+    },
+    "implementation/01_domain_knowledge_and_deck_strategy_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/01_domain_knowledge_and_deck_strategy_implementation_plan(1).md",
+      "sha256": "39ef49313fd2e41f89195ae4bd8211959122332349f5f31bd5ee8dd8bd0122db",
+      "bytes": 10303
+    },
+    "implementation/02_structured_public_belief_and_solver_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/02_structured_public_belief_and_solver_implementation_plan(1).md",
+      "sha256": "2243edeb55c8523d8521dbf28a13855345cf21c7920c0ce6406a21c64dbf8bcf",
+      "bytes": 13134
+    },
+    "implementation/03_machine_learning_teacher_student_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/03_machine_learning_teacher_student_implementation_plan(1).md",
+      "sha256": "49c277bf19c39a90ef78fc67ec133463273bf7b3d3c57260f997a0d2d1f5906a",
+      "bytes": 10268
+    },
+    "implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan(1).md",
+      "sha256": "dc8424da6db19ae501e794a077b5669e17d8959e54e7b4f323bc98f24ffa9ea3",
+      "bytes": 13008
+    },
+    "implementation/05_evaluation_submission_and_strategy_implementation_plan.md": {
+      "uploaded_path": "/mnt/data/05_evaluation_submission_and_strategy_implementation_plan(1).md",
+      "sha256": "eb44bffa588ef99593820d2f42a355b56dd83d190e9a75559fe2e51309d6d074",
+      "bytes": 11143
+    },
+    "reference/plan_index.md": {
+      "uploaded_path": "/mnt/data/plan_index.md",
+      "sha256": "96d28e724ff138fdc1c656c53170df9bed091d45eb48dc7686d8216b162a5023",
+      "bytes": 6083
+    },
+    "AGENTS.md": {
+      "uploaded_path": "/mnt/data/AGENTS(1).md",
+      "sha256": "0ce21b039ddefe650c20b4c34311e44f2c7764a122e94f35e070551506b0a781",
+      "bytes": 3889
+    },
+    "MAGE_PTCG_v5_README.md": {
+      "uploaded_path": "/mnt/data/MAGE_PTCG_v5_README(2).md",
+      "sha256": "d1538b362f507456063b650935355221d30695782428c11704568224c4b0c6a0",
+      "bytes": 3966
+    }
+  },
+  "final_files": {
+    "AGENTS.md": {
+      "sha256": "21521398ae25617f2cc1c49edf433e20ecd2c72f9e493d6716cf63768d73c0da",
+      "bytes": 4390
+    },
+    "CHANGELOG.md": {
+      "sha256": "3104a0b037811dda0b4f0a5ebf1adac29f168d81c1509878c2c0d358d19abb9f",
+      "bytes": 2391
+    },
+    "MAGE_PTCG_v5_README.md": {
+      "sha256": "25eb665f6e6d7feb372fc8766b433a0f38245894374f3b56b46ea24fe2a2743e",
+      "bytes": 6655
+    },
+    "VALIDATION_REPORT.md": {
+      "sha256": "478ca6793952a47c8ba779e919255954c6b07a0b518e34c2478e5c3600e20a5b",
+      "bytes": 975
+    },
+    "ai_orchestrator_implementation_plan.md": {
+      "sha256": "6317ce2eefefb85f67216e3f87ed812e4c8f9ba9e201a1406e106549f52fbe04",
+      "bytes": 41039
+    },
+    "ai_orchestrator_review_disposition.md": {
+      "sha256": "3581f4b7a3aad730e993110daab30e40ed1c05627f66a1de92efe182bcdffee5",
+      "bytes": 2773
+    },
+    "bootstrap_kernel_implementation_plan.md": {
+      "sha256": "1ac1e36e95d04be0baeb6e0b7cdad2376f35b86a37618f46b2f05a063c17af07",
+      "bytes": 6016
+    },
+    "design/00_overall_plan.md": {
+      "sha256": "6e47d5c19829e41ee98ec48223cd4d893b1c78cf129a10062e2281e176bd9336",
+      "bytes": 10857
+    },
+    "design/01_domain_knowledge_and_deck_strategy_plan.md": {
+      "sha256": "739edade5d0572e77638bc83e2ab62cfc543ee076965bdfa9b42d38e3a10df7b",
+      "bytes": 8031
+    },
+    "design/02_structured_public_belief_and_solver_plan.md": {
+      "sha256": "8d33538e9f0d80a3940b41429d2e80385241f0e7fc33f5f3df1b6e97a3b0155b",
+      "bytes": 8981
+    },
+    "design/03_machine_learning_teacher_student_plan.md": {
+      "sha256": "727a32cb771fa182f83a58b55fd329403b24ab4c8cc813f2abd5d4c8d2e3e34d",
+      "bytes": 9230
+    },
+    "design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": {
+      "sha256": "7e7fa9e87d2125b226993a3b2ac0a9411d1925bb270d940b225dadda0304e817",
+      "bytes": 9138
+    },
+    "design/05_evaluation_submission_and_strategy_plan.md": {
+      "sha256": "c9f51baa5b96fb6060b932eb1538f449abbad077ddbad470fa4de8f96b492a07",
+      "bytes": 9672
+    },
+    "implementation/00_overall_implementation_plan.md": {
+      "sha256": "914b245c6260b6aa1fd3fe4a4b3d528ffc586421484b019f1fb98ec873f11919",
+      "bytes": 11717
+    },
+    "implementation/01_domain_knowledge_and_deck_strategy_implementation_plan.md": {
+      "sha256": "39ef49313fd2e41f89195ae4bd8211959122332349f5f31bd5ee8dd8bd0122db",
+      "bytes": 10303
+    },
+    "implementation/02_structured_public_belief_and_solver_implementation_plan.md": {
+      "sha256": "2243edeb55c8523d8521dbf28a13855345cf21c7920c0ce6406a21c64dbf8bcf",
+      "bytes": 13134
+    },
+    "implementation/03_machine_learning_teacher_student_implementation_plan.md": {
+      "sha256": "49c277bf19c39a90ef78fc67ec133463273bf7b3d3c57260f997a0d2d1f5906a",
+      "bytes": 10268
+    },
+    "implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": {
+      "sha256": "dc8424da6db19ae501e794a077b5669e17d8959e54e7b4f323bc98f24ffa9ea3",
+      "bytes": 13008
+    },
+    "implementation/05_evaluation_submission_and_strategy_implementation_plan.md": {
+      "sha256": "354e3e89925af1aa42f43e3f274042eca22b74603c7f79243438c3dff3dcee7b",
+      "bytes": 12308
+    },
+    "reference/plan_index.md": {
+      "sha256": "87e2964a31bfe4f9ee6a12298ddd4539e2be43cdf062d4297b2c6b1d4ed35a99",
+      "bytes": 7338
+    }
+  },
+  "changed_from_source": [
+    "AGENTS.md",
+    "MAGE_PTCG_v5_README.md",
+    "ai_orchestrator_implementation_plan.md",
+    "design/00_overall_plan.md",
+    "design/05_evaluation_submission_and_strategy_plan.md",
+    "implementation/00_overall_implementation_plan.md",
+    "implementation/05_evaluation_submission_and_strategy_implementation_plan.md",
+    "reference/plan_index.md"
+  ],
+  "added_files": [
+    "ai_orchestrator_review_disposition.md",
+    "bootstrap_kernel_implementation_plan.md"
+  ],
+  "validation": {
+    "relative_link_errors": 0,
+    "unclosed_code_fences": 0,
+    "required_checks_passed": 10,
+    "required_checks_total": 10,
+    "markdown_files": 20
+  }
+}

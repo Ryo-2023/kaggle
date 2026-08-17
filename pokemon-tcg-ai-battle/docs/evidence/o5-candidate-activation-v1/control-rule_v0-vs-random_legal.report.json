@@ -1,0 +1,147 @@
+{
+    "adversarial": {
+        "games": 0,
+        "members": {},
+        "status": "EXCLUDED_BY_BENCHMARK_KIND"
+    },
+    "core_regression": {
+        "games": 200,
+        "members": {
+            "random_legal": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 200,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 34.5,
+                    "p95": 116.04999999999998
+                },
+                "games": 200,
+                "invalid_actions": 0,
+                "losses": 58,
+                "match_latency_seconds": {
+                    "max": 0.404062,
+                    "p50": 0.07297000000000001,
+                    "p95": 0.28808395
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 0,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 29,
+                        "wins": 71
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 29,
+                        "wins": 71
+                    }
+                },
+                "seeds": [
+                    93000,
+                    93001,
+                    93002,
+                    93003,
+                    93004,
+                    93005,
+                    93006,
+                    93007,
+                    93008,
+                    93009
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.6436252184459675,
+                    0.768459744353068
+                ],
+                "win_rate": 0.71,
+                "wins": 142
+            }
+        },
+        "status": "EXECUTED"
+    },
+    "current_meta": {
+        "games": 0,
+        "members": {},
+        "status": "BENCHMARK_BLOCKED_INSUFFICIENT_ACTIVE_POPULATION"
+    },
+    "overall": {
+        "attribution_available": true,
+        "attribution_missing_games": 0,
+        "candidate_exception": 0,
+        "candidate_fallback_games": 0,
+        "candidate_fallback_total": 0,
+        "candidate_invalid": 0,
+        "candidate_timeout": 0,
+        "crashes": 0,
+        "decided_games": 200,
+        "draws": 0,
+        "fallbacks": 0,
+        "game_length_steps": {
+            "p50": 34.5,
+            "p95": 116.04999999999998
+        },
+        "games": 200,
+        "invalid_actions": 0,
+        "losses": 58,
+        "match_latency_seconds": {
+            "max": 0.404062,
+            "p50": 0.07297000000000001,
+            "p95": 0.28808395
+        },
+        "opponent_exception": 0,
+        "opponent_fallback_games": 0,
+        "opponent_fallback_total": 0,
+        "opponent_invalid": 0,
+        "opponent_timeout": 0,
+        "reproducible": true,
+        "seat_wld": {
+            "champion_player_0": {
+                "draws": 0,
+                "losses": 29,
+                "wins": 71
+            },
+            "champion_player_1": {
+                "draws": 0,
+                "losses": 29,
+                "wins": 71
+            }
+        },
+        "seeds": [
+            93000,
+            93001,
+            93002,
+            93003,
+            93004,
+            93005,
+            93006,
+            93007,
+            93008,
+            93009
+        ],
+        "timeouts": 0,
+        "wilson_ci_95": [
+            0.6436252184459675,
+            0.768459744353068
+        ],
+        "win_rate": 0.71,
+        "wins": 142
+    },
+    "safety": {
+        "games": 0,
+        "members": {},
+        "status": "EXCLUDED_BY_BENCHMARK_KIND"
+    }
+}

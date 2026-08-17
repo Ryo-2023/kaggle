@@ -1,0 +1,69 @@
+{
+  "schema_version": "meta-specialist-cg-legalized-public-meta-v1",
+  "source_epoch": "kaggle-public-20260816-fresh-epoch11-new-lineages",
+  "seed_namespace": "kaggle-public-cg-seed-20260816-fresh-epoch11-new-lineages",
+  "current_pool_manifest": "opponents/pool_manifest.json",
+  "output_root": "runs/cg-legalized-public-meta-epoch11-new-lineages-v2-20260816",
+  "scan_roots": [
+    "opponents",
+    "docs/evidence",
+    "runs/cg-public-deck-repair-epoch11-scan-evidence-20260816"
+  ],
+  "sources": [
+    {
+      "candidate_id": "kaggle_sushanth_mega_venusaur_solar_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch11-staging-20260816/mega_venusaur",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/mega-venusaur-ex-solar-transfer-agent",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/mega-venusaur-ex-solar-transfer-agent",
+      "source_commit": "61d858364e38962b93d3732c32975ff4d1fc65e52a49aef85082c573fcd61d47",
+      "replacements": [{"index": 59, "old": 1, "new": 1}]
+    },
+    {
+      "candidate_id": "kaggle_siddharajkulkarni_ptgc_game_epoch11_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch11-staging-20260816/siddharaj",
+      "source_ref": "public_kaggle_kernel/siddharajkulkarni/ptgc-game",
+      "source_url": "https://www.kaggle.com/code/siddharajkulkarni/ptgc-game",
+      "source_commit": "4e075f696faa2cf4bcbca354b117cec201d2ab9d9d86694b148974fba5583f55",
+      "replacements": [{"index": 59, "old": 3, "new": 3}]
+    },
+    {
+      "candidate_id": "kaggle_makthanithin_improved_probabilistic_epoch11_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch11-staging-20260816/makthanithin",
+      "source_ref": "public_kaggle_kernel/makthanithin/improved-probabilistic-agent",
+      "source_url": "https://www.kaggle.com/code/makthanithin/improved-probabilistic-agent",
+      "source_commit": "7f422fd381bb672c1153be5f49c25de24913b3c41fdc8020c79dff22b29dd442",
+      "replacements": [{"index": 59, "old": 1252, "new": 1252}]
+    },
+    {
+      "candidate_id": "kaggle_prvsiyan_search_audited_v12_epoch11_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch11-staging-20260816/prvsiyan",
+      "source_ref": "public_kaggle_kernel/prvsiyan/ptcg-ai-battle-search-audited-alakazam-v12",
+      "source_url": "https://www.kaggle.com/code/prvsiyan/ptcg-ai-battle-search-audited-alakazam-v12",
+      "source_commit": "e0a6c7bae2cd47f5ebcb2448095321d0cab6cd387cc49abe0417bb7bf98f9c97",
+      "replacements": [{"index": 59, "old": 1252, "new": 1252}]
+    },
+    {
+      "candidate_id": "kaggle_aristophanivan_2plyexpectimax_epoch11_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch11-staging-20260816/aristophanivan",
+      "source_ref": "public_kaggle_kernel/aristophanivan/2plyexpectimax",
+      "source_url": "https://www.kaggle.com/code/aristophanivan/2plyexpectimax",
+      "source_commit": "013cdfb5e51523170c29a7ba11d45bb6065ff6a266d428767b2b46837ec11ea2",
+      "replacements": [{"index": 59, "old": 1252, "new": 1252}]
+    },
+    {
+      "candidate_id": "kaggle_jazivxt_archaludon_v28_epoch11_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch11-staging-20260816/jazivxt_archaludun",
+      "source_ref": "public_kaggle_kernel/jazivxt/archaludon-metal-gpu-v28-agents-only",
+      "source_url": "https://www.kaggle.com/code/jazivxt/archaludon-metal-gpu-v28-agents-only",
+      "source_commit": "b7e4e4bf8c964a7a50fea343dbe7a4b4ac5517368d1e5823d5dc563568d02d5d",
+      "replacements": [{"index": 59, "old": 1244, "new": 1244}]
+    }
+  ],
+  "authority": {
+    "training_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false,
+    "longrun_allowed": false
+  },
+  "research_only": true
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": "o2-training-loop-v1",
+  "deck_pool": "configs/competition/deck_pool_o2_v1.yaml",
+  "opponent_pool": "configs/competition/opponent_pool_o2_v1.yaml",
+  "offline_training_config": "configs/offline_training_v1/smoke.json",
+  "champion": "rule-agent-v0",
+  "challenger": "rule-agent-v0",
+  "seeds": [1000],
+  "engine_version": "cabt",
+  "fixture_only": true
+}

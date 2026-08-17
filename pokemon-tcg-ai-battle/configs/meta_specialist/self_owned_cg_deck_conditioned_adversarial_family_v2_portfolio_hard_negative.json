@@ -1,0 +1,127 @@
+{
+  "schema_version": "self-owned-cg-deck-conditioned-adversarial-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_portfolio_hard_negative_family_v2_20260816",
+  "seed_namespace": "self-owned-cg-portfolio-hard-negative-fresh-v2-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-independent-cross-lineage-v21-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v20-20260816",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-margin-gated-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06"
+  ],
+  "deck_recipes": [
+    {
+      "id": "fire-v22-00",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v22_portfolio_fire.json",
+      "seed": 20269400,
+      "ordinal": 400
+    },
+    {
+      "id": "dark-v22-01",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v22_portfolio_dark.json",
+      "seed": 20269401,
+      "ordinal": 401
+    },
+    {
+      "id": "lightning-v22-02",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v22_portfolio_lightning.json",
+      "seed": 20269402,
+      "ordinal": 402
+    },
+    {
+      "id": "fighting-v22-03",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v22_portfolio_fighting.json",
+      "seed": 20269403,
+      "ordinal": 403
+    }
+  ],
+  "policy_variants": [
+    {
+      "id": "fire-pressure-v22-00",
+      "deck_recipe_id": "fire-v22-00",
+      "overrides": {
+        "lethal_bonus": 15800,
+        "lethal_hp_margin": 0,
+        "attack_damage_weight_milli": 1180,
+        "attack_generic_base": 11800,
+        "attack_982_base": 39200,
+        "attack_983_base": 54500,
+        "ability_bonus": 28500,
+        "setup_active_riolu": 43000,
+        "setup_bench_riolu": 38000,
+        "evolve_mega_lucario": 54000,
+        "attach_mega_lucario": 48500,
+        "attach_mega_2energy_bonus": 11500,
+        "attach_overenergy_penalty": -32000,
+        "search_mega_lucario": 52500,
+        "retreat_good_score": 13500
+      }
+    },
+    {
+      "id": "dark-reserve-v22-01",
+      "deck_recipe_id": "dark-v22-01",
+      "overrides": {
+        "lethal_bonus": 10200,
+        "lethal_hp_margin": -2,
+        "attack_damage_weight_milli": 920,
+        "attack_generic_base": 9000,
+        "attack_982_base": 33500,
+        "attack_983_base": 47000,
+        "ability_bonus": 33500,
+        "setup_active_riolu": 47000,
+        "setup_bench_riolu": 42000,
+        "evolve_mega_lucario": 52000,
+        "attach_mega_lucario": 42000,
+        "attach_mega_2energy_bonus": 8000,
+        "attach_overenergy_penalty": -41000,
+        "search_mega_lucario": 46000,
+        "retreat_good_score": 18500
+      }
+    },
+    {
+      "id": "lightning-search-v22-02",
+      "deck_recipe_id": "lightning-v22-02",
+      "overrides": {
+        "lethal_bonus": 17500,
+        "lethal_hp_margin": 1,
+        "attack_damage_weight_milli": 1400,
+        "attack_generic_base": 14500,
+        "attack_982_base": 40500,
+        "attack_983_base": 57500,
+        "ability_bonus": 22000,
+        "setup_active_riolu": 39000,
+        "setup_bench_riolu": 33000,
+        "evolve_mega_lucario": 47500,
+        "attach_mega_lucario": 51500,
+        "attach_mega_2energy_bonus": 13500,
+        "attach_overenergy_penalty": -26000,
+        "search_mega_lucario": 58500,
+        "retreat_good_score": 9000
+      }
+    },
+    {
+      "id": "fighting-switch-v22-03",
+      "deck_recipe_id": "fighting-v22-03",
+      "overrides": {
+        "lethal_bonus": 12500,
+        "lethal_hp_margin": -1,
+        "attack_damage_weight_milli": 1050,
+        "attack_generic_base": 11000,
+        "attack_982_base": 37000,
+        "attack_983_base": 51000,
+        "ability_bonus": 26500,
+        "setup_active_riolu": 41000,
+        "setup_bench_riolu": 36000,
+        "evolve_mega_lucario": 50500,
+        "attach_mega_lucario": 46500,
+        "attach_mega_2energy_bonus": 9500,
+        "attach_overenergy_penalty": -35000,
+        "search_mega_lucario": 50500,
+        "retreat_good_score": 15500
+      }
+    }
+  ]
+}

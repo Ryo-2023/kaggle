@@ -1,0 +1,33 @@
+{
+  "schema_version": "self-owned-cg-deck-spec-v1",
+  "archetype_id": "portfolio-hard-negative-lucario-recovery-v24",
+  "max_non_energy_copies": 4,
+  "require_ace_spec_count": 1,
+  "required_basic_pokemon_min": 1,
+  "required_basic_energy_min": 1,
+  "roles": [
+    {"role": "basic_pokemon", "card_ids": [673], "count": 2},
+    {"role": "evolution_hariyama", "card_ids": [674], "count": 2},
+    {"role": "basic_draw_engine", "card_ids": [675], "count": 2},
+    {"role": "basic_support_engine", "card_ids": [676], "count": 2},
+    {"role": "basic_attacker", "card_ids": [677], "count": 4},
+    {"role": "mega_attacker", "card_ids": [678], "count": 4},
+    {"role": "bench_attacker", "card_ids": [135], "count": 1},
+    {"role": "basic_energy", "card_ids": [6], "count": 13},
+    {"role": "setup_item", "card_ids": [1086], "count": 4},
+    {"role": "pokemon_search_item", "card_ids": [1102, 1121], "count": 3},
+    {"role": "recovery_item", "card_ids": [1097, 1118], "count": 3},
+    {"role": "switch_item", "card_ids": [1123, 1143], "count": 2},
+    {"role": "energy_pokemon_search_item", "card_ids": [1142, 1145], "count": 2},
+    {"role": "damage_item", "card_ids": [1141, 1148], "count": 2},
+    {"role": "non_rule_box_search_item", "card_ids": [1152, 1132], "count": 1},
+    {"role": "ace_tool", "card_ids": [1158, 1159], "count": 1},
+    {"role": "energy_search_item", "card_ids": [1119, 1135], "count": 1},
+    {"role": "gust_supporter", "card_ids": [1182, 1205], "count": 2},
+    {"role": "tempo_supporter", "card_ids": [1191, 1192], "count": 3},
+    {"role": "draw_supporter", "card_ids": [1227, 1190], "count": 2},
+    {"role": "evolution_supporter", "card_ids": [1225, 1210], "count": 2},
+    {"role": "stadium", "card_ids": [1242, 1252], "count": 1},
+    {"role": "stadium_secondary", "card_ids": [1251, 1243], "count": 1}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "self-owned-cg-independent-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_independent_policy_family_v21_train4_cross_archetype_20260816",
+  "seed_namespace": "self-owned-cg-fresh-cross-archetype-train4-v21-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-independent-cross-lineage-v20-20260816/promoted",
+    "runs/cg-self-owned-runtime-safe-v19-independent-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v15-public-mix-20260816"
+  ],
+  "deck_recipes": [
+    {"id": "fire-v21-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269300, "ordinal": 300},
+    {"id": "dark-v21-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269301, "ordinal": 301},
+    {"id": "lightning-v21-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269302, "ordinal": 302},
+    {"id": "fighting-v21-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_fighting.json", "seed": 20269303, "ordinal": 303},
+    {"id": "water-v21-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 20269304, "ordinal": 304},
+    {"id": "psychic-v21-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_psychic.json", "seed": 20269305, "ordinal": 305}
+  ],
+  "policy_variants": [
+    {"id": "fire-pressure-v21-00", "deck_recipe_id": "fire-v21-00", "overrides": {"lethal_bonus": 24000, "nonlethal_attack_penalty": -12000, "damaged_active_attack_bonus": 12000}},
+    {"id": "dark-reserve-v21-01", "deck_recipe_id": "dark-v21-01", "overrides": {"energy_reserve_penalty": -24000, "retreat_energy_reserve_bonus": 18000, "retreat_damaged_active_bonus": 16000}},
+    {"id": "lightning-search-v21-02", "deck_recipe_id": "lightning-v21-02", "overrides": {"search_before_evolve_bonus": 26000, "bench_threat_bonus": 12000, "low_hand_supporter_bonus": 8000}},
+    {"id": "fighting-lethal-v21-03", "deck_recipe_id": "fighting-v21-03", "overrides": {"lethal_bonus": 18000, "nonlethal_attack_penalty": -8000, "retreat_damaged_active_bonus": 18000}},
+    {"id": "water-ability-v21-04", "deck_recipe_id": "water-v21-04", "overrides": {"low_hand_ability_bonus": 18000, "low_hand_supporter_bonus": 9000, "bench_threat_bonus": 9000}},
+    {"id": "psychic-stability-v21-05", "deck_recipe_id": "psychic-v21-05", "overrides": {"energy_reserve_penalty": -18000, "retreat_damaged_active_bonus": 18000, "low_hand_ability_bonus": 16000}}
+  ]
+}

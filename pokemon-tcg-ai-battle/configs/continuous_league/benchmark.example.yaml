@@ -1,0 +1,13 @@
+name: visible-league-v1
+opponent_roles:
+  - TRAINING_ACTIVE
+  - BENCHMARK_VISIBLE
+subject_decks:
+  - deck_id: current-deck
+    deck_path: deck.csv
+    deck_hash: e92d5717fd04865b0b528307df7a9d9aecc2c7b917bfbd5042fe58e3d1f26997
+repetitions: 8
+execution_blocks:
+  - main
+base_seed: 71000
+sealed: false

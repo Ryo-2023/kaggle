@@ -1,0 +1,27 @@
+{
+  "schema_version": "cg-unused-meta-residual-v1",
+  "research_only": true,
+  "promotion_authority": false,
+  "submission_authority": false,
+  "training_authority": false,
+  "local_eval_only": true,
+  "policy_parent_sha256": "1c505b2b5d345bfd897573a7586fb1232d1946d6a3405d8fb1e8486e4e8578e9",
+  "deck_parent_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+  "pool_manifest_path": "opponents/pool_manifest.json",
+  "pool_manifest_sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca",
+  "selection_basis": "public smoke_ok IDs remaining after cg_weekend_splits_v1 and cg_unused_meta_holdout_v1/v2/v3; internal-source policies excluded; tomatomato_archaludon is retained only as an unseen hard-opponent confirmation reference",
+  "opponent_ids": [
+    "rauffauzanrambe_advanced",
+    "tomatomato_archaludon",
+    "yaminh_agent"
+  ],
+  "evaluation_contract": {
+    "both_seats": true,
+    "games_per_arm": 96,
+    "repetitions_per_opponent_seat": 16,
+    "fault_inclusive": true,
+    "training_exposure": 0,
+    "teacher_labels_saved": false,
+    "purpose": "research-only residual public-meta confirmation; no CEM selection labels and no automatic promotion"
+  }
+}

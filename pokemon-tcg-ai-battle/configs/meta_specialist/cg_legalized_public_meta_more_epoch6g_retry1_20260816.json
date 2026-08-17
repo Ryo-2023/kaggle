@@ -1,0 +1,46 @@
+{
+  "schema_version": "meta-specialist-cg-legalized-public-meta-v1",
+  "source_epoch": "kaggle-public-20260816-fresh-epoch6g-legalized-proxies-retry1",
+  "seed_namespace": "kaggle-public-cg-seed-20260816-fresh-epoch6g-legalized-proxies-retry1",
+  "current_pool_manifest": "opponents/pool_manifest.json",
+  "output_root": "runs/cg-legalized-public-meta-more-epoch6g-retry1-20260816",
+  "scan_roots": [
+    "opponents",
+    "runs/cg-kaggle-kernel-meta-intake-public-more-epoch6d-20260816/evidence",
+    "runs/cg-kaggle-kernel-meta-intake-public-more-epoch6g-20260816/evidence",
+    "runs/cg-legalized-public-meta-more-epoch6g-20260816/evidence"
+  ],
+  "sources": [
+    {
+      "candidate_id": "kaggle_avikdas_framework_legalized_epoch6g_retry1_20260816",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260816-new-authors/avikdas-framework",
+      "source_ref": "public_kaggle_kernel/avikdas567/ptcg-ai-strategy-agentic-optimization-framework",
+      "source_url": "https://www.kaggle.com/code/avikdas567/ptcg-ai-strategy-agentic-optimization-framework",
+      "source_commit": "731a324e1f4eefab84a8b4dd8ff4c4aca30203980f2643422d56f804d889e975",
+      "entrypoint_adapter": "DECK_ON_INITIAL_SELECT_NONE_SINGLE_ARG_V1",
+      "replacements": [
+        {"index": 59, "old": 318, "new": 1125}
+      ]
+    },
+    {
+      "candidate_id": "kaggle_sushanth_mega_emboar_legalized_epoch6g_retry1_20260816",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260816-new-authors/sushanth-mega-emboar-fire",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/mega-emboar-fire-domination-agent",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/mega-emboar-fire-domination-agent",
+      "source_commit": "42be0d6336d3e7e831db20772334e6bdfc4d5ac319d3551dd845724e51cda2bb",
+      "entrypoint_adapter": "DECK_ON_INITIAL_SELECT_NONE_SINGLE_ARG_V1",
+      "replacements": [
+        {"index": 20, "old": 1110, "new": 2},
+        {"index": 21, "old": 1110, "new": 2},
+        {"index": 26, "old": 1107, "new": 2}
+      ]
+    }
+  ],
+  "authority": {
+    "training_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false,
+    "longrun_allowed": false
+  },
+  "research_only": true
+}

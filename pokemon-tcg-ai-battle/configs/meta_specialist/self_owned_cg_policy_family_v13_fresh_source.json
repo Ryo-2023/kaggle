@@ -1,0 +1,25 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_fresh_source_v13_20260816",
+  "seed_namespace": "self-owned-cg-fresh-source-v13-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v9-c06-neighborhood-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v10-broad-support-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v11-heterogeneous-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v12-crossed-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "fresh-v13-role-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20262000, "ordinal": 0},
+    {"id": "fresh-v13-broad-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20262001, "ordinal": 1},
+    {"id": "fresh-v13-stability-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20262002, "ordinal": 2},
+    {"id": "fresh-v13-c06-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v7_c06_neighborhood.json", "seed": 20262003, "ordinal": 3}
+  ],
+  "policy_variants": [
+    {"id": "core-v13-00", "deck_recipe_id": "fresh-v13-role-00", "overrides": {}},
+    {"id": "attack-v13-01", "deck_recipe_id": "fresh-v13-broad-01", "overrides": {"lethal_bonus": 14500, "attack_damage_weight_milli": 1750, "attack_generic_base": 4500, "attack_982_base": 32000, "attack_983_base": 62000}},
+    {"id": "setup-v13-02", "deck_recipe_id": "fresh-v13-stability-02", "overrides": {"ability_bonus": 25500, "search_mega_lucario": 31000, "setup_active_riolu": 39000, "setup_bench_riolu": 47000, "evolve_mega_lucario": 52688}},
+    {"id": "defensive-v13-03", "deck_recipe_id": "fresh-v13-c06-03", "overrides": {"lethal_bonus": 11000, "attack_damage_weight_milli": 1350, "attack_generic_base": 2500, "attach_mega_lucario": 33000, "attach_overenergy_penalty": -15000, "retreat_good_score": 11500}}
+  ]
+}

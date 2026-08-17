@@ -1,0 +1,252 @@
+{
+  "bradley_terry_log_strength": {
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 0.331,
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 0.1142,
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 0.1142,
+    "rule-agent-v0": -1.0059
+  },
+  "components": [
+    [
+      "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+      "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+      "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+      "rule-agent-v0"
+    ]
+  ],
+  "graph_connected": true,
+  "latency_seconds": {
+    "max": 1.269,
+    "n": 60,
+    "p50": 0.333,
+    "p95": 0.6108
+  },
+  "legality": {
+    "crashes": 0,
+    "invalid_actions": 0,
+    "timeouts": 0
+  },
+  "pairs": {
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+      "a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+      "a_wilson_ci": [
+        0.2366,
+        0.7634
+      ],
+      "a_win_rate": 0.5,
+      "a_wins": 5,
+      "b": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+      "b_wins": 5,
+      "draws": 0,
+      "games": 10,
+      "reproducible": true,
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 3,
+          "wins": 2
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        }
+      }
+    },
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+      "a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+      "a_wilson_ci": [
+        0.5958,
+        0.9821
+      ],
+      "a_win_rate": 0.9,
+      "a_wins": 9,
+      "b": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+      "b_wins": 1,
+      "draws": 0,
+      "games": 10,
+      "reproducible": true,
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 1,
+          "wins": 4
+        }
+      }
+    },
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__rule-agent-v0": {
+      "a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+      "a_wilson_ci": [
+        0.2366,
+        0.7634
+      ],
+      "a_win_rate": 0.5,
+      "a_wins": 5,
+      "b": "rule-agent-v0",
+      "b_wins": 5,
+      "draws": 0,
+      "games": 10,
+      "reproducible": true,
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 3,
+          "wins": 2
+        }
+      }
+    },
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+      "a": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+      "a_wilson_ci": [
+        0.1682,
+        0.6873
+      ],
+      "a_win_rate": 0.4,
+      "a_wins": 4,
+      "b": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+      "b_wins": 6,
+      "draws": 0,
+      "games": 10,
+      "reproducible": true,
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 4,
+          "wins": 1
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        }
+      }
+    },
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__rule-agent-v0": {
+      "a": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+      "a_wilson_ci": [
+        0.4902,
+        0.9433
+      ],
+      "a_win_rate": 0.8,
+      "a_wins": 8,
+      "b": "rule-agent-v0",
+      "b_wins": 2,
+      "draws": 0,
+      "games": 10,
+      "reproducible": true,
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 1,
+          "wins": 4
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 1,
+          "wins": 4
+        }
+      }
+    },
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899__vs__rule-agent-v0": {
+      "a": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+      "a_wilson_ci": [
+        0.7225,
+        1.0
+      ],
+      "a_win_rate": 1.0,
+      "a_wins": 10,
+      "b": "rule-agent-v0",
+      "b_wins": 0,
+      "draws": 0,
+      "games": 10,
+      "reproducible": true,
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        }
+      }
+    }
+  },
+  "pairs_played": 6,
+  "participants": [
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+    "rule-agent-v0"
+  ],
+  "per_agent": {
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": {
+      "draws": 0,
+      "games": 30,
+      "losses": 11,
+      "wilson_ci_95": [
+        0.4551,
+        0.7813
+      ],
+      "win_rate": 0.6333,
+      "wins": 19
+    },
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+      "draws": 0,
+      "games": 30,
+      "losses": 13,
+      "wilson_ci_95": [
+        0.392,
+        0.7262
+      ],
+      "win_rate": 0.5667,
+      "wins": 17
+    },
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+      "draws": 0,
+      "games": 30,
+      "losses": 13,
+      "wilson_ci_95": [
+        0.392,
+        0.7262
+      ],
+      "win_rate": 0.5667,
+      "wins": 17
+    },
+    "rule-agent-v0": {
+      "draws": 0,
+      "games": 30,
+      "losses": 23,
+      "wilson_ci_95": [
+        0.1179,
+        0.4093
+      ],
+      "win_rate": 0.2333,
+      "wins": 7
+    }
+  },
+  "population_id": "team-agents-v1-a3976401cae4fd38",
+  "population_identity_hash": "a3976401cae4fd386c4e962b402e6303c69706337432cc6343b7c42654200370",
+  "rating_note": "Bradley-Terry log-strength from a fully connected round-robin (6 pairs over 4 participants, 10 games each = 60 games total); not an Elo scale, and not to be used to auto-change Champion.",
+  "reproducibility": true,
+  "schema_version": "o6-team-league-report-v1",
+  "total_games": 60,
+  "worst_matchup": {
+    "a": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+    "a_wins": 10,
+    "b": "rule-agent-v0",
+    "b_wins": 0,
+    "draws": 0
+  }
+}

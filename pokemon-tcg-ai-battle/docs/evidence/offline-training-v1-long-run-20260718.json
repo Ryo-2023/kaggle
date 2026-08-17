@@ -1,0 +1,157 @@
+{
+  "schema_version": "offline-training-v1-long-run-evidence-v1",
+  "generated_at": "2026-07-18",
+  "branch": "feature/belief-guided-search",
+  "base_commit": "062533feee8ac91914d10fd67231181f6ef7949e",
+  "worktree": "pokemon-tcg-ai-battle (main workspace)",
+  "run_id": "offline-long-run-actual-20260718-r1",
+  "champion_before_and_after": "Rule Agent v0 (unchanged)",
+  "promotion_before_and_after": "NO_DECISION (unchanged)",
+  "decision": "PROMOTION_CANDIDATE_NO_DECISION_MAINTAINED",
+  "decision_is_promotion_decision": false,
+  "actual_collection": {
+    "config": "configs/offline_training_v1/production.json (games=2048, source=actual, base_seed=3000)",
+    "episodes": 2048,
+    "games_requested": 2048,
+    "games_committed": 2048,
+    "decisions": 96530,
+    "candidates": 628632,
+    "actual_cabt": "ACTUAL_CABT_RUN",
+    "performance_eligible": true,
+    "dataset_status": "ACTUAL_TRAINING",
+    "privacy_violations": 0,
+    "duplicate_decision_count": 0,
+    "collection_wall_clock_seconds": 424.0,
+    "standalone_validate_run": {
+      "valid": true,
+      "row_count": 96530,
+      "duplicate_decision_count": 0
+    }
+  },
+  "dataset_build": {
+    "record_count": 92902,
+    "shard_count": 91,
+    "split_episode_counts": {
+      "train": 1638,
+      "validation": 205,
+      "test": 205
+    },
+    "split_decision_counts": {
+      "train": 74449,
+      "validation": 7574,
+      "test": 10879
+    },
+    "split_fractions": {
+      "train": 0.8,
+      "validation": 0.1,
+      "test": 0.1
+    },
+    "split_seed": 12345,
+    "duplicate_conflict_count_quarantined": 3628,
+    "manifest_hash": "5f405f0ec798aa329fc79a605d25e1fdfbc27373b4e9565eccd5bc215b68afee",
+    "reproducibility_check": "build-dataset re-run with --force produced an identical manifest_hash"
+  },
+  "training": {
+    "config": "configs/offline_training_v1/production.json",
+    "epochs_configured": 40,
+    "epochs_run": 26,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "grad_clip": 1.0,
+    "patience": 5,
+    "seed": 7,
+    "hidden_dims": [
+      256,
+      128,
+      64
+    ],
+    "max_batch_decisions": 1024,
+    "device_resolved": "cuda",
+    "bf16": true,
+    "early_stop_triggered": true,
+    "early_stop_reason": "val_nll did not improve for 5 epochs (patience=5) after epoch 21 best (best_metric=0.154983)",
+    "best_checkpoint_epoch": 21,
+    "last_checkpoint_epoch": 26,
+    "model_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+    "model_purpose": "NEURAL_ACTUAL_TRAINED"
+  },
+  "offline_evaluation": {
+    "split": "test",
+    "neural_student_v1": {
+      "top1": 0.9432852284217299,
+      "top3": 1.0,
+      "mrr": 0.9716272941753226,
+      "nll": 0.17204821190531935,
+      "legal_action_rate": 1.0
+    },
+    "linear_student_v0_baseline": {
+      "top1": 0.9095505101571836,
+      "top3": 0.9983454361614119,
+      "nll": 1.1265607132234374,
+      "legal_action_rate": 1.0
+    },
+    "neural_minus_linear_top1": 0.033734718264546326
+  },
+  "screening_fixture_harness": {
+    "legal_action_rate": 1.0,
+    "fallback_rate": 0.0,
+    "verdict": "INSUFFICIENT_EVIDENCE (expected, by design)"
+  },
+  "export_and_package": {
+    "export_path": "runs/offline-training-v1/offline-long-run-actual-20260718-r1/export/neural-student-v1.json",
+    "package_archive_sha256": "d4e2cdcb4557b4bbb9968266a0990525a7e172b9a9e664b477a21f957892e67d",
+    "package_member_count": 18
+  },
+  "clean_room_verify": {
+    "verified": true,
+    "executed_cases": 8,
+    "legal_cases": 8,
+    "illegal_cases": 0,
+    "exception_cases": 0,
+    "fallback_cases": 2,
+    "legal_action_rate": 1.0
+  },
+  "preflight_100_match_seed9000": {
+    "attempted_games": 100,
+    "completed_games": 100,
+    "champion_wins": 53,
+    "challenger_wins": 47,
+    "draws": 0,
+    "invalid_actions": 0,
+    "crashes": 0,
+    "timeouts": 0,
+    "challenger_fallback_count": 0,
+    "legal_action_rate_champion": 1.0,
+    "legal_action_rate_challenger": 1.0,
+    "gate_status": "CLEAN_PASS"
+  },
+  "paired_evaluation": {
+    "seeds": [
+      10000,
+      11000,
+      12000,
+      13000
+    ],
+    "total_games": 400,
+    "champion_wins": 169,
+    "challenger_wins": 231,
+    "draws": 0,
+    "challenger_win_rate": 0.5775,
+    "challenger_win_rate_95ci_wilson": [
+      0.5286,
+      0.625
+    ],
+    "crashes_total": 0,
+    "timeouts_total": 0,
+    "invalid_actions_total": 0,
+    "challenger_fallback_count_total": 0
+  },
+  "decision_reasoning": {
+    "evaluation_summary": [
+      "The neural Student v1 trained on 2048 production episodes achieved a live actual-cabt win rate of 57.75% (95% Wilson CI [52.86%, 62.50%]) against Rule Agent v0, showing statistically significant superiority.",
+      "Offline top-1 fidelity reached 94.33% (outperforming the linear baseline by 3.37pt), confirming that the increased scale of training data (2048 games vs 128 games) successfully resolved the imitation/compounding error limits observed in the pilot (pilot win rate was 40.5%).",
+      "Safety preflight (100 games) and paired evaluation (400 games) achieved complete E2E legal execution: 0 crash, 0 timeout, 0 invalid actions, and 0 fallback triggers.",
+      "Although performance metrics would qualify the model as a promotion candidate, default agent default-fix rules are strictly maintained, keeping Rule Agent v0 as the active champion and submission default, and Promotion as NO_DECISION."
+    ]
+  }
+}

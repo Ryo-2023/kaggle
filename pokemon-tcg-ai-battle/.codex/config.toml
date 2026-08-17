@@ -1,0 +1,4 @@
+# タスク別の切替規則は AGENTS.md「モデルと推論 effort の使い分け」を正典とする。
+# 起動側が model / effort を明示しない場合のリポジトリ既定。
+model = "gpt-5.6-terra"
+model_reasoning_effort = "high"

@@ -1,0 +1,13 @@
+{
+  "run_id": "o6-team-league-f4c8f9b87ae6-raw-v1",
+  "status": "INVALID_PRIVATE_EVIDENCE",
+  "status_flags": ["INVALID_PRIVATE_EVIDENCE", "PRIVACY_VALIDATION_FAILED", "NOT_EXPORTABLE", "NOT_MERGE_EVIDENCE"],
+  "invalidation_reason": "O6-AUD-002 targeted re-audit (handoff-artifacts/o6-raw-trajectory-targeted-reaudit) found raw trajectory files retained logs, search_begin_input, and full hand/prize contents (PRIVACY-001), the field gate accepted unknown/renamed fields fail-open (PRIVACY-002), and manifest/hashes/summary tampering was undetectable by the independent verifier (INTEGRITY-001).",
+  "invalidated_finding_ids": ["O6-AUD-002-PRIVACY-001", "O6-AUD-002-PRIVACY-002", "O6-AUD-002-INTEGRITY-001"],
+  "file_count": 316,
+  "root_hash": "6d784056a5a91a21591249dc200315ac3a6b3bfc596b1226f26272bee86d62e9",
+  "root_hash_basis": "sha256 of this run's own checksums.sha256 file, computed prior to untracking from git",
+  "created_commit": "fd08e04",
+  "raw_payload_location": "intentionally omitted (restricted local quarantine on the audited worktree's disk, never git-tracked again)",
+  "superseded_by": "o6-team-league-<population_identity_hash[:12]>-public-v2 (see docs/evidence/o6-opponent-intelligence-v4/)"
+}

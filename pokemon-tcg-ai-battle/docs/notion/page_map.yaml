@@ -1,0 +1,86 @@
+schema_version: 1
+canonical_direction: repository_to_notion
+generated_at: 2026-07-31T00:00:00+09:00
+
+pages:
+  - local_path: docs/plan/design/00_overall_plan.md
+    notion_page_id: 39dfefac-d260-8152-88d0-c362991cd8d7
+    notion_url: https://app.notion.com/p/39dfefacd260815288d0c362991cd8d7
+    title: 00｜全体設計
+  - local_path: docs/plan/implementation/00_overall_implementation_plan.md
+    notion_page_id: 39dfefac-d260-814c-afdf-c3d3e3efc24d
+    notion_url: https://app.notion.com/p/39dfefacd260814cafdfc3d3e3efc24d
+    title: 00｜全体実装
+  - local_path: docs/plan/design/01_domain_knowledge_and_deck_strategy_plan.md
+    notion_page_id: 39dfefac-d260-81d2-8653-e2469bf4f170
+    notion_url: https://app.notion.com/p/39dfefacd26081d28653e2469bf4f170
+    title: 01｜カード知識・デッキ戦略｜設計
+  - local_path: docs/plan/implementation/01_domain_knowledge_and_deck_strategy_implementation_plan.md
+    notion_page_id: 39dfefac-d260-817b-8f41-d80e1ea8585b
+    notion_url: https://app.notion.com/p/39dfefacd260817b8f41d80e1ea8585b
+    title: 01｜カード知識・デッキ戦略｜実装
+  - local_path: docs/plan/design/02_structured_public_belief_and_solver_plan.md
+    notion_page_id: 39dfefac-d260-81d7-8874-d4064736a94b
+    notion_url: https://app.notion.com/p/39dfefacd26081d78874d4064736a94b
+    title: 02｜構造化Belief・探索｜設計
+  - local_path: docs/plan/implementation/02_structured_public_belief_and_solver_implementation_plan.md
+    notion_page_id: 39dfefac-d260-8107-94dc-ca2501151908
+    notion_url: https://app.notion.com/p/39dfefacd260810794dcca2501151908
+    title: 02｜構造化Belief・探索｜実装
+  - local_path: docs/plan/design/03_machine_learning_teacher_student_plan.md
+    notion_page_id: 39dfefac-d260-8166-af3f-c01c13203d6f
+    notion_url: https://app.notion.com/p/39dfefacd2608166af3fc01c13203d6f
+    title: 03｜機械学習・Teacher / Student｜設計
+  - local_path: docs/plan/implementation/03_machine_learning_teacher_student_implementation_plan.md
+    notion_page_id: 39dfefac-d260-819c-b31c-d511576583e5
+    notion_url: https://app.notion.com/p/39dfefacd260819cb31cd511576583e5
+    title: 03｜機械学習・Teacher / Student｜実装
+  - local_path: docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
+    notion_page_id: 39dfefac-d260-81f9-a47e-ee0cf2ce8b94
+    notion_url: https://app.notion.com/p/39dfefacd26081f9a47eee0cf2ce8b94
+    title: 04｜Kaggle実戦適応・共同最適化｜設計
+  - local_path: docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
+    notion_page_id: 39dfefac-d260-8174-8ea0-e73dc7e4fdc7
+    notion_url: https://app.notion.com/p/39dfefacd26081748ea0e73dc7e4fdc7
+    title: 04｜Kaggle実戦適応・共同最適化｜実装
+  - local_path: docs/plan/design/05_evaluation_submission_and_strategy_plan.md
+    notion_page_id: 39dfefac-d260-81f3-bc8f-f65aa6d62271
+    notion_url: https://app.notion.com/p/39dfefacd26081f3bc8ff65aa6d62271
+    title: 05｜評価・提出・Strategy｜設計
+  - local_path: docs/plan/implementation/05_evaluation_submission_and_strategy_implementation_plan.md
+    notion_page_id: 39dfefac-d260-817c-832b-c4bbc0854103
+    notion_url: https://app.notion.com/p/39dfefacd260817c832bc4bbc0854103
+    title: 05｜評価・提出・Strategy｜実装
+  - local_path: docs/plan/design/06_continuous_league_benchmark_and_training_specification.md
+    notion_page_id: 3adfefac-d260-8118-a02c-d56dd574c1f0
+    notion_url: https://app.notion.com/p/3adfefacd2608118a02cd56dd574c1f0
+    title: 06｜継続学習とオフライン対戦ベンチマークの設計・運用仕様
+
+status_pages:
+  - local_path: docs/status/current_status.md
+    notion_page_id: 39bfefac-d260-8143-b980-d17e9fb958a7
+    notion_url: https://app.notion.com/p/39bfefacd2608143b980d17e9fb958a7
+    notion_title: Pokémon TCG AI Battle Challenge｜プロジェクト管理
+    update_mode: selected_sections_only
+    page_kind: dashboard_mirror
+    also_maps_from:
+      - docs/status/progress.md
+      - docs/status/handoff.md
+      - docs/status/decisions.md
+    machine_managed_sections:
+      - status
+      - progress
+      - current-focus
+      - handoff
+      - decisions
+      - sync-metadata
+    human_managed:
+      - layout
+      - callouts
+      - columns
+      - quick_links
+      - child_pages
+      - navigation
+    preserve_child_pages:
+      - プロジェクトメニュー
+    full_page_replacement: prohibited

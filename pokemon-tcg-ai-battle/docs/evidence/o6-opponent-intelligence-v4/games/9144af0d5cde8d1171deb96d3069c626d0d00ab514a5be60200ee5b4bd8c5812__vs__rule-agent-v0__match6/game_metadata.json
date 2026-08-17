@@ -1,0 +1,21 @@
+{
+  "crash": false,
+  "engine_seed_capability": "ENGINE_SEED_UNSUPPORTED",
+  "execution_index": 6,
+  "fallback_usage": 0,
+  "fault": false,
+  "game_id": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__rule-agent-v0#6",
+  "latency_seconds": 0.32,
+  "pair_id": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__rule-agent-v0",
+  "participant_a": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+  "participant_b": "rule-agent-v0",
+  "requested_seed": 96006,
+  "runtime_duration_seconds": 0.32,
+  "schema_version": "o6-raw-game-metadata-v1",
+  "seat_0_participant": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+  "seat_1_participant": "rule-agent-v0",
+  "status": "DONE",
+  "timeout": false,
+  "winner": 0,
+  "winner_participant": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812"
+}

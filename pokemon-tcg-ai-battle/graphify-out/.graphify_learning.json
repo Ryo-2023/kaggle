@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-08-17T03:34:31.634273+00:00",
+  "nodes": {
+    "scripts_policy_learning_run_r2d3_multiseed_psro_performance_controller_run_full_training": {
+      "code_fingerprint": "adb5b6290257f88dcf02fa51cc261f51103a71737875c8a7314f429471b0f810",
+      "label": ".run_full_training()",
+      "last": "2026-08-08T17:53:23.740583+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-08T17:53:23.740583+00:00",
+          "outcome": "useful",
+          "q": "長時間学習を開始してよい性能根拠と最短ゲートは何か"
+        }
+      ],
+      "score": 0.823523209,
+      "source_file": "scripts/policy_learning/run_r2d3_multiseed_psro_performance.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "scripts_policy_learning_run_r2d3_multiseed_psro_performance_controller_run_multiseed_training": {
+      "code_fingerprint": "adb5b6290257f88dcf02fa51cc261f51103a71737875c8a7314f429471b0f810",
+      "label": ".run_multiseed_training()",
+      "last": "2026-08-08T17:53:23.740583+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-08T17:53:23.740583+00:00",
+          "outcome": "useful",
+          "q": "長時間学習を開始してよい性能根拠と最短ゲートは何か"
+        }
+      ],
+      "score": 0.823523209,
+      "source_file": "scripts/policy_learning/run_r2d3_multiseed_psro_performance.py",
+      "status": "tentative",
+      "uses": 1
+    },
+    "scripts_policy_learning_run_r2d3_multiseed_psro_performance_controller_training_updates": {
+      "code_fingerprint": "adb5b6290257f88dcf02fa51cc261f51103a71737875c8a7314f429471b0f810",
+      "label": ".training_updates()",
+      "last": "2026-08-08T17:53:23.740583+00:00",
+      "provenance": [
+        {
+          "date": "2026-08-08T17:53:23.740583+00:00",
+          "outcome": "useful",
+          "q": "長時間学習を開始してよい性能根拠と最短ゲートは何か"
+        }
+      ],
+      "score": 0.823523209,
+      "source_file": "scripts/policy_learning/run_r2d3_multiseed_psro_performance.py",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

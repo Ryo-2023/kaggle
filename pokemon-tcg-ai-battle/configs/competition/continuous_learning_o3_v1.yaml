@@ -1,0 +1,15 @@
+{
+  "schema_version": "o3-continuous-learning-v1",
+  "external_acquisition_config": "configs/competition/external_acquisition_o3_v1.yaml",
+  "rules_attestation_config": "configs/competition/rules_attestation_o3_v1.yaml",
+  "deck_pool": "configs/competition/deck_pool_o2_v1.yaml",
+  "opponent_pool": "configs/competition/opponent_pool_o2_v1.yaml",
+  "evaluation_matrix": "configs/competition/evaluation_matrix_o3_v1.yaml",
+  "champion": "rule-agent-v0",
+  "auto_promote": false,
+  "auto_submit": false,
+  "minimum_new_episodes": 1,
+  "minimum_new_eligible_decisions": 1,
+  "minimum_new_deck_observations": 1,
+  "maximum_artifact_age_days": 30
+}

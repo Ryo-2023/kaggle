@@ -1,0 +1,74 @@
+schema_version: team-source-policy-v1
+policy_id: pokemon-team-agents-internal-v1
+policy_version: 1.0.0
+status: approved
+
+source_match:
+  repository_name: pokemon-tcg-ai-battle
+  remote: origin
+  branch_globs: ["agents/*"]
+
+approval:
+  approval_type: namespace_policy
+  approved_by: "Project owner / team representative"
+  approved_at: "2026-07-21"
+  approval_basis: "Explicit approval in project conversation"
+  scope: "Team-internal development, evaluation, training, and strategy analysis"
+  applies_to_existing_branches: true
+  applies_to_future_matching_branches: true
+
+allowed:
+  evaluation: true
+  training_data_generation: true
+  strategy_analysis: true
+  team_redistribution: true
+
+prohibited:
+  public_redistribution: true
+  submission_bundle: true
+  external_redistribution: true
+  automatic_champion_promotion: true
+
+technical_requirements:
+  commit_sha_pinned: true
+  source_snapshot_required: true
+  static_security_scan: true
+  dependency_inventory_required: true
+  isolated_execution_required: true
+  legal_action_validation_required: true
+  state_leakage_test_required: true
+  timeout_and_resource_limits_required: true
+  no_private_information_access: true
+  no_automatic_dependency_install: true
+  no_unreviewed_network_access: true
+  submission_runtime_isolation_required: true
+
+activation_policy:
+  permission_status_after_match: approved
+  technical_validation_still_required: true
+  new_commit_requires_revalidation: true
+  branch_rename_requires_source_rebinding: true
+  failed_validation_action: quarantine
+  unknown_dependency_action: block
+  invalid_deck_action: block
+  unsafe_code_action: quarantine
+
+artifact_policy:
+  immutable_source_snapshot: true
+  immutable_population_snapshot: true
+  content_hash_verification: true
+  manifest_hash_verification: true
+  large_artifacts_in_git: false
+  latest_alias_allowed: true
+  experiment_must_pin_resolved_population_id: true
+
+revocation:
+  supported: true
+  preserve_historical_manifests: true
+  stop_new_use_after_revocation: true
+  do_not_mutate_published_snapshots: true
+
+notes:
+  - "This policy grants permission; it does not bypass technical validation."
+  - "Agent logic must not be copied into a submission bundle without separate explicit approval."
+  - "Public or external redistribution remains prohibited."

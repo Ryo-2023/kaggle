@@ -1,0 +1,53 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_stability_v8_20260816",
+  "seed_namespace": "self-owned-cg-stability-v8-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-generation-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v2-20260816-00",
+    "runs/cg-self-owned-deck-generation-v2-20260816-01",
+    "runs/cg-self-owned-deck-generation-v2-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-00",
+    "runs/cg-self-owned-deck-generation-v3-20260816-01",
+    "runs/cg-self-owned-deck-generation-v3-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-03",
+    "runs/cg-self-owned-deck-generation-v3-20260816-04",
+    "runs/cg-self-owned-deck-generation-v3-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-00",
+    "runs/cg-self-owned-deck-generation-v4-20260816-03",
+    "runs/cg-self-owned-deck-generation-v4-20260816-04",
+    "runs/cg-self-owned-deck-generation-v4-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06",
+    "runs/cg-self-owned-cg-policy-factorial-v1-20260816-retry1",
+    "runs/cg-self-owned-cg-meta-batch-v2-20260816-promoted",
+    "runs/cg-self-owned-cg-meta-batch-v3-20260816-promoted",
+    "runs/cg-self-owned-cg-meta-batch-v4-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-factorial-v2-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v5-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v6-cross-archetype-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v7-broad-support-20260816-promoted",
+    "runs/cg-self-owned-independent-root-policy-family-v1-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "stability-v8-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261400, "ordinal": 0},
+    {"id": "stability-v8-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261401, "ordinal": 1},
+    {"id": "stability-v8-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261402, "ordinal": 2},
+    {"id": "stability-v8-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261403, "ordinal": 3},
+    {"id": "stability-v8-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261404, "ordinal": 4},
+    {"id": "stability-v8-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261405, "ordinal": 5},
+    {"id": "stability-v8-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261406, "ordinal": 6},
+    {"id": "stability-v8-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20261407, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "balanced-v8-00", "deck_recipe_id": "stability-v8-00", "overrides": {}},
+    {"id": "lethal-v8-01", "deck_recipe_id": "stability-v8-01", "overrides": {"lethal_bonus": 22000, "attack_damage_weight_milli": 1500}},
+    {"id": "setup-v8-02", "deck_recipe_id": "stability-v8-02", "overrides": {"setup_active_riolu": 48000, "setup_bench_riolu": 42000, "search_mega_lucario": 60000}},
+    {"id": "attack-v8-03", "deck_recipe_id": "stability-v8-03", "overrides": {"attack_generic_base": 15000, "attack_982_base": 48000, "attack_983_base": 62000, "attack_damage_weight_milli": 1800}},
+    {"id": "attach-v8-04", "deck_recipe_id": "stability-v8-04", "overrides": {"attach_mega_lucario": 56000, "attach_mega_2energy_bonus": 14000, "attach_overenergy_penalty": -40000, "retreat_good_score": 16000}},
+    {"id": "retreat-v8-05", "deck_recipe_id": "stability-v8-05", "overrides": {"attach_mega_lucario": 42000, "attach_mega_2energy_bonus": 6000, "attach_overenergy_penalty": -18000, "retreat_good_score": 22000}},
+    {"id": "ability-v8-06", "deck_recipe_id": "stability-v8-06", "overrides": {"ability_bonus": 40000, "search_mega_lucario": 62000, "setup_active_riolu": 50000}},
+    {"id": "conservative-v8-07", "deck_recipe_id": "stability-v8-07", "overrides": {"lethal_bonus": 8000, "attack_damage_weight_milli": 700, "attack_generic_base": 8000, "attach_mega_lucario": 50000, "attach_overenergy_penalty": -45000}}
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": "self-owned-cg-deck-bound-source-cem-plan-v1",
+  "source_epoch": "self_owned_cg_deck_bound_source_cem_v4_root_neighborhood_20260817",
+  "seed_namespace": "self-owned-cg-deck-bound-source-cem-fresh-v4-20260817",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-portfolio-hard-negative-source-v2-20260816",
+    "runs/cg-portfolio-lucario-core-source-v3-retry1-20260816",
+    "runs/cg-portfolio-lucario-core-source-v4-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v21-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v20-20260816",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-margin-gated-v1-20260816"
+  ],
+  "reference_specs": [
+    {"id": "p1_reference_v4", "package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package"},
+    {"id": "rule_v0_reference_v4", "package": "runs/meta-specialist-performance-sprint-v1/rule-v0-root-deck"},
+    {"id": "balanced_independent_reference_v4", "package": "runs/cg-self-owned-independent-root-policy-family-v1-20260816/p1-controls/balanced-independent-v1-00"}
+  ],
+  "deck_recipes": [
+    {"id": "premium-v26", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v26_root_neighborhood_premium.json", "seed": 20289901, "ordinal": 901},
+    {"id": "search-v26", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v26_root_neighborhood_search.json", "seed": 20289902, "ordinal": 902},
+    {"id": "support-v26", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v26_root_neighborhood_support.json", "seed": 20289903, "ordinal": 903},
+    {"id": "gust-v26", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v26_root_neighborhood_gust.json", "seed": 20289904, "ordinal": 904},
+    {"id": "premium2-v27", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v27_root_neighborhood_premium2.json", "seed": 20289905, "ordinal": 905},
+    {"id": "search2-v27", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v27_root_neighborhood_search2.json", "seed": 20289906, "ordinal": 906},
+    {"id": "support2-v27", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v27_root_neighborhood_support2.json", "seed": 20289907, "ordinal": 907},
+    {"id": "gust2-v27", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v27_root_neighborhood_gust2.json", "seed": 20289908, "ordinal": 908}
+  ]
+}

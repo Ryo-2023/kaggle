@@ -1,0 +1,32 @@
+{
+  "schema_version": "offline-training-v1-config-v1",
+  "profile": "o2-actual-cabt-smoke",
+  "run_id_prefix": "o2-real-cabt",
+  "collection": {
+    "source": "actual",
+    "games": 40,
+    "base_seed": 9300,
+    "max_steps": 10000,
+    "validation_percent": 25,
+    "split_seed": 93
+  },
+  "dataset": {
+    "shard_size": 32,
+    "train_fraction": 0.5,
+    "validation_fraction": 0.25,
+    "test_fraction": 0.25,
+    "split_seed": 93
+  },
+  "model": {"preset": "compact"},
+  "training": {
+    "epochs": 2,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "grad_clip": 1.0,
+    "patience": 2,
+    "seed": 93,
+    "max_batch_decisions": 64,
+    "device": "cpu"
+  },
+  "screening": {"games": 4, "base_seed": 9400}
+}

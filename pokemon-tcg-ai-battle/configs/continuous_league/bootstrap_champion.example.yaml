@@ -1,0 +1,43 @@
+schema_version: bootstrap-champion-config-v1
+
+# Bootstrap step 0、RuntimePolicy公開、通常学習で同じモデル形状を使う。
+# 既存RuntimePolicyをDIRECT_CHECKPOINTとして採る場合は、元のmanifestの
+# `model_config` と一致させる。
+model:
+  state_size: 128
+  action_size: 64
+  hidden_size: 256
+  recurrent_core: gru
+  atoms: 51
+  v_min: -1.0
+  v_max: 1.0
+  opponent_classes: 64
+  deck_family_classes: 32
+  action_type_classes: 32
+
+# 実装のテストではこれらの対局数を実行しない。
+qualification_games_per_candidate: 4
+screen_games_per_candidate: 256
+screen_finalists: 4
+validation_games_per_candidate: 1024
+screen_seed_namespace: bootstrap-screen-v1
+validation_seed_namespace: bootstrap-validation-v1
+
+teacher_split:
+  train: 0.8
+  validation: 0.2
+teacher_outcome_weights:
+  win: 1.0
+  draw: 0.5
+  loss: 0.25
+
+# `bootstrap-distill --config` はこの値と model: の次元を固定する。
+distillation:
+  learning_rate: 0.0001
+  batch_size: 32
+  max_epochs: 20
+  patience_epochs: 4
+  gradient_clip: 40.0
+  seed: 71000
+
+# `bootstrap-initialize` と `bootstrap-publish-runtime` はこの model: を読む。

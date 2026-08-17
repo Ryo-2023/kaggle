@@ -1,0 +1,78 @@
+{
+  "schema_version": "o6-search-agent-diagnosis-v1",
+  "date": "2026-07-21",
+  "method": "isolated subprocess, own HOME, faulthandler.dump_traceback_later(8s, repeat=True) attached before kaggle_environments import; phase markers on stderr for module import / agent module exec / first+second deck call / env make; per-decision timing wrapper never fires (0 decisions observed in any run)",
+  "targets": [
+    {
+      "source_branch": "origin/agents/ozawa-metal-psychic-search",
+      "pinned_commit": "84721642664b4755d2619628b79d8d83ab456a77",
+      "runs": [
+        {"timeout_seconds": 90, "env_overrides": {}, "outcome": "TIMEOUT", "decisions_observed": 0},
+        {"timeout_seconds": 30, "env_overrides": {}, "outcome": "TIMEOUT", "decisions_observed": 0},
+        {"timeout_seconds": 60, "env_overrides": {"SEARCH_LOCAL_FIXED_BUDGET": "0.05"}, "outcome": "TIMEOUT", "decisions_observed": 0,
+         "note": "SEARCH_LOCAL_FIXED_BUDGET is env-overridable in this agent's own source (main.py) but did not change the outcome"},
+        {"timeout_seconds": 20, "env_overrides": {}, "outcome": "TIMEOUT", "decisions_observed": 0,
+         "faulthandler_stack": [
+           "cg/utils.py:30 in to_dataclass",
+           "cg/utils.py:63 in json_to_dataclass",
+           "cg/api.py:608 in search_step",
+           "main.py:3472 in _rollout",
+           "main.py:3538 in _run_one",
+           "main.py:3577 in _search_choose_main",
+           "main.py:3671 in choose_action",
+           "main.py:3819 in agent"
+         ]}
+      ],
+      "phase_timings_before_stuck": {
+        "module_import_kaggle_env_seconds": "~2.6 (shared with kaggle_environments import cost measured independently, see note)",
+        "agent_module_exec_seconds": 0.04,
+        "first_deck_call_seconds": "<0.001",
+        "second_deck_call_seconds": "<0.001",
+        "env_make_seconds": 0.017,
+        "first_decision_search": "never completed within 20-90s across 4 attempts"
+      }
+    },
+    {
+      "source_branch": "origin/agents/water-box-search",
+      "pinned_commit": "3759a983164732b7babdcca5c9620da83ebc8acf",
+      "runs": [
+        {"timeout_seconds": 20, "env_overrides": {}, "outcome": "TIMEOUT", "decisions_observed": 0,
+         "faulthandler_stack": [
+           "main.py:2056 in _rollout",
+           "main.py:2130 in _run_one",
+           "main.py:2161 in _search_choose_main",
+           "main.py:2242 in choose_action",
+           "main.py:2341 in agent"
+         ]}
+      ]
+    }
+  ],
+  "shared_architecture": {
+    "both_agents_use": "a shared `cg` package (cg/api.py, cg/utils.py, cg/sim.py) that binds a native game-simulation library (cg/libcg.so on this host; libcg-arm64.so/libcg.dylib/cg.dll also bundled for other platforms) via ctypes, used for MCTS-style rollouts inside choose_action -> _search_choose_main -> _run_one -> _rollout",
+    "own_time_budget_mechanism": "both agents already implement a documented, code-level, wall-clock decision budget: _decision_budget() reads obs_dict['remainingOverageTime'] (absent in this local cabt run -> falls back to SEARCH_LOCAL_FIXED_BUDGET=1.0s), clamps to [SEARCH_MIN_DECISION_BUDGET=0.3s, SEARCH_MAX_DECISION_BUDGET=4.0s], and _rollout() checks `time.monotonic() > deadline` once per rollout iteration before the next simulated step; a module-level SEARCH_GLOBAL_GUARD_SECONDS=360.0 (documented in-source as '60% of the 600s/match budget') caps cumulative per-game search time.",
+    "root_cause_identified": "the deadline check in _rollout() is only evaluated BETWEEN calls to search_step(); it cannot preempt a single in-flight search_step() call. In this execution environment, a single search_step() call (native ctypes round-trip + cg.utils.to_dataclass recursive JSON->dataclass conversion of the returned state) was observed still executing after two consecutive 8-second faulthandler dumps (i.e. >16s) without returning, for both agents, on the very first search-eligible decision of the very first game.",
+    "network_or_credential_capability": "none found. `cg/api.py` imports only `ctypes`/`json`/local siblings; no socket/requests/urllib/httpx usage in either agent's static scan or in the cg package. The LiteLLM startup warnings observed in stderr are unrelated: they were reproduced from a bare `from kaggle_environments import make` alone (no agent code involved, ~2.6s one-time cost), i.e. environment-level, not agent-introduced.",
+    "infinite_loop_ruled_out": "no. _rollout is bounded by ROLLOUT_MAX_SELECTS iterations and the deadline check; _run_one/_search_choose_main are bounded by SEARCH_GLOBAL_GUARD_SECONDS. The observed stall is a single call taking far longer than its own budget anticipates, not an unbounded loop.",
+    "environment_confound_uncertain": "this session's Bash tool calls are visibly wrapped by a safety-guard layer (observed separately as a `[guard_destructive]` interception on an unrelated `rm -rf`). Whether an FFI-heavy ctypes call pattern is unusually slow specifically under that wrapping, vs. genuinely this slow on unconstrained hardware (e.g. Kaggle's actual runtime), was not established -- this diagnosis reports what was actually measured in this environment and does not extrapolate to Kaggle-hosted behavior."
+  },
+  "classification": {
+    "ozawa-metal-psychic-search": "UNSUPPORTED_RUNTIME (root cause NEEDS_OWNER_FIX)",
+    "water-box-search": "UNSUPPORTED_RUNTIME (root cause NEEDS_OWNER_FIX)",
+    "rationale": "Superseded by empirical profiling below: this is no longer only a budget/timeout classification. A reproducible native-library crash was found in both agents' shared `cg` package."
+  },
+  "profiling_update_2026_07_21": {
+    "method": "cg.utils.to_dataclass / json_to_dataclass / cg.api.search_step / search_begin / search_end / search_release / to_observation_class monkey-patched with call-count+wall-time counters; faulthandler.dump_traceback_later(6s, repeat=True) attached; full self-play game driven via kaggle_environments' own environment.run([agent, agent]), cwd set to the materialized source root (matching the production adapter), timeout 35s via the `timeout` coreutil.",
+    "finding_1_gemini_hypothesis_partially_contradicted": "Gemini's static estimate attributed the timeout to cumulative to_dataclass overhead across ~2400 rollout steps (10-40s). Measured: 426 to_dataclass calls made during module import/setup totaled 0.0004s (max single call 0.000028s) -- individual to_dataclass calls are not slow. The actual stall is concentrated in a small number of very long-blocking calls, not many cheap ones.",
+    "finding_2_native_call_is_the_bottleneck": "faulthandler snapshots repeatedly (across independent runs and both agents) caught execution inside a single in-flight `search_step` call (cg/api.py -> lib.SearchStep via ctypes) for 6-16+ continuous seconds without returning, confirming the wall-clock cost is dominated by the native library round-trip itself, not by the Python-side JSON/dataclass conversion around it.",
+    "finding_3_segfault_reproduced": "In 2 of 2 repeated runs for ozawa-metal-psychic-search and 1 of 1 run for water-box-search, the isolated subprocess crashed with SIGSEGV (exit code 139) after the long search_step stall, with the crash-adjacent stack trace still inside the same _rollout -> search_step / to_dataclass code path. This is a memory-safety defect in the shared native `cg` library (libcg.so), not a Python-level bug, and is consistent with the SearchState/root_state release-leak concern raised independently in the Gemini review (claude_handoff.md item 4: search_begin's per-world root_state is not individually search_release'd).",
+    "finding_4_binary_compatibility_ruled_out_as_sole_cause": "`ldd cg/libcg.so` resolves cleanly against this host's libstdc++/libgcc_s/libc/libm (glibc 2.39); `readelf --version-info` shows no unmet GLIBC/GLIBCXX/CXXABI requirement. The crash is not explained by a missing-symbol or too-old-glibc incompatibility; it is more likely a genuine memory-corruption bug reachable through repeated SearchBegin/SearchStep/SearchEnd cycles in one process.",
+    "revised_conclusion": "The per-decision wall-clock budget mismatch (SEARCH_LOCAL_FIXED_BUDGET vs O6's smoke timeout) is real but secondary. The primary, owner-actionable defect is a reproducible native-library crash (SIGSEGV) in the shared `cg` package used by both blocked agents, most plausibly tied to incomplete SearchState release. O6's per-game isolated-subprocess adapter architecture already contains the blast radius of this crash to a single disposable subprocess (validated: it does not take down the host League/validate process); this finding is a reason to keep that isolation, not to relax it.",
+    "bundled_native_binary_provenance": "ozawa-metal-psychic-search and water-box-search bundle byte-identical cg/libcg.so files (sha256 ffd89bf9...) that are DIFFERENT from the libcg.so shipped inside the installed kaggle_environments package itself (sha256 7acbfc7b...). cg/api.py and cg/utils.py (containing search_step/to_dataclass) are not part of the official kaggle_environments distribution at all -- they are team-authored ctypes bindings around a separately-distributed native library. Because Python resolves `from .sim import lib` relative to the bundled cg package's own file location, the real Kaggle runtime would also load the team's bundled ffd89bf9... binary, not the pip-installed 7acbfc7b... one -- so this crash is not ruled out as a pre-existing risk on Kaggle's actual infrastructure, but it also cannot be confirmed there without access to that exact host.",
+    "gemini_mitigations_assessment": "SEARCH_NUM_WORLDS/SEARCH_MAX_CANDIDATES/ROLLOUT_MAX_SELECTS reductions (proposed in timeout_agent_static_analysis.json) would reduce the number of search_step calls and therefore the probability of hitting the slow-call/crash path per decision, but do not fix the underlying native memory-safety bug and were not applied here (agent logic must not be changed by O6). The FAST_DESERIALIZATION mitigation (cache __dataclass_fields__, avoid recursive dataclass construction) is not supported by finding_1: to_dataclass itself was not measured to be the bottleneck in this run, so that specific fix would not address the crash."
+  },
+  "adapter_timeout_contract_findings": {
+    "documented_search_budget_is_externally_configurable": "partially -- ozawa-metal-psychic-search reads SEARCH_LOCAL_FIXED_BUDGET from an environment variable (tested, had no effect on this failure mode since the failure is inside a single call, not aggregate budget); water-box-search hardcodes SEARCH_LOCAL_FIXED_BUDGET=1.0 with no override hook.",
+    "safe_budget_injection_without_changing_agent_logic": "not effective for this specific failure mode: the blocking operation is a single native call the agent's own deadline check cannot interrupt mid-flight, so no O6-side timeout/config injection (env var, adapter timeout, warm process reuse) can make search_step() itself finish faster or become interruptible without modifying agent source, which is out of scope.",
+    "recommendation": "do not weaken or route around either agent's search logic from O6. Report this diagnosis to the source owners (nihei team is not implicated; both blocked sources use the shared `cg` package) for them to add an interruptible/timeout-bounded native call wrapper if they want VALIDATED status under O6's isolated-subprocess adapter."
+  }
+}

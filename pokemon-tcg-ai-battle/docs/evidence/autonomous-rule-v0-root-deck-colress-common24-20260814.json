@@ -1,0 +1,73 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-colress-common24-v1",
+  "date": "2026-08-14",
+  "purpose": "Common24 guardrail for the only positive P0 Rule v0/root-deck weighted candidate",
+  "root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814-common24-retry-v3",
+  "common24_manifest_sha256": "98d484667946fc24e9cf94b335c75aa702c792d24e61c1a71a283f77931be56b",
+  "summary_sha256": "053eb00cf500ff1688ef3e4a741d94a4ac24fa12574608a54d9b0ed47b8e8009",
+  "summary_md_sha256": "9effcf8028821c4e35ea517bcb997983e1383184f3b6ce1bd1248f117357abab",
+  "final_summary_sha256": "b28312873ec039bc64662516df25893ba28e7b63023e108b754d362a6f644276",
+  "source_weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814",
+  "source_weighted_manifest_sha256": "6aa07690b4f605309418e1a574bd24050758412b185a3b2285974b77f052b417",
+  "protocol": {
+    "common24_opponents": 24,
+    "games_per_arm": 96,
+    "games_per_seat": 2,
+    "base_seed": 23420000,
+    "same_seed_schedule": true,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "faults_total": 0,
+    "heldout_exposure": false,
+    "unique_game_ids_per_arm": true,
+    "unique_seeds_per_arm": true,
+    "seat_counts_per_arm": {"0": 48, "1": 48}
+  },
+  "arms": {
+    "parent": {
+      "wdlf": "8-1-87-0",
+      "score_rate": 0.08854166666666667,
+      "summary_sha256": "2c7e2c7983abd9b9b23302a7a724136d12bb6fc8b21051dc2ef9040b7c266a8b",
+      "ledger_sha256": "01a0b5e5104ee5c355120f4c753f2fdb3a75f4dabb59a1e09fba3e150cabcd93",
+      "manifest_sha256": "8203d15b120f77fb24619ad0a36f86fd069147d3e2317860fb3e66410a75a30b"
+    },
+    "root-carmine-to-colress": {
+      "mutation": "1192 Carmine -> 1194 Colress's Tenacity",
+      "deck_file_sha256": "af201a2106b501533beb1b17d5b944b6cab83d0d6cd8288bfc5d4105774516f6",
+      "deck_multiset_sha256": "1c765b30b8deb5b35d35addb1ea7fecc047c1b9d8119a6bff2b1ecd3754974a5",
+      "wdlf": "11-0-85-0",
+      "score_rate": 0.11458333333333333,
+      "delta_vs_parent_points": 2.6041666666666656,
+      "status": "candidate_only_common24_positive_no_confirmation",
+      "summary_sha256": "620fc0e676debe90634e14b79a4b0156df43b8aaec3840341db14c9b4d806243",
+      "ledger_sha256": "3823036284f623f37630f992b6c29a5370a03215a4834cbc22798a53b9ed0cc1",
+      "manifest_sha256": "4daf47d78f5c05b302e0804e9e58f022bd227bcc78feaeed76cca016da9223"
+    }
+  },
+  "invalid_prior_roots": [
+    {
+      "root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814-common24",
+      "reason": "one transient parent relative-deck-path fault; excluded from score"
+    },
+    {
+      "root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814-common24-retry-v2",
+      "reason": "stdin multiprocessing spawn failure before a valid ledger; excluded from score"
+    }
+  ],
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_pass": true,
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "promotion": "none",
+    "next": "Keep candidate-only; require a separately approved 384 confirmation before any promotion or longrun."
+  }
+}

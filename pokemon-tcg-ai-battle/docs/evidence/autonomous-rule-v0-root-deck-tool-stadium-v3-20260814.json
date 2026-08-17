@@ -1,0 +1,79 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-tool-stadium-v3-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root-deck novel Tool/Stadium weighted48 then common24 screen",
+  "weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-tool-stadium-v3-weighted48-20260814",
+  "common24_root": "runs/final-sprint-autonomous/rule-v0-root-deck-tool-stadium-v3-common24-20260814",
+  "weighted_manifest_sha256": "64d7c5e685cf2d743fb6d2f9d9e51665b2453c6f429643b981a4d166ab088f9a",
+  "weighted_summary_sha256": "3301caf2b36f74766521aff4b6aa632a672788926dc68798330260ac14a7a088",
+  "weighted_summary_md_sha256": "b336cf6905bdc0d37e188c6f8d48552e6ad6e890bd7b2c300db5d9479389580a",
+  "common24_manifest_sha256": "d970ef19a7c290e785c4a5dd1bad84d9cfaa41df26a5350d5f682bb9402f5781",
+  "common24_summary_sha256": "7058abc988944be84f0f0ba9b6c2cfaf50be2c325a3650726d674a3792bd151b",
+  "common24_summary_md_sha256": "b4f1d197dde58353f582a62131c2715c0ca55fcb99b798ba9947e2e6e65bfaac",
+  "common24_final_sha256": "82fdf5ffa6b01aa20dbc7a8789208cb06f7e5f5cb03dc1509ea34520e11e24ea",
+  "protocol": {
+    "weighted_base_seed": 23470000,
+    "common24_base_seed": 23480000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "weighted_games_per_arm": 48,
+    "common24_games_per_arm": 96,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "faults_total": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "root-hero-cape-to-maximum-belt",
+      "mutation": "1159 Hero Cape -> 1158 Maximum Belt",
+      "deck_file_sha256": "b6027a60d29d094764f6eb56e2c2a3e291daac5fb071f30ac349e512ad4449fc",
+      "deck_multiset_sha256": "1685104a25f3afd3581a7b310b9068ac5f38d30160495cd99f02b8fe8a17c90a",
+      "weighted_wdlf": "4-0-44-0",
+      "weighted_delta_points": 6.283903953134224,
+      "common24_wdlf": "7-0-89-0",
+      "common24_delta_points": -7.291666666666667,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "f710e45abecc0a73165b9f3af8a7f5607be25c2b23d37a4cd060ef5032e8c831",
+      "weighted_arm_manifest_sha256": "b01cbf8ff9f0d69dcd5b644aeae1ff5464ec4a50b2c3b660422ec8cf35514184",
+      "common24_arm_summary_sha256": "9c030014d2011acd6075fac05a5db9887df5256e64178b4bdb53f0c4a98524e2",
+      "common24_arm_manifest_sha256": "12efdf206622baaa44221e27b2c5ce47a65e5f74638e934f768c99b173d67b9f"
+    },
+    {
+      "candidate_id": "root-gravity-mountain-to-festival-grounds",
+      "mutation": "1252 Gravity Mountain -> 1245 Festival Grounds",
+      "deck_file_sha256": "d034887232321f6466b69c4b5c23580d05b4e169539582df60634be20f980f2e",
+      "deck_multiset_sha256": "3f26ca157b1d79855abe773e3ba9c65b823e0b4d4a12002df665e755cfae75ae",
+      "weighted_wdlf": "5-0-43-0",
+      "weighted_delta_points": 8.54961018194626,
+      "common24_wdlf": "10-0-86-0",
+      "common24_delta_points": -4.166666666666667,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "6b7c16d441f2a0a75fbeab3699fc7e7391985979dfd1549b337ac8ed2c7cc7f9",
+      "weighted_arm_manifest_sha256": "7b3201dcd7b2e446523bfff0a5482f6e706b77741a2a0f3cc635cbfc3f165e80",
+      "common24_arm_summary_sha256": "dcef80227851b26bf316706f64103163ea5e54e5fe76496f755c12044202205c",
+      "common24_arm_manifest_sha256": "3201e229bde2251474d603ed05ed9e4d8913afe5a6f948ecacde0cdc486ba1ae"
+    }
+  ],
+  "parent_common24": {
+    "wdlf": "14-0-82-0",
+    "score_rate": 0.14583333333333334,
+    "summary_sha256": "64104d262bf7cf2c329bfc7feac607537cf8e82e5e4fcc6620ad754cc202784d",
+    "manifest_sha256": "6f556d491984a59894fb319cd87c15f22a9a7ac9155a0b49c5525c64e01d0a77"
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": true,
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "promotion": "none",
+    "reason": "Both weighted Tool/Stadium positives reversed against the parent on common24; stop these surfaces without 384 or longrun."
+  }
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Pokemon opponent ingestion every 12 hours
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+Persistent=true
+Unit=pokemon-opponent-ingest.service
+
+[Install]
+WantedBy=timers.target

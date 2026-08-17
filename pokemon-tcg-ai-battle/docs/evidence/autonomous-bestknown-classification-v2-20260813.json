@@ -1,0 +1,232 @@
+{
+  "schema_version": "mage-ptcg-autonomous-bestknown-classification-v2",
+  "as_of": "2026-08-13",
+  "research_only": true,
+  "promotion_authority": false,
+  "training_authority": false,
+  "submission_authority": false,
+  "interpretation": {
+    "evaluation_best_known": "The strongest bounded local evaluation candidate currently observed. The deck-mutation arm uses 23 non-self opponents and is therefore not a replacement for the 24-opponent native ranking until a common-protocol rerun is complete.",
+    "training_eligible_best_known": "The strongest pair that is both permission-qualified in the current training schedule and has a current sealed snapshot. This is separate from local evaluation strength and never grants submission permission.",
+    "submission_eligible_best_known": "The strongest package-closed, clean-room-smoked pair currently connected to the production submission route. Local-evaluation opponent assets are excluded.",
+    "global_best_known": "A global claim requires the same protocol for all measured and quarantined assets plus package/permission reconciliation. It remains unresolved here."
+  },
+  "classification": {
+    "EvaluationBestKnown": {
+      "status": "PROVISIONAL_BOUNDED_EVALUATION_BEST_KNOWN",
+      "pair_id": "plamen06_steel::deck_mutation=aab824462a561b8a459fc71e1a780dc46487f8ab9ed27514a2dfff17fb40b6d9",
+      "base_asset_id": "plamen06_steel",
+      "archetype": "Archaludon",
+      "candidate_id": "aab824462a561b8a459fc71e1a780dc46487f8ab9ed27514a2dfff17fb40b6d9",
+      "policy_sha256": "8a40be6825612ea927f5a6fd3396bb18e78a198d554e44cbb572acbab1b74ac3",
+      "deck_sha256": "9f413dd4423c2a90f40fa25753f01a610607fa1e0be8c54a9aee50b1285639e7",
+      "deck_multiset_sha256": "a9b45c1d90672bf46ad67bc61e4f8a7382a44e5745d27f1b823495655909f227",
+      "parent_deck_sha256": "fbe6ab59992260b0d6774abed19469be315521b5ed0546de8c20f329607693e6",
+      "score_rate": 0.748302,
+      "requested_games": 1472,
+      "wins": 1101,
+      "draws": 1,
+      "losses": 370,
+      "faults": 0,
+      "opponents": 23,
+      "seats": 2,
+      "games_per_opponent_seat_per_block": 8,
+      "basis": "Four independent 368-game confirmation blocks, candidate arm; every block was candidate-positive against the parent native arm.",
+      "authority": {
+        "training_allowed": false,
+        "promotion_allowed": false,
+        "submission_allowed": false,
+        "longrun_allowed": false
+      },
+      "comparability_caveat": "The pooled top-3 native ranking uses a 24-reference protocol with subject replacement rules; this mutation confirmation intentionally uses 23 non-self references. The candidate is therefore the bounded evaluation leader, not yet a globally common-protocol winner."
+    },
+    "TrainingEligibleBestKnown": {
+      "status": "TOMATOMATO_PRIMARY_WITH_LUCIFER_CONTROL",
+      "primary_pair_id": "tomatomato_archaludon",
+      "primary_archetype": "Archaludon/Cinderace",
+      "primary_policy_sha256": "8908af5caad296820a6ce5a9c8d388f04869eb499b308ac446142d9dcdaced9e",
+      "primary_deck_sha256": "42165967b565dd42ec426ecccfe79bfa7d72aa8306590e149dface0ee8bd530e",
+      "primary_native_common_arena_score_rate": 0.720703125,
+      "primary_native_common_arena_games": 1536,
+      "current_training_schedule_allowed": true,
+      "current_behavior_allowed": false,
+      "sealed_snapshot": {
+        "path": "runs/meta-specialist-teacher-records/archaludon-teacher-tomatomato-96/teacher_dataset_manifest.json",
+        "sha256": "b5a5bd30d0e0807c90ea65307e9665c01921842bfedc9abd4557ea02775b53ff",
+        "games": 96,
+        "records": 5146,
+        "outcome": "60W/36L",
+        "seat_balance": "48/48"
+      },
+      "eligible_control_pair_ids": [
+        "lucifer19_battlecore"
+      ],
+      "control_snapshot": {
+        "path": "runs/meta-specialist-teacher-records/archaludon-teacher-lucifer19-96-strong-20260812/teacher_dataset_manifest.json",
+        "sha256": "d25d1d4f0cdc51207e9269d510310981039f3ebefd570f3c33ccc1c1a7023d84",
+        "games": 96,
+        "records": 5102,
+        "outcome": "72W/24L",
+        "seat_balance": "48/48"
+      },
+      "plamen_note": "plamen06_steel is permission-qualified in the older derivation decision, but has no current sealed teacher snapshot and is training_allowed=false in the immutable META_TRAIN permission-filtered schedule. Its mutation candidate is not a training asset."
+    },
+    "SubmissionEligibleBestKnown": {
+      "status": "RULE_V0_ROOT_DECK_PACKAGE_ANCHOR",
+      "pair_id": "rule-v0-root-deck",
+      "production_policy_sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+      "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+      "archive_path": "runs/meta-specialist-performance-sprint-v1/rule-v0-root-deck/submission.tar.gz",
+      "archive_sha256": "da4bbe9d65c6d42feae2070fc02711efde4ffbe1ca08b9f9f00bfed3d96f9b9a",
+      "clean_room_smoke": {
+        "status": "PASS",
+        "games": 2,
+        "done": 2,
+        "faults": 0,
+        "illegal_actions": 0
+      },
+      "reason": "All 102 pool assets, including the native top-3 and mutation candidate, are local_eval_only and prohibited from as-is package inclusion. The current package builder is connected to the root Rule v0 route only."
+    },
+    "BestKnownArchaludon": {
+      "status": "PROVISIONAL_MUTATION_LEADER_NOT_PACKAGEABLE",
+      "pair_id": "plamen06_steel::deck_mutation=aab824462a561b8a459fc71e1a780dc46487f8ab9ed27514a2dfff17fb40b6d9",
+      "policy_source": "native plamen06_steel",
+      "policy_sha256": "8a40be6825612ea927f5a6fd3396bb18e78a198d554e44cbb572acbab1b74ac3",
+      "deck_sha256": "9f413dd4423c2a90f40fa25753f01a610607fa1e0be8c54a9aee50b1285639e7",
+      "parent_native": {
+        "pair_id": "plamen06_steel",
+        "score_rate": 0.7282608695652174,
+        "games": 1472,
+        "wins": 1072,
+        "draws": 0,
+        "losses": 400,
+        "faults": 0
+      },
+      "candidate_vs_parent": {
+        "score_delta_points": 2.0041,
+        "win_delta": 29,
+        "block_deltas_points": [
+          3.8043,
+          0.2717,
+          2.1739,
+          1.7663
+        ],
+        "all_four_blocks_candidate_ahead": true,
+        "all_four_blocks_faults": 0
+      },
+      "policy_race": {
+        "path": "runs/final-sprint-autonomous/deck-mutation-plamen-v1/policy-race-736/policy_race_summary.json",
+        "sha256": "e941429da0252c9dd79f95ba294c7ba68d3eb3e8e9acbe12c71a3a1426a93f65",
+        "native_default": "271W/0D/97L/0F in 368 (73.6413%)",
+        "use_search_0": "271W/0D/97L/0F in 368 (73.6413%)",
+        "interpretation": "No policy difference observed in this block; the positive signal belongs to the deck mutation, not to disabling search."
+      },
+      "authority": {
+        "training_allowed": false,
+        "promotion_allowed": false,
+        "submission_allowed": false,
+        "longrun_allowed": false
+      }
+    },
+    "GlobalBestKnown": {
+      "status": "UNRESOLVED",
+      "current_common_arena_native_leader": "tomatomato_archaludon",
+      "current_common_arena_native_score_rate": 0.720703125,
+      "current_common_arena_native_games": 1536,
+      "reason_codes": [
+        "slow5_assets_have_no_completed_ranking",
+        "R7_is_smoke_false_and_local_eval_only",
+        "mutation_candidate_uses_23_reference_opponents_not_the_native_24_reference_protocol",
+        "all_pool_assets_are_local_eval_only",
+        "submission_package_closure_exists_only_for_rule_v0_root_deck"
+      ],
+      "required_next_evidence": "Re-evaluate the mutation candidate and native controls on one sealed common protocol, then complete or explicitly quarantine all remaining assets before naming a global winner."
+    }
+  },
+  "native_top3_pooled1536": [
+    {
+      "rank": 1,
+      "pair_id": "tomatomato_archaludon",
+      "policy_sha256": "8908af5caad296820a6ce5a9c8d388f04869eb499b308ac446142d9dcdaced9e",
+      "deck_sha256": "42165967b565dd42ec426ecccfe79bfa7d72aa8306590e149dface0ee8bd530e",
+      "wins": 1107,
+      "draws": 0,
+      "losses": 429,
+      "faults": 0,
+      "games": 1536,
+      "score_rate": 0.720703125,
+      "seat0_wins": 561,
+      "seat1_wins": 546
+    },
+    {
+      "rank": 2,
+      "pair_id": "lucifer19_battlecore",
+      "policy_sha256": "c4acf505565a078648844c47b865af3898d5fa75422c46a8762375dddff7f90c",
+      "deck_sha256": "fbe6ab59992260b0d6774abed19469be315521b5ed0546de8c20f329607693e6",
+      "wins": 1103,
+      "draws": 0,
+      "losses": 433,
+      "faults": 0,
+      "games": 1536,
+      "score_rate": 0.7180989583333334,
+      "seat0_wins": 554,
+      "seat1_wins": 549
+    },
+    {
+      "rank": 3,
+      "pair_id": "plamen06_steel",
+      "policy_sha256": "8a40be6825612ea927f5a6fd3396bb18e78a198d554e44cbb572acbab1b74ac3",
+      "deck_sha256": "fbe6ab59992260b0d6774abed19469be315521b5ed0546de8c20f329607693e6",
+      "wins": 1102,
+      "draws": 0,
+      "losses": 434,
+      "faults": 0,
+      "games": 1536,
+      "score_rate": 0.7174479166666666,
+      "seat0_wins": 567,
+      "seat1_wins": 535
+    }
+  ],
+  "mutation_confirmation": {
+    "candidate_manifest_path": "runs/final-sprint-autonomous/deck-mutation-plamen-v1/candidates.json",
+    "candidate_manifest_sha256": "67f63c1caadf1b478cd3865dda8193f778e4c1fc4e5d0903776b23a0e982690b",
+    "candidate_id": "aab824462a561b8a459fc71e1a780dc46487f8ab9ed27514a2dfff17fb40b6d9",
+    "candidate_mutation": {
+      "swap_count": 2,
+      "added_cards": [1115, 345],
+      "removed_cards": [57, 1185],
+      "deck_sha256": "9f413dd4423c2a90f40fa25753f01a610607fa1e0be8c54a9aee50b1285639e7",
+      "deck_multiset_sha256": "a9b45c1d90672bf46ad67bc61e4f8a7382a44e5745d27f1b823495655909f227",
+      "card_count": 60
+    },
+    "blocks": [
+      {"candidate": "269W/0D/99L/0F", "native": "255W/0D/113L/0F", "candidate_score_rate": 0.7309782608695652, "native_score_rate": 0.6929347826086957},
+      {"candidate": "271W/0D/97L/0F", "native": "270W/0D/98L/0F", "candidate_score_rate": 0.7364130434782609, "native_score_rate": 0.7336956521739131},
+      {"candidate": "278W/0D/90L/0F", "native": "270W/0D/98L/0F", "candidate_score_rate": 0.7554347826086957, "native_score_rate": 0.7336956521739131},
+      {"candidate": "283W/1D/84L/0F", "native": "277W/0D/91L/0F", "candidate_score_rate": 0.7703804347826086, "native_score_rate": 0.7527173913043478}
+    ],
+    "confirmation_evidence_path": "docs/evidence/autonomous-deck-mutation-plamen-top-confirm-20260813.md",
+    "confirmation_evidence_sha256": "c4c925ebb0b3e70a071f05f39c20300b6c70213067dba54b48dd76aaf6d78963"
+  },
+  "policy_race": {
+    "path": "docs/evidence/autonomous-deck-mutation-plamen-policy-race-20260813.md",
+    "sha256": "656799dded9250a207527ae3260595c66cdc48bbb9169ec12abd2d55211ef01c",
+    "summary_path": "runs/final-sprint-autonomous/deck-mutation-plamen-v1/policy-race-736/policy_race_summary.json",
+    "summary_sha256": "e941429da0252c9dd79f95ba294c7ba68d3eb3e8e9acbe12c71a3a1426a93f65",
+    "status": "POLICY_NO_DIFFERENCE_OBSERVED"
+  },
+  "permission_and_package_sources": [
+    {"path": "opponents/pool_manifest.json", "sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca"},
+    {"path": "configs/meta_specialist/performance_first_broad_pool_v1.json", "sha256": "832273ff656280d2556c9df09a9a3db9f2564a181be78a3e658509d3b396209b"},
+    {"path": "runs/final-sprint-autonomous/meta-distribution-v1/manifest.json", "sha256": "e430f1284e587e7f301f9e29abe377faad79ff5120a39c42b7b2f6a5223dd2ae"},
+    {"path": "runs/final-sprint-autonomous/meta-distribution-v1/meta_schedule.json", "sha256": "9db6e1d9ea3a6913f2080ac5ca4f08b748ed9fa1469cfd0a7a74d0253cb16b6a"},
+    {"path": "docs/evidence/strong-asset-eligibility-audit-20260812.md", "sha256": "a70afb3d995c7643e27b26aa1a43a048cf27c6b25770453af71a1c2ae9a625a4"},
+    {"path": "docs/evidence/performance-first-submission-bundle-20260812.md", "sha256": "0937538aaa8e940cdb86a3f5597588ec3a2bf15d9e5db9c5406535f33ff8a330"}
+  ],
+  "native_ranking_sources": [
+    {"path": "runs/meta-specialist-asset-ranking-top3-confirm384-20260812/asset_ranking.json", "sha256": "58df60b5c3ace39fb827ede3adf229c2d3d626e14b9dd685dda0d18506f5690b"},
+    {"path": "runs/meta-specialist-asset-ranking-top3-confirm384-block2-20260812/asset_ranking.json", "sha256": "776f499598d771af10bfcdec0b10e8578aa347d114b122099725c5ce38dc163e"},
+    {"path": "runs/meta-specialist-asset-ranking-top3-confirm384-block3-20260812/asset_ranking.json", "sha256": "e8ea484359d9085cdd2003c2877672f5245f9bb0fc8b1945148f141ab031acc7"},
+    {"path": "runs/meta-specialist-asset-ranking-top3-confirm384-block4-20260812/asset_ranking.json", "sha256": "27d665871f2bad82dc9877a9dbd5fea51767caf9c5b28ad9b4804138fec01cc5"}
+  ]
+}

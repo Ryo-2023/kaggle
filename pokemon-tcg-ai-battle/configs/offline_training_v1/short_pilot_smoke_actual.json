@@ -1,0 +1,35 @@
+{
+  "schema_version": "offline-training-v1-config-v1",
+  "profile": "short-pilot-smoke-actual",
+  "run_id_prefix": "offline-training-v1",
+  "collection": {
+    "source": "actual",
+    "games": 2,
+    "base_seed": 9000,
+    "validation_percent": 20,
+    "split_seed": 0
+  },
+  "dataset": {
+    "shard_size": 8,
+    "train_fraction": 0.5,
+    "validation_fraction": 0.25,
+    "test_fraction": 0.25,
+    "split_seed": 12345
+  },
+  "model": {
+    "preset": "compact"
+  },
+  "training": {
+    "epochs": 2,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "grad_clip": 1.0,
+    "patience": 5,
+    "seed": 7,
+    "max_batch_decisions": 64
+  },
+  "screening": {
+    "games": 4,
+    "base_seed": 5000
+  }
+}

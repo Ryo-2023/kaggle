@@ -1,0 +1,8 @@
+{
+  "schema_version": "kaggle-agent-package-config-v1",
+  "competition_slug": "pokemon-tcg-ai-battle",
+  "agent_kind": "student",
+  "output_dir": "dist/kaggle/student-actual-v0",
+  "model_artifact": ".local_artifacts/c4_actual_training/training/artifact",
+  "contract": {"submission_method": "UNKNOWN", "archive_type": "UNKNOWN", "entrypoint": "main.py"}
+}

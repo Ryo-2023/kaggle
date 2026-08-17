@@ -1,0 +1,37 @@
+{
+  "adapter_version": "o6-native-subprocess-v1",
+  "agent_registry_hash": "490d5f9e3b9e0290c5cf1560c70a2d45f9aac80bef25bc20aed899681bca812d",
+  "approval_status": "PENDING_REVIEW",
+  "build_config_hash": "ff1a8bf2d21a41e137387ac783afbf49ad5699742636b3afc7b38c8e7b3be6a0",
+  "cabt_version": "kaggle-environments-1.32.0",
+  "created_at": "2026-07-21T10:55:36Z",
+  "deck_registry_hash": "6238ece513c4f5760c9b7718f670246a623dc094e43034fadcb4d43087f57454",
+  "display_name": "team-agents-20260721-v2-minimized-closure",
+  "manifest_hash": "52cb478d004862c330eb88dfa116e7eddd8471f15dbc49fa73487d1a2b264bd9",
+  "opponent_ids": [
+    "0a4fa91bc0685fc1249523a34cc990c34efd2d3e818e9d7dadde4a5e43df696e",
+    "6ded34b5c8dc84797a267fb22d8939841a305276961dea3c2059050109df540d",
+    "d5652f359235676853434c13c8dc02edaa9e5948ea6a66c18cf992e8133c58f9"
+  ],
+  "permission_policy_hash": "3d09d725ec232ccbcd64af176c73edbfc5ff195f1b918809f7698faa082fffab",
+  "population_id": "team-agents-v1-f4c8f9b87ae6601a",
+  "population_identity_hash": "f4c8f9b87ae6601ab86805203a51df7b10e5c505a4d30558b26be2c238419ad1",
+  "population_version": "v1",
+  "ruleset_version": "unknown",
+  "runtime_bundle_registry_hash": "5ca9c85cdb59e4e8a7a85fa8aeff8bbd4f13f70a070de2533f0f265e2fc5b703",
+  "runtime_contract_version": "o6-runtime-bundle-v1",
+  "schema_version": "o6-population-manifest-v1",
+  "selection_policy": "all-validated-pinned-team-branches",
+  "source_commit_shas": [
+    "158f435cc22c7b2a274b7e9d52167aba8c399e7a",
+    "26372f0fa4cf6c98ea42cd2d78f838064a978ca0",
+    "9c9a7766a3ec0bc3638eeda045a8c13719678aac"
+  ],
+  "source_snapshot_ids": [
+    "4698f5350a4b461e49c18aa20302f03f1845a871ffc9446ce127bd93d2e3813a",
+    "960e69e8289679c016580d689bc395a0fadfeb1cd2d01b7f8cbdc25eeb22145a",
+    "d39f1497cb04901a33e064c16e8648c8029d422c7f1b92348d29b8f2d9d8c323"
+  ],
+  "strategy_registry_hash": "aaef59c7319a0a1f7c598ff9f70241143f0e56c092dbcc6f9e8ff673a0527445",
+  "validation_summary_hash": "ec5fee1d3fce3bb636ce1c6304b7c3b1c2194ca0710e0ae23765648e9614290f"
+}

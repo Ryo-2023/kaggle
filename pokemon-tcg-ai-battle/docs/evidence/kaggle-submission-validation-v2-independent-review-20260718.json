@@ -1,0 +1,68 @@
+{
+  "verdict": "PASS_WITH_NOTES",
+  "failed_submission_refs": [54796979, 54798845],
+  "new_archive_sha256": "390dfcfb886bbdaacb6624a537d160444331f71bcae59b7028b4ea2716f32962",
+  "archive_size": 631369,
+  "entrypoint_sha256": "c01a188034658735b38d1c51a1d375046b5d9f3e5f38f442269d9ab606b9c8bb",
+  "runtime_main_sha256": "777da2527e1c513c54b5abb799c71458af36d7898db6016b8e7baa6ca072ad36",
+  "model_sha256": "2318b7ff7f1d981ec4181ae01cc681b15c057f5b4daba3d5f900e71e2144eb8f",
+  "semantic_model_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+  "build_commit": "d7ea5d8053d405fbb1a576c866ec221498117005",
+  "verification_script_commit": "d7ea5d8053d405fbb1a576c866ec221498117005",
+  "verification_script_sha256": "7760724f485e7b6d5dd72ffd1671c129c804c7adc953b7ab28025b601c0a6385",
+  "python_version": "3.11.11",
+  "kaggle_environments_version": "1.32.0",
+  "cwd_decoupled_verification": true,
+  "code_root": "extracted_archive",
+  "working_directory": "separate_empty_directory",
+  "archive_only_verification": true,
+  "external_files_read": [],
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": {"status": "PASS", "steps": 60, "statuses": ["DONE", "DONE"]},
+    "G6": {"status": "PASS", "games": 20, "seed": 35000, "wins": 12, "losses": 8, "draws": 0, "crashes": 0, "invalid_actions": 0, "timeouts": 0}
+  },
+  "fallback_telemetry": {"status": "AVAILABLE", "selected_count": 855, "fallback_reasons": []},
+  "wrapper": {"status": "PASS", "mode": "DRY_RUN", "execute_used": false},
+  "focused_tests": {"status": "PASS", "passed": 93, "failed": 0, "warnings": 9, "seconds": 104.53},
+  "full_regression": {
+    "status": "FULL_REGRESSION_BLOCKED",
+    "passed": 1068,
+    "failed": 1,
+    "warnings": 5,
+    "seconds": 219.57,
+    "failed_test": "tests/test_collect_offline_training_v1_evidence.py::test_run_command_safe_timeout_and_child_cleanup",
+    "junit": "/tmp/kaggle-validation-v2-full-pytest.xml"
+  },
+  "findings": {
+    "critical": [
+      "cwd fallback could select a non-package working directory",
+      "runtime Python and cwd-decoupled readiness were not measured fail-closed",
+      "zero-game smoke could produce readiness"
+    ],
+    "high": [
+      "archived module origins could be accepted from a trusted venv and mage_submission_agents was not audited",
+      "wrapper omitted Python, Kaggle Environments, and runtime_main SHA enforcement",
+      "archive total size, member count, and special-file limits were absent",
+      "repository root main.py was not safe under raw exec without __file__"
+    ],
+    "medium": [
+      "Python open hooks cannot prove capture of every native-extension I/O",
+      "upstream get_last_callable mutates sys.path, bounded by per-gate subprocess isolation",
+      "full regression remains blocked by one known flaky timeout race"
+    ],
+    "low": [
+      "privacy test used an overbroad numeric substring assertion; fixed"
+    ]
+  },
+  "local_submission_ready": true,
+  "kaggle_validation_passed": false,
+  "kaggle_resubmission_executed": false,
+  "champion_default": "Rule Agent v0",
+  "promotion": "NO_DECISION",
+  "model_changed": false,
+  "additional_training_executed": false
+}

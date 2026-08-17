@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mage-ptcg.local/o6/public_trajectory_schema_v1.json",
+  "title": "o6-public-trajectory-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_type", "step_index", "seat_direction", "public_payload"],
+  "properties": {
+    "schema_version": {"const": "o6-public-trajectory-v1"},
+    "event_type": {"enum": ["INITIAL_PUBLIC_STATE", "PUBLIC_ACTION", "TERMINAL_PUBLIC_STATE"]},
+    "step_index": {"type": "integer", "minimum": 0},
+    "seat_direction": {"enum": ["SEAT_0", "SEAT_1", null]},
+    "public_payload": {"$ref": "#/$defs/public_payload"}
+  },
+  "$defs": {
+    "public_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["players", "board", "result", "action"],
+      "properties": {
+        "players": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/player_projection"}},
+        "board": {"$ref": "#/$defs/board_projection"},
+        "result": {"type": ["integer", "null"]},
+        "action": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/action_projection"}]}
+      }
+    },
+    "status_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["poisoned", "burned", "asleep", "paralyzed", "confused"],
+      "properties": {
+        "poisoned": {"type": "boolean"},
+        "burned": {"type": "boolean"},
+        "asleep": {"type": "boolean"},
+        "paralyzed": {"type": "boolean"},
+        "confused": {"type": "boolean"}
+      }
+    },
+    "card_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["card_id", "serial", "player_index", "current_hp", "max_hp", "appear_this_turn", "attached_energy_count", "tool_count", "evolution_depth"],
+      "properties": {
+        "card_id": {"type": "integer"},
+        "serial": {"type": ["integer", "null"]},
+        "player_index": {"type": ["integer", "null"], "enum": [0, 1, null]},
+        "current_hp": {"type": ["integer", "null"]},
+        "max_hp": {"type": ["integer", "null"]},
+        "appear_this_turn": {"type": ["boolean", "null"]},
+        "attached_energy_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "tool_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "evolution_depth": {"type": "integer", "minimum": 0, "maximum": 256}
+      }
+    },
+    "card_slot_list": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/card_projection"}]}
+    },
+    "player_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hand_count", "deck_count", "prize_count", "bench_max", "active", "bench", "discard", "status"],
+      "properties": {
+        "hand_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "deck_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "prize_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "bench_max": {"type": "integer", "minimum": 0, "maximum": 256},
+        "active": {"$ref": "#/$defs/card_slot_list"},
+        "bench": {"$ref": "#/$defs/card_slot_list"},
+        "discard": {"$ref": "#/$defs/card_slot_list"},
+        "status": {"$ref": "#/$defs/status_flags"}
+      }
+    },
+    "board_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stadium", "stadium_played", "supporter_played", "energy_attached", "retreated"],
+      "properties": {
+        "stadium": {"$ref": "#/$defs/card_slot_list"},
+        "stadium_played": {"type": "boolean"},
+        "supporter_played": {"type": "boolean"},
+        "energy_attached": {"type": "boolean"},
+        "retreated": {"type": "boolean"}
+      }
+    },
+    "action_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["option_type", "option_type_name", "player_index", "attack_id", "count", "number"],
+      "properties": {
+        "option_type": {"type": "integer"},
+        "option_type_name": {"enum": ["PLAY", "ATTACH", "EVOLVE", "ABILITY", "ATTACK", "END", null]},
+        "player_index": {"type": ["integer", "null"], "enum": [0, 1, null]},
+        "attack_id": {"type": ["integer", "null"]},
+        "count": {"type": ["integer", "null"]},
+        "number": {"type": ["integer", "null"]}
+      }
+    }
+  }
+}

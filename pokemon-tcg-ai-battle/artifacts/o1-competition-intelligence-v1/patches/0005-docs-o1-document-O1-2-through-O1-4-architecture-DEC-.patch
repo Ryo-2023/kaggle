@@ -1,0 +1,299 @@
+From 64d754250e2532b211bc034004f5d7e954c40996 Mon Sep 17 00:00:00 2001
+From: bfe-lab-ono <ono.ryosuke.36t@st.kyoto-u.ac.jp>
+Date: Sat, 18 Jul 2026 12:25:39 +0900
+Subject: [PATCH 5/5] docs(o1): document O1-2 through O1-4 architecture,
+ DEC-014, and Slice 2-4 evidence
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 設計書04 §20.5、実装計画書04 §24にO1-2 (Replay正規化)、O1-3
+  (Knowledge Registry)、O1-4 (Immutable Snapshot/Offline Training
+  Adapter) の実装範囲・モジュール一覧・既知の限界を記録する。
+- DEC-014、current_status.md、handoff.mdを更新し、Champion/Promotion
+  不変・protected files不変・offline_trainingコード無変更を明記する。
+- Evidence (テスト結果258件、group_split.pyの実装バグ発見・修正、
+  CLI subprocess経由end-to-endパイプラインの2回実行によるhash決定性
+  証明) を追加する。
+
+Experiment: docs/evidence/o1-competition-intelligence-sidecar-slice2-4.md
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ ...mpetition-intelligence-sidecar-slice2-4.md | 80 +++++++++++++++++++
+ docs/notion/local_hashes.json                 |  4 +-
+ ...ntelligence_and_joint_optimization_plan.md | 11 +++
+ ..._joint_optimization_implementation_plan.md | 57 +++++++++++++
+ docs/status/current_status.md                 |  8 ++
+ docs/status/decisions.md                      | 10 +++
+ docs/status/handoff.md                        | 18 +++--
+ 7 files changed, 181 insertions(+), 7 deletions(-)
+ create mode 100644 docs/evidence/o1-competition-intelligence-sidecar-slice2-4.md
+
+diff --git a/docs/evidence/o1-competition-intelligence-sidecar-slice2-4.md b/docs/evidence/o1-competition-intelligence-sidecar-slice2-4.md
+new file mode 100644
+index 0000000..c429402
+--- /dev/null
++++ b/docs/evidence/o1-competition-intelligence-sidecar-slice2-4.md
+@@ -0,0 +1,80 @@
++---
++project: MAGE-PTCG
++document_status: evidence
++as_of: 2026-07-18
++---
++
++# Competition Intelligence Sidecar（O1）Slice 2–4 実装 Evidence
++
++## 結果
++
++O1-2（Replay正規化・解析）、O1-3（Knowledge Registry）、O1-4（Immutable Intelligence SnapshotとOffline Training Adapter）を実装した。この続きにあたるO1-5（外部/Kaggle live/team bundle adapter）とO1-6（Meta posterior／Opponent Surrogate）は未実装のまま。O1-0/O1-1（Slice 0–2、[Evidence](o1-competition-intelligence-sidecar-slice0-1.md)）の基盤をそのまま再利用し、変更していない。Champion（Rule Agent v0）、Promotion（`NO_DECISION`）、canonical branch、Promotion Gate関連artifactは本Sliceでも変更していない。
++
++## Baseと作業場所
++
++| 項目 | 値 |
++|---|---|
++| canonical repository | `/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle`（branch `feature/belief-guided-search`）。本セッション開始時点でHEADが`3ef1ba3`から`c21ebed`（`chore(submission): freeze Neural Student v1 candidate artifact`）へ前進していたが、これは本セッションと無関係な既存Promotion Gate作業によるfast-forward commitであり、本セッションからの書き込みは一切ない（読み取り専用で`git log`／`git status`のみ確認） |
++| 作業worktree | `/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle-o1-intelligence`（既存の検証済みdetached worktree） |
++| worktree開始HEAD | `9efe409f05727c30f23122bc2d1ddf683ca12645`（Slice 0–2完了時点） |
++| O1-2〜O1-4完了時点のHEAD | 本Evidence作成後のcommitで確定（末尾のcommit一覧を参照） |
++
++## 実装範囲
++
++新規モジュール一覧、既存責務の再利用方針、既知の限界（データソース起因）は[実装計画書§24](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#24-o1-2o1-4実装o1-2026-07-18-その2)を正とする（本Evidenceでは複製しない）。要点のみ：
++
++- O1-2は既存`offline_training`が生成する`rule-bc-v1.jsonl`（`RuleBCExample`行）を読み取り専用・寛容にparseし、Stable ActionKey digestを再利用してEpisodeRecord／DecisionRecordへ正規化する。`mage_ptcg.student`／`mage_ptcg.offline_training.dataset`はimportしない（両者は`mage_ptcg.student`パッケージの`__init__.py`経由でStudent runtimeモジュールを間接的に読み込むため、独自readerで代替した）。
++- O1-3は既存`contracts.KnowledgeClaim`と`validate_claim_transition`（O1-1で実装済み）の上に、Claim Bundle（YAML/JSON、既存PyYAML依存を再利用）のparse、決定的矛盾検出、追記型永続化を追加する。
++- O1-4は既存`mage_ptcg.dataops.collector.split_by_episode_group`のrank-by-hash技法を、episode／opponent／agent／deck fingerprint／temporal bucket／sourceの複合キーへ一般化する。Offline Training Adapterは`offline_training`のコードを一切変更せず、選択episodeへfilterした新JSONLを生成し既存`build_dataset()`へ渡す方式（selection-only）とした。
++
++## 自己レビューで発見・修正した実装バグ
++
++`group_split.py`の初期実装は、group識別用の複合hashへ`episode_id`（episodeごとに常に一意）を含めていた。この結果、同じopponent／deck／agent／sourceを共有する複数episodeが**必ず異なるgroupに分離**され、group-aware splitが実質的にepisode単位の無意味な分割になり、leakage防止機能が働いていなかった。
++
++`tests/competition_intelligence/test_snapshot_and_adapter.py::TestGroupSplit::test_same_opponent_grouped_together_across_episodes`（同一opponentを持つ6episodeが必ず同一partitionに入ることを検証する新規テスト）が最初の実装に対して失敗し、この問題を検出した。修正は、複合キーから`episode_id`を除去し、全grouping dimensionが`None`の場合だけ`fallback_episode_id`（単一episodeの識別用）を使う設計へ変更することで行った。修正後、同テストおよび関連する28件のO1-4テストすべてがPASSすることを確認した。
++
++## テスト
++
++| 検証 | コマンド | 結果 |
++|---|---|---|
++| 新規focused tests（全体） | `env -u PYTHONPATH python3 -m pytest tests/competition_intelligence/ tests/test_competition_intelligence_cli_end_to_end.py tests/test_competition_intelligence_runtime_isolation.py tests/test_check_o1_protected_files.py -q` | 258 passed（うちO1-0/O1-1の127件は不変、今回の新規追加は131件） |
++| repository全体tests | `nice -n 10 env -u PYTHONPATH python3 -m pytest tests/ -q` | 1277 passed、0 failed、162.04秒、single process |
++| byte-compile | `env -u PYTHONPATH python3 -m compileall -q src/ scripts/ main.py agents/` | pass |
++| `git diff --check` | — | pass |
++| docs validator | `python scripts/docs/validate_docs.py` | `Validated 12 canonical documents.` |
++| protected files before/after | `scripts/check_o1_protected_files.py verify --baseline artifacts/o1-competition-intelligence-v1/protected-files-before.json` | `protected_files_unchanged: true`、diff_count 0 |
++
++### 既知の1件flakyテストについて
++
++今回のrepository全体run（1277 passed）では、前回Slice 0–1で確認・診断済みの環境依存flaky test（`tests/test_actual_agent_viability.py::test_viability_runner_redacts_raw_runner_values_and_resumes`、非決定的な生成hash値と固定文字列「700」の偶然の部分一致が原因）は発生しなかった。この非決定性はSlice 0–1のEvidenceで既に base commit `6782e68`のisolated worktreeでの再現によって「本セッションの変更と無関係」と証明済みであり、今回発生しなかったことは新たな修正の結果ではない（当該test自体は今回未変更）。
++
++## Runtime isolation（再確認）
++
++`tests/test_competition_intelligence_runtime_isolation.py`は変更していないが、O1-2〜O1-4の新規16モジュールを追加した後も同テストが引き続きPASSすることを確認した。加えて、新規モジュールのimport文を直接grepし、`mage_ptcg.student`／`mage_ptcg.offline_training.dataset`への直接importが存在しないこと、`mage_ptcg.competition_intelligence`外部への依存が`mage_ptcg.competition.redaction`と`mage_ptcg.offline_training_v1_support.statistics`の2箇所のみであることを確認した。
++
++## Protected files
++
++`scripts/check_o1_protected_files.py verify`（baseline: Slice 0–1で記録した`artifacts/o1-competition-intelligence-v1/protected-files-before.json`）は`protected_files_unchanged: true`、diff_count 0 を報告した。O1-2〜O1-4は`main.py`／`deck.csv`／Rule Agent／Promotion関連コード／Kaggle packaging scriptsのいずれも一切変更していない。
++
++## End-to-end pipeline（CLI subprocess経由、2回実行）
++
++```text
++ingest-local → normalize → analyze → import-knowledge
++  → build-knowledge-snapshot → build-snapshot → export-offline-dataset
++  → rebuild-catalog → report
++```
++
++`tests/test_competition_intelligence_cli_end_to_end.py`が実際の`scripts/run_competition_intelligence.py`を`subprocess`経由で全9段階駆動し、`tests/competition_intelligence/test_pipeline_end_to_end.py`が同じパイプラインをPython関数呼び出しで独立した2つの作業ディレクトリから実行して、以下が決定的に同一であることを確認した。
++
++- Knowledge Snapshotの`snapshot_sha256`／`snapshot_id`
++- Intelligence Snapshotの`snapshot_sha256`／`snapshot_id`
++- 正規化済み`normalized/episodes.jsonl`／`normalized/decisions.jsonl`（バイト単位で同一）
++- exportした`offline_training`互換datasetファイル（バイト単位で同一）
++
++実データソースの制約（既存`offline_training`の自己対戦収集は単一opponent identityのため、opponent軸のleakage-free splitが原理的に不可能）により、end-to-endテストは正規化後のepisodeへ合成的なopponent多様性を注入して検証している（実データのidentity／hash／decision紐付けはそのまま維持）。この制約と理由は[実装計画書§24.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#243-既知の限界データソース起因実装の不備ではない)に記録している。
++
++## 残る制約
++
++- O1-5（外部/Kaggle live/team bundle adapter）、O1-6（Meta posterior／Opponent Surrogate／Promotion Report）は未実装。継続順序は[実装計画書§23.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#233-未実装範囲継続計画)を参照
++- `winner`／`termination_reason`／per-decision latency／result-to-goは既存`offline_training`の`rule-bc-v1.jsonl`に存在しないため、正規化後も`None`のまま（捏造していない）
++- 96,530 decisions全件を用いた大規模解析、実Kaggle接続、Student再学習は本Sliceの完了条件に含めていない（意図的）
+diff --git a/docs/notion/local_hashes.json b/docs/notion/local_hashes.json
+index 8940a0f..3aee216 100644
+--- a/docs/notion/local_hashes.json
++++ b/docs/notion/local_hashes.json
+@@ -3,12 +3,12 @@
+   "docs/plan/design/01_domain_knowledge_and_deck_strategy_plan.md": "7feae2b446c5726d1fc0f77ec9272f8103aa0674317933f2dfabb82181d89660",
+   "docs/plan/design/02_structured_public_belief_and_solver_plan.md": "e31a2971939aabbdb2deead99409f92285f36deaff5220ee27edb3b53203649c",
+   "docs/plan/design/03_machine_learning_teacher_student_plan.md": "0c06600dfaf6e92530c4336ece2aa2503e1bedd1cf688fb96c68772a1809e9d6",
+-  "docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": "926e126631c05b6101c882a3798b1d3d22c08558e481fd0abe8652b7be33e37c",
++  "docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": "8f2f610479f027e3af87ab02dc62f660e96e0f6425b94c752487c2c7d1fe085f",
+   "docs/plan/design/05_evaluation_submission_and_strategy_plan.md": "294c8d865f5ab7bda56d701dbe36018235d77bb93f7f68f3cf8a4c9715973051",
+   "docs/plan/implementation/00_overall_implementation_plan.md": "9f181cc165bcdbec3384579010fe897ee5397a75342c12701426c4ea804dde77",
+   "docs/plan/implementation/01_domain_knowledge_and_deck_strategy_implementation_plan.md": "079fcffbbf34fa9606dc99c30075dc7b675e0a6f60316c6c7b0caf6020623ac8",
+   "docs/plan/implementation/02_structured_public_belief_and_solver_implementation_plan.md": "803a935d517e252427c03c9d894ce072c9b0c5e0cc3c3b8bb65280d604453fe9",
+   "docs/plan/implementation/03_machine_learning_teacher_student_implementation_plan.md": "c66744b66b72a2bef1c68f7d5c32c167d6dfa2463a28400743e90562a24860e7",
+-  "docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": "1aa5b21a3d9dae7c63dcfc1c09449d0842c192164c2cc17a26ab55eeb8641250",
++  "docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": "4a4b7948c91365a530da97b28f4c5ab20c4c5f960f2687f03ea13223ea581b02",
+   "docs/plan/implementation/05_evaluation_submission_and_strategy_implementation_plan.md": "e6ef072c0d6936f4f2c51be9f3380f1d69f834a02864c43a7c4b322781859808"
+ }
+diff --git a/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md b/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
+index a643723..d13c3de 100644
+--- a/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
++++ b/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
+@@ -486,3 +486,14 @@ C2a Knowledge Pack（既存、[Evidence](../../evidence/knowledge-pack-v0.md)）
+ ### 20.4 Runtime Isolation
+ 
+ 提出runtime（`main.py`起点で到達可能な全import）は、本節のsidecar（`mage_ptcg.competition_intelligence`）、`mage_ptcg.dataops`、`sqlite3`、`pandas`、`scikit-learn`、学習用PyTorchのいずれもimportしない。既存C2b Capability Probe（`mage_ptcg.competition`）はsidecarから読み取り専用で再利用する対象であり、runtimeからの到達禁止という制約自体は変わらない。
++
++### 20.5 O1-2〜O1-4 実装状態（2026-07-18追記）
++
++O1-2（Replay正規化・解析）、O1-3（Knowledge Registry）、O1-4（Immutable Intelligence SnapshotとOffline Training Adapter）を実装した。設計上の要点：
++
++- O1-2の正規化は、既存`offline_training`が生成する`rule-bc-v1.jsonl`（`RuleBCExample`行）を読み取り専用で解釈する。Stable ActionKeyのdigestは行内の値をそのまま再利用し、再計算しない。本データソースには`winner`／`termination_reason`／per-decision latency／result-to-goが存在しないため、これらは`None`かつ`quality_flags`で明示し、捏造しない。
++- Deck/Policy Fingerprintは、カードroleデータベースが存在しない制約（DEC-010）を踏まえ、evolution edge・energy profile・trainer role profileを「未取得」と明示し、`semantic_operation`の検証済み6値（PLAY/ATTACH/EVOLVE/ABILITY/ATTACK/END、出典`mage_ptcg.observability.cabt_trace.OPTION_TYPE_NAMES`）から導出できる範囲だけを算出する。
++- O1-4のGroup-aware Splitは、単一opponent identityの自己対戦データではopponent軸のleakageを原理的にゼロにできないことを明示する（実装は`mage_ptcg.dataops.collector.split_by_episode_group`のrank-by-hash技法を複合キーへ一般化したもの）。
++- Offline Training Adapterは`offline_training`のコード自体を一切変更せず、元の`rule-bc-v1.jsonl`行を選択episodeへfilterした新しいJSONLファイルを生成し、既存の`build_dataset()`へそのまま渡せる形にする（selection-only）。
++
++詳細は[実装計画書§24](../implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#24-o1-2o1-4実装o1-2026-07-18-その2)を正とする。
+diff --git a/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md b/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
+index bf1d6d4..d85d900 100644
+--- a/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
++++ b/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
+@@ -734,3 +734,60 @@ python scripts/check_o1_protected_files.py verify --baseline <path>
+ ```
+ 
+ 新規focused test 127件（`tests/competition_intelligence/`115件＋`tests/test_competition_intelligence_runtime_isolation.py`4件＋`tests/test_check_o1_protected_files.py`8件、内訳は[Evidence](../../evidence/o1-competition-intelligence-sidecar-slice0-1.md)）がPASS。詳細な実行ログとPromotion Gateへの非干渉確認は同Evidenceを正とする。
++
++---
++
++## 24. O1-2〜O1-4実装（O1, 2026-07-18 その2）
++
++本節は、[設計書§20.5](../design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md#205-o1-2o1-4-実装状態2026-07-18追記)に基づき、O1-2（Replay正規化・解析）、O1-3（Knowledge Registry）、O1-4（Immutable SnapshotとOffline Training Adapter）を実装した範囲を記録する。§23で実装したO1-0／O1-1の基盤（contracts／permissions／archive／runstate／catalog／config／CLI）をそのまま再利用し、変更しない。
++
++### 24.1 新規モジュール
++
++| Slice | モジュール | 責務 |
++|---|---|---|
++| O1-2 | `offline_reader.py` | 既存Offline Training run（`collection/<id>/private_dataset/rule-bc-v1.jsonl`）の読み取り専用discoveryと、寛容なJSONL行parser（不正行はquarantine対象として報告し、例外で処理全体を止めない） |
++| O1-2 | `phase.py` | turn／prize count／active Pokemon有無からの決定的phase分類（OPENING/SETUP/BOARD_DEVELOPMENT/FIRST_MAJOR_EXCHANGE/PRIZE_RACE/ENDGAME/UNKNOWN）、理由・evidence付き |
++| O1-2 | `replay_normalize.py` | `rule-bc-v1.jsonl`行からEpisodeRecord／DecisionRecordへの正規化。Stable ActionKey digestは行内の値をそのまま再利用する |
++| O1-2 | `fingerprint.py` | Deck/Policy/Joint Fingerprintの決定的baseline。カードroleデータベース不在の制約を`missing_data_flags`で明示する |
++| O1-2 | `matchup_stats.py` | 既存Wilson実装（`offline_training_v1_support.statistics.wilson_score_interval`）を再利用したmatchup集計 |
++| O1-2 | `failure_hypothesis.py` | 17分類の全taxonomyを定数化し、実際に根拠があるもの（fallback、setup遅延、prize劣勢、legal option欠落）だけを生成する |
++| O1-2 | `high_info_selector.py` | 利用可能な信号（top-2 margin、endgame/prize race、fallback、Knowledge Claim scope一致）だけを選択し、他は理由付きで`unavailable`と報告する |
++| O1-3 | `raw_notes.py` | 生note archiving（既存`archive.py`のcontent-addressed storeと`HUMAN_TEXT` SourceEnvelopeを再利用） |
++| O1-3 | `claim_bundle.py` | Claim Bundle（YAML/JSON、既存PyYAML依存を再利用）のparseとKnowledgeClaim検証。importは常に`RAW`状態から開始し、bundleが指定する`status`は無視する |
++| O1-3 | `contradiction.py` | 同一`claim_type`・scope overlapに基づく決定的矛盾検出。両Claimを保持し上書きしない |
++| O1-3 | `knowledge_registry.py` | Claimの追記型永続化とlifecycle遷移の適用（既存`KnowledgeClaim.with_transition`を利用）。同一`claim_id`の再importをfail-closedで拒否する |
++| O1-3 | `knowledge_snapshot.py` | `IntelligenceSnapshot`と同型の自己検証immutable snapshot |
++| O1-4 | `group_split.py` | episode／opponent／agent／deck fingerprint／temporal bucket／sourceを単一の複合キーとしてhash化し、rank-by-hashで分割（`dataops.collector.split_by_episode_group`の技法を一般化） |
++| O1-4 | `leakage_audit.py` | 実測されたleakage件数（0固定ではない）を返す監査。hard invariant（episode／opponent／temporal／future claim／duplicate）はpass/fail判定に含め、deck/model/source overlapは参考値として報告する |
++| O1-4 | `snapshot_builder.py` | cutoff／permission／source cap／group split／leakage auditを統合したIntelligenceSnapshot builder |
++| O1-4 | `offline_adapter.py` | `offline_training`のコードを一切変更せず、元の`rule-bc-v1.jsonl`行を選択episodeへfilterした新JSONLを生成するselection-only adapter。`example_weight`拡張点（既定1.0、本Sliceでは未使用）を用意 |
++| — | `pipeline.py` | 上記を結合するrun-directory orchestration層（CLIの呼び出し先） |
++
++### 24.2 発見した実装バグとその修正（自己レビュー）
++
++`group_split.py`の初期実装は`GroupKey`の複合hashへ`episode_id`（常に一意）を含めていたため、同じopponent／deck／agentを共有する複数episodeが**必ず別groupとして分離**され、group-aware splitが実質的にepisode単位の無意味な分割になっていた（leakage防止が機能しない）。`tests/competition_intelligence/test_snapshot_and_adapter.py::test_same_opponent_grouped_together_across_episodes`で検出し、`episode_id`を複合キーから除去（全dimensionが`None`の場合だけ`fallback_episode_id`を使う）することで修正した。
++
++### 24.3 既知の限界（データソース起因、実装の不備ではない）
++
++- 既存`offline_training`収集は自己対戦のため、通常opponent identityが全episodeで一定であり、opponent軸のleakage-free splitは原理的に不可能である。temporal bucket等、他のgrouping dimensionによる分割が必要（`leakage_audit.py`はこれを実測値として正しく報告する）。
++- `winner`／`termination_reason`／per-decision latency／result-to-goは現在の`rule-bc-v1.jsonl`に存在しない。
++
++### 24.4 CLI（O1-0/O1-1の3コマンドに加え、O1-2〜O1-4の7コマンドを実装）
++
++```bash
++python scripts/run_competition_intelligence.py normalize --run-dir <run> --offline-training-run <path> --source-id <id>
++python scripts/run_competition_intelligence.py analyze --run-dir <run>
++python scripts/run_competition_intelligence.py import-knowledge --run-dir <run> --bundle <path> --raw-source-id <id>
++python scripts/run_competition_intelligence.py build-knowledge-snapshot --run-dir <run> --cutoff <iso>
++python scripts/run_competition_intelligence.py build-snapshot --run-dir <run> --cutoff <iso> --base-commit <sha>
++python scripts/run_competition_intelligence.py export-offline-dataset --run-dir <run> --snapshot-id <id> --offline-training-run <path> --output <path>
++python scripts/run_competition_intelligence.py report --run-dir <run>
++```
++
++### 24.5 テストと検証
++
++新規focused test 258件（O1-0/O1-1の127件＋O1-2〜O1-4の131件）がPASS。完全な`ingest-local → normalize → analyze → import-knowledge → build-knowledge-snapshot → build-snapshot → export-offline-dataset → report`パイプラインをCLI subprocess経由で独立した2つの作業ディレクトリから実行し、Knowledge Snapshot・Intelligence Snapshot・正規化済みEpisode/Decision・exportしたdatasetファイルすべてが決定的に同一のcontent hash／バイト列になることを確認した（`tests/competition_intelligence/test_pipeline_end_to_end.py`、`tests/test_competition_intelligence_cli_end_to_end.py`）。repository full suiteは1277 passed（既知の環境依存flaky testは今回発生せず）。詳細はEvidence（[o1-competition-intelligence-sidecar-slice2-4.md](../../evidence/o1-competition-intelligence-sidecar-slice2-4.md)）を正とする。
++
++### 24.6 未実装範囲
++
++O1-5（外部/Kaggle live/team bundle adapter）、O1-6（Meta posterior／Opponent Surrogate／Promotion Report）は未着手のまま。継続順序は§23.3の記載から変更しない。
+diff --git a/docs/status/current_status.md b/docs/status/current_status.md
+index 6d5be32..511b0d8 100644
+--- a/docs/status/current_status.md
++++ b/docs/status/current_status.md
+@@ -156,6 +156,14 @@ as_of: 2026-07-17
+   - `main.py`から`mage_ptcg.competition_intelligence`が到達不能であることをclean subprocessで検証（`tests/test_competition_intelligence_runtime_isolation.py`）。新規focused test 127件PASS、repository full suite 1145 passed／1 failed（既存の環境依存flaky test`test_actual_agent_viability.py::test_viability_runner_redacts_raw_runner_values_and_resumes`で、本変更とは無関係。原因はfixtureのcard ID「700」がartifact_hashの16進数文字列と偶然部分一致すること）
+   - protected files（`main.py`、`deck.csv`、Rule Agent v0/v1、Promotion関連コード、Kaggle packaging scripts等）のgit blob SHA before/after比較で無変更を確認。Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま不変
+   - Evidence：[../evidence/o1-competition-intelligence-sidecar-slice0-1.md](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)
++- Competition Intelligence Sidecar（O1）Slice 2–4 実装（2026-07-18、同worktree、base `6782e68`、O1-0/O1-1 commit `9efe409`の続き）
++  - O1-2（Replay正規化・解析：`offline_reader.py`／`phase.py`／`replay_normalize.py`／`fingerprint.py`／`matchup_stats.py`／`failure_hypothesis.py`／`high_info_selector.py`）、O1-3（Knowledge Registry：`raw_notes.py`／`claim_bundle.py`／`contradiction.py`／`knowledge_registry.py`／`knowledge_snapshot.py`）、O1-4（Immutable Snapshot／Adapter：`group_split.py`／`leakage_audit.py`／`snapshot_builder.py`／`offline_adapter.py`）を実装し、`pipeline.py`で結合してCLIへ10コマンドとして接続
++  - `offline_training`のコードは一切変更せず、既存`build_dataset()`が読む`rule-bc-v1.jsonl`と同形式のfilter済みJSONLを生成するselection-only adapterとして実装。`mage_ptcg.student`／`mage_ptcg.offline_training.dataset`はimportせず（Student runtimeへの間接依存を避けるため）、`rule-bc-v1.jsonl`行を直接parseする独自readerを実装
++  - 自己レビューで実装バグを発見・修正：`group_split.py`の複合キーへ`episode_id`（常に一意）を含めていたためgroup-aware splitのleakage防止が機能していなかった。テストで検出し修正（詳細は[実装計画書§24.2](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#242-発見した実装バグとその修正自己レビュー)）
++  - CLI subprocess経由で`ingest-local → normalize → analyze → import-knowledge → build-knowledge-snapshot → build-snapshot → export-offline-dataset → report`の完全パイプラインを独立した2作業ディレクトリから実行し、Knowledge/Intelligence Snapshotと正規化済みEpisode/Decision、exportしたdatasetファイルすべてが決定的に同一hash/バイト列であることを確認
++  - 新規focused test 258件（O1-0/O1-1の127件＋今回131件）PASS、repository full suite 1277 passed（既知の環境依存flaky testは今回未発生）。protected filesはgit blob SHA before/after比較で無変更。Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま不変
++  - O1-5（外部/Kaggle live/team bundle adapter）、O1-6（Meta posterior／Opponent Surrogate）は未着手
++  - Evidence：[../evidence/o1-competition-intelligence-sidecar-slice2-4.md](../evidence/o1-competition-intelligence-sidecar-slice2-4.md)
+ 
+ ## 回収不能な旧報告
+ 
+diff --git a/docs/status/decisions.md b/docs/status/decisions.md
+index 8c5e6a1..699ee8b 100644
+--- a/docs/status/decisions.md
++++ b/docs/status/decisions.md
+@@ -87,3 +87,13 @@ document_status: decision-log
+ - 本セッションではO1-0（Guardrails）とO1-1（Foundation：contracts／permissions／provenance／archive／runstate／catalog／config／CLI 3コマンド）のみを実装する。O1-2（Replay正規化）以降のO1-6までは未着手とし、継続計画を[実装計画書§23.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#233-未実装範囲継続計画)に記録する。
+ - `mage_ptcg.competition_intelligence`は`main.py`から到達不能とし、`tests/test_competition_intelligence_runtime_isolation.py`で検証する。Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま変更しない。
+ - 詳細はEvidence（[o1-competition-intelligence-sidecar-slice0-1.md](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)）を正とする。
++
++## DEC-014｜O1-2〜O1-4はoffline_trainingのコードを変更せず、選択専用adapterとして実装する
++
++- 日付：2026-07-18
++- O1-2（Replay正規化）、O1-3（Knowledge Registry）、O1-4（Immutable SnapshotとOffline Training Adapter）を実装した。既存`mage_ptcg.offline_training`／`mage_ptcg.student`のコードは一切変更しない。
++- Offline Training Adapterは、選択されたepisodeへ元の`rule-bc-v1.jsonl`行をfilterした新しいJSONLファイルを生成し、既存の`build_dataset()`へそのまま渡す方式（selection-only）とする。これにより、Snapshotを使わない既存パイプラインの挙動は変更前と完全に同一のまま保たれる。
++- `mage_ptcg.competition_intelligence`は`mage_ptcg.student`／`mage_ptcg.offline_training.dataset`をimportしない（両者は`mage_ptcg.student`パッケージの`__init__.py`経由でStudent runtimeを間接的に読み込むため）。代わりに`rule-bc-v1.jsonl`の行形式を直接、寛容にparseする独自reader（`offline_reader.py`）を実装する。
++- 自己レビューで`group_split.py`の複合キーに`episode_id`（常に一意）が含まれ、group-aware splitのleakage防止が機能していなかった実装バグを発見し修正した（[実装計画書§24.2](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#242-発見した実装バグとその修正自己レビュー)）。
++- 新規focused test 258件（O1-0/O1-1の127件＋O1-2〜O1-4の131件）PASS、repository full suite 1277 passed。CLI subprocess経由の完全パイプラインを2回実行し、Knowledge/Intelligence Snapshotと正規化済みEpisode/Decisionが決定的に同一hashになることを確認した。
++- Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま変更しない。詳細はEvidence（[o1-competition-intelligence-sidecar-slice2-4.md](../evidence/o1-competition-intelligence-sidecar-slice2-4.md)）を正とする。
+diff --git a/docs/status/handoff.md b/docs/status/handoff.md
+index 716b97d..6de9f06 100644
+--- a/docs/status/handoff.md
++++ b/docs/status/handoff.md
+@@ -205,6 +205,15 @@ runtime既定にはpermitted priorがないためRule v1はRule v0へ明示fallb
+ - Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま。Kaggle提出、canonical branchへの統合は未実施。
+ - 詳細は[Evidence](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)
+ 
++### Competition Intelligence Sidecar（O1）Slice 2–4（2026-07-18、同worktree、O1-0/O1-1 commit `9efe409`の続き）
++
++- O1-2（Replay正規化・解析）、O1-3（Knowledge Registry）、O1-4（Immutable SnapshotとOffline Training Adapter）を実装した。設計・実装の詳細は[実装計画書§24](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#24-o1-2o1-4実装o1-2026-07-18-その2)、決定は[DEC-014](decisions.md#dec-014o1-2o1-4はoffline_trainingのコードを変更せず選択専用adapterとして実装する)。
++- `offline_training`のコードは一切変更せず、既存`build_dataset()`が読む`rule-bc-v1.jsonl`と同形式のfilter済みJSONLを生成するselection-only adapterとして実装。CLIへ`normalize`／`analyze`／`import-knowledge`／`build-knowledge-snapshot`／`build-snapshot`／`export-offline-dataset`／`report`の7コマンドを追加し、O1-0/O1-1の3コマンドと合わせ計10コマンドが動作する。
++- 自己レビューで実装バグを発見・修正：`group_split.py`の複合キーへ`episode_id`（常に一意）を含めていたため、group-aware splitのleakage防止機能が実質的に無効化されていた。テストで検出し修正した。
++- CLI subprocess経由で完全パイプラインを独立した2作業ディレクトリから実行し、Knowledge/Intelligence Snapshot・正規化済みEpisode/Decision・exportしたdatasetがすべて決定的に同一hash/バイト列であることを確認した。
++- 新規focused test 258件（O1-0/O1-1の127件＋今回131件）PASS、repository full suite 1277 passed。protected filesはgit blob SHA before/after比較で無変更。Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま。
++- 詳細は[Evidence](../evidence/o1-competition-intelligence-sidecar-slice2-4.md)
++
+ #### 今後の長期的な課題（ユーザー承認が必要）
+ 
+ 1. **ChallengerモデルのChampion/default昇格判断と提出コード配線**:
+@@ -243,13 +252,12 @@ runtime既定にはpermitted priorがないためRule v1はRule v0へ明示fallb
+ - この環境のlive probeは公式CLI・公式Python client・認証を利用できず、`LOCAL_ONLY`（`no_remote_competition_capability_proven`）へ分類。これはリモート機能の不存在を断定せず、現環境では能力を証明できなかったことを表す。認証済みKaggle環境では未実測
+ - 正当な認証済み環境で再probeする場合も、観測・分類・安全なarchive保存に限定し、Replayを直接学習データ化せず、結果を新規Evidenceとして残す
+ 
+-### Competition Intelligence Sidecar（O1）O1-2以降の再開条件
++### Competition Intelligence Sidecar（O1）O1-5以降の再開条件
++
++O1-2（Replay正規化・解析）、O1-3（Knowledge Claim Registry）、O1-4（Immutable Snapshot／Offline Training adapter）は実装済み（Slice 2–4、[Evidence](../evidence/o1-competition-intelligence-sidecar-slice2-4.md)）。残るのは以下。
+ 
+-- O1-2（Replay正規化・解析）：既存`offline_training`のrun manifest／shardを読み取り専用で走査するlocal run readerを追加し、`decision_state.py`のStable ActionKeyをそのまま使ってEpisodeRecord/DecisionRecordへ正規化する。96,530 decisions全件の重い再解析は本Sliceの完了条件にしない
+-- O1-3（Knowledge Claim Registry）：`contracts.KnowledgeClaim`と`validate_claim_transition`は実装済みのため、Claim Bundle取込CLIとdeterministic contradiction検出のみを追加する
+-- O1-4（Immutable Snapshot／Offline Training adapter）：cutoff／permission intersection／episode-group splitを適用したSnapshot builderと、既存Offline Training schemaを変更しないselection-onlyのlazy import adapterを追加する。Snapshotなしの既存Offline Training動作が不変であることを回帰確認する
+ - O1-5（外部source）：`mage_ptcg.competition`の`ProbeRunner`を拡張し、Team bundle validator（permission manifest必須、path traversal／symlink拒否）を追加する。live Kaggle capabilityは本環境で未確認のままでよい
+-- O1-6（Meta／Surrogate）：Deck/Policy fingerprintのstdlib実装とDirichlet系meta posterior、empirical Opponent Surrogateを追加する。Student教師への直接使用は禁止のまま維持する
++- O1-6（Meta／Surrogate）：Deck/Policy fingerprintのstdlib実装（`fingerprint.py`のbaselineを拡張）とDirichlet系meta posterior、empirical Opponent Surrogateを追加する。Student教師への直接使用は禁止のまま維持する
+ - いずれのSliceも、Champion／submission default（Rule Agent v0）、Promotion（`NO_DECISION`）、`main.py`からの到達不能性を変更しない
+ 
+ ## その後
+-- 
+2.43.0
+

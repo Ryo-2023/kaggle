@@ -1,0 +1,68 @@
+{
+  "schema_version": "mage-ptcg-autonomous-bestknown-classification-v3",
+  "as_of": "2026-08-13",
+  "research_only": true,
+  "promotion_authority": false,
+  "training_authority": false,
+  "submission_authority": false,
+  "classification": {
+    "EvaluationBestKnown": {
+      "status": "PROVISIONAL_COMMON_PROTOCOL_NATIVE",
+      "pair_id": "tomatomato_archaludon",
+      "score_rate": 0.720703125,
+      "games": 1536,
+      "wins": 1107,
+      "draws": 0,
+      "losses": 429,
+      "faults": 0,
+      "policy_sha256": "8908af5caad296820a6ce5a9c8d388f04869eb499b308ac446142d9dcdaced9e",
+      "deck_sha256": "42165967b565dd42ec426ecccfe79bfa7d72aa8306590e149dface0ee8bd530e",
+      "basis": "Four independent 384-game blocks on the sealed native 24-reference protocol",
+      "caveat": "plamen mutation common-protocol rerun is 4 blocks/1536 and scores 71.5495%; the earlier 23-reference 1472-game parent-relative result is not globally comparable"
+    },
+    "TrainingEligibleBestKnown": {
+      "status": "TOMATOMATO_PRIMARY_WITH_LUCIFER_CONTROL",
+      "pair_id": "tomatomato_archaludon",
+      "score_rate": 0.720703125,
+      "games": 1536,
+      "sealed_snapshot_sha256": "b5a5bd30d0e0807c90ea65307e9665c01921842bfedc9abd4557ea02775b53ff",
+      "control_pair_id": "lucifer19_battlecore",
+      "control_snapshot_sha256": "d25d1d4f0cdc51207e9269d510310981039f3ebefd570f3c33ccc1c1a7023d84",
+      "behavior_allowed": false,
+      "submission_allowed": false
+    },
+    "SubmissionEligibleBestKnown": {
+      "status": "RULE_V0_ROOT_DECK_PACKAGE_ANCHOR",
+      "pair_id": "rule-v0-root-deck",
+      "archive_sha256": "da4bbe9d65c6d42feae2070fc02711efde4ffbe1ca08b9f9f00bfed3d96f9b9a",
+      "clean_room_smoke": "2 DONE / 0 faults / 0 illegal",
+      "strong_asset_pool_as_is_allowed": false
+    },
+    "BestKnownArchaludon": {
+      "status": "PROVISIONAL_TOMATO_NATIVE",
+      "pair_id": "tomatomato_archaludon",
+      "score_rate": 0.720703125,
+      "games": 1536,
+      "mutation_candidate_note": "plamen mutation deck is Metal/Psychic, not Archaludon; its common-protocol 4-block score is 71.5495%"
+    },
+    "GlobalBestKnown": {
+      "status": "UNRESOLVED",
+      "reasons": [
+        "slow5 assets have no completed common ranking",
+        "R7 is smoke_false/local_eval_only",
+        "mutation candidate common protocol has 1536 games, reverses in blocks 2 and 4, and is below tomato point estimate",
+        "pool assets remain local_eval_only and package closure is absent"
+      ]
+    }
+  },
+  "sources": {
+    "native_top3_pooled1536_evidence_sha256": "e3299aac3a666cca3d19ab80a8feb0d7dddc861be155c2479345933eb22df863",
+    "mutation_common_protocol_block1_summary_sha256": "86992be532a77d5d2b0396c7199ca78d49a119804b7b56932db8e65c6c626f1d",
+    "mutation_common_protocol_block2_summary_sha256": "6a2109b1c8921cf65626da42f9e0a8295fe588fe24f3fc92e9086401f0983e87",
+    "mutation_common_protocol_block3_summary_sha256": "c104d040da4e1205a3e6451545fb3dfdfda8d8072333eb4bc9acb21540feccc6",
+    "mutation_common_protocol_block4_summary_sha256": "e8e3078209944540a4b3080055ddd60d765bc66c78be7aaa9ac30bec7b7a9b09",
+    "candidate_manifest_sha256": "67f63c1caadf1b478cd3865dda8193f778e4c1fc4e5d0903776b23a0e982690b",
+    "meta_manifest_sha256": "e430f1284e587e7f301f9e29abe377faad79ff5120a39c42b7b2f6a5223dd2ae",
+    "meta_schedule_sha256": "9db6e1d9ea3a6913f2080ac5ca4f08b748ed9fa1469cfd0a7a74d0253cb16b6a"
+  }
+}

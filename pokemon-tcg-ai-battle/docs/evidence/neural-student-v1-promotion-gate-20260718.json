@@ -1,0 +1,28 @@
+{
+  "gate_status": "CLEAN_PASS",
+  "challenger": "neural_student_package",
+  "package_path": "/tmp/neural-student-promotion-build-a",
+  "model_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+  "archive_sha256": "8a01dfb003ee49cdb84ff7b2b005fe05ef95c73c3f8588040b2e2d09bb0091ee",
+  "total_games": 1000,
+  "wins": 542,
+  "losses": 458,
+  "draws": 0,
+  "win_rate": 0.542,
+  "wilson_ci_95": [0.5110, 0.5727],
+  "wilson_ci_99": [0.5013, 0.5822],
+  "latency_ms": {
+    "p50": 4.33,
+    "max": 10.04
+  },
+  "invalid_selections": 0,
+  "fallback_count": 0,
+  "exception_count": 0,
+  "safety_preflight": {
+    "seed": 19000,
+    "wins": 59,
+    "losses": 41,
+    "gate_status": "CLEAN_PASS"
+  },
+  "c4_student_comparison": "SKIPPED_HARNESS_UNAVAILABLE"
+}

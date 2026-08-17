@@ -1,0 +1,17 @@
+{
+  "canonicalization_version": "o6-canonical-json-v1",
+  "event_count": 31,
+  "evidence_format_version": "o6-evidence-format-v1",
+  "game_dir_id": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899__match2",
+  "privacy_validation": {
+    "events_checked": 31,
+    "status": "PASS"
+  },
+  "runtime_digests": {
+    "action_trace_digest": "6e31268b2353b24d01bf2a3efe7ef5b18cfc82b0c9bb17ae86c9578efe7591b7",
+    "complete_trajectory_digest": "491d0e721aacad54989dd902cab486a06d1192a87911058a30a91b342837504c",
+    "initial_observation_digest": "4c4d71d60b85b5763d78bb6bc1952cc81d5aa27c2458175ddbe80d190cd4ea66",
+    "terminal_observation_digest": "5acc9188dbee06154d62e12d173c669ff4a605858414ecb2be82d6287c52bec7"
+  },
+  "schema_version": "o6-public-trajectory-manifest-v1"
+}

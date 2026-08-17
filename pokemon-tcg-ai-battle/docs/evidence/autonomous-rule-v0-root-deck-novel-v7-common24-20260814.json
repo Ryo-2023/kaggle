@@ -1,0 +1,80 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-novel-v7-common24-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root deck Hariyama line weighted-positive common24 guardrail",
+  "source_weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-novel-v7-weighted48-20260814",
+  "source_weighted_manifest_sha256": "d2908c075d91be4c2d4d9f7bb95d006d96286569cea04832df8f6788ec2a9952",
+  "source_weighted_summary_sha256": "d9aa2971789637845fb5daddb2877d2bdff9089dd2e260b29189394d635a3637",
+  "common24_root": "runs/final-sprint-autonomous/rule-v0-root-deck-novel-v7-common24-96-20260814",
+  "common24_manifest_sha256": "44cc62bcf1f4305443c8f0338601ec74f02c7db43243ff9d8e03fe1b49a5ab84",
+  "common24_summary_sha256": "e02d9f045de6422bb5463e369f4dd051301ed3c35cec7dd335df33525fff2bcd",
+  "common24_summary_md_sha256": "ebfb4cf1838d412f0bd0d3c7b62d412a67e1d2eaaebc1ac5dedfee6e5a2b2dc3",
+  "runner_sha256": "9b91c39751a07440aa63f0938fdc6b194eac1f382430b3d31874c79f07e42f62",
+  "protocol": {
+    "base_seed": 23560000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "opponents": 24,
+    "games_per_arm": 96,
+    "games_per_seat": 2,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "common24_config_sha256": "832273ff656280d2556c9df09a9a3db9f2564a181be78a3e658509d3b396209b"
+  },
+  "parent": {
+    "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+    "policy_sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+    "wdl_fault": "10-0-86-0",
+    "score_rate": 0.10416666666666667,
+    "summary_sha256": "800ae83ee7aa21558031a13d615e559751f444d7e95ac490a907e1e6d4d76257",
+    "manifest_sha256": "2ca9936d3bfe837f8326c800bbaa176f1ec3431a0ab2f904f2edb0850cd332f3",
+    "ledger_sha256": "74c9b39fbfadd1299002d0fe0e99d2f3d5eeeb4095c5d92c744d0c103912240d"
+  },
+  "candidate": {
+    "candidate_id": "root-hariyama-to-makuhita",
+    "mutation": "674 Hariyama -> 673 Makuhita",
+    "deck_sha256": "df8d97b20a13bab107103fd5521565c4669c64289e96bddfef6cb8f8662c69b6",
+    "deck_multiset_sha256": "5e89dbaf04e511bff8fbab8a9ece422d43065f4fda20fb1b2985af65a1615bb2",
+    "policy_sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+    "wdl_fault": "9-0-87-0",
+    "score_rate": 0.09375,
+    "delta_points": -1.0416666666666672,
+    "summary_sha256": "336c483adfa5d99895327cd3d0bcc667b87e7194a2cf62642d730a13b9d7e8e0",
+    "manifest_sha256": "94259c772dbce438e997196a22d2c95d37735d7d54257e5f943d1a31262e555e",
+    "ledger_sha256": "ba97fc7e102eb4cc6e3f5f61017520bb8f70efe0a87d7b18bc6522b8c0c8d96c",
+    "status": "candidate_only_stop"
+  },
+  "integrity": {
+    "all_arms_done": true,
+    "all_faults_zero": true,
+    "all_draws_zero": true,
+    "cross_arm_game_ids_unique": true,
+    "parent": {"games": 96, "seat0": 48, "seat1": 48, "opponents": 24, "game_ids_unique": true, "seeds_unique": true},
+    "candidate": {"games": 96, "seat0": 48, "seat1": 48, "opponents": 24, "game_ids_unique": true, "seeds_unique": true}
+  },
+  "invalid_source_arm_preserved": {
+    "candidate_id": "root-poke-pad-to-dusk-ball",
+    "weighted_summary_sha256": "6d5c037c3dd441a6f47376538dac05e985fd7072f36b2ab0a2eb7ec8c10df1ae",
+    "weighted_manifest_sha256": "f94b7996372ca45a3799d84e50ca33f950cce14cfd59638ea331b530c678bca1",
+    "weighted_ledger_sha256": "3902317c0407a7a2f7e83b4ca5636953d21ecdadd71f139c36d6f3239de92742",
+    "faults": 48,
+    "fault_detail": "AGENT_INVALID; cabt terminal result unavailable",
+    "decision": "not rerun and no performance score used"
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_positive": false,
+    "common24_candidate_status": "candidate_only_stop",
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "reason": "Hariyama weighted-positive screen reversed to -1.042pt on common24; stop without 384/longrun."
+  }
+}

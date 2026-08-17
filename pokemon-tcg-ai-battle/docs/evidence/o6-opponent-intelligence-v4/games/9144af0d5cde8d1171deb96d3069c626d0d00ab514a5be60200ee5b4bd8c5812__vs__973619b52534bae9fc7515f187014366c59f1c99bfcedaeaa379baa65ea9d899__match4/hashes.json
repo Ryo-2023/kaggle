@@ -1,0 +1,10 @@
+{
+  "files": {
+    "game_metadata.json": "17e4e7a8d779f5ea1e753a1b6eb24b0a97dd83e947726944e1c01e3de5895dc6",
+    "independent_digest.txt": "65c570ccedcb9e5d84cd29f35818ea5dde56e15bbc9675e6c0cfe69772cc0f4b",
+    "public_projection_trajectory.jsonl.gz": "bcd757080f4f5d84de155777fe55fcb9db472047a97674ec93f4cfce6200250e",
+    "runtime_digest.txt": "65c570ccedcb9e5d84cd29f35818ea5dde56e15bbc9675e6c0cfe69772cc0f4b",
+    "trajectory_manifest.json": "f2fe23b69d33e48b087f28ea95e1627be7633b46df8fedf687361d31d449c77c"
+  },
+  "schema_version": "o6-public-evidence-hashes-v1"
+}

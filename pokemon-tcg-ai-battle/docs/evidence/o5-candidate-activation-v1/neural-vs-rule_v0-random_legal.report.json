@@ -1,0 +1,219 @@
+{
+    "adversarial": {
+        "games": 0,
+        "members": {},
+        "status": "EXCLUDED_BY_BENCHMARK_KIND"
+    },
+    "core_regression": {
+        "games": 400,
+        "members": {
+            "random_legal": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 200,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 34.0,
+                    "p95": 127.19999999999993
+                },
+                "games": 200,
+                "invalid_actions": 0,
+                "losses": 63,
+                "match_latency_seconds": {
+                    "max": 1.637005,
+                    "p50": 0.20554699999999998,
+                    "p95": 0.8038459499999999
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 0,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 35,
+                        "wins": 65
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 28,
+                        "wins": 72
+                    }
+                },
+                "seeds": [
+                    93000,
+                    93001,
+                    93002,
+                    93003,
+                    93004,
+                    93005,
+                    93006,
+                    93007,
+                    93008,
+                    93009
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.6176504385930084,
+                    0.7453767905394755
+                ],
+                "win_rate": 0.685,
+                "wins": 137
+            },
+            "rule_v0": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 200,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 34.5,
+                    "p95": 176.0
+                },
+                "games": 200,
+                "invalid_actions": 0,
+                "losses": 102,
+                "match_latency_seconds": {
+                    "max": 1.685024,
+                    "p50": 0.1901155,
+                    "p95": 1.35793065
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 0,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 49,
+                        "wins": 51
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 53,
+                        "wins": 47
+                    }
+                },
+                "seeds": [
+                    93000,
+                    93001,
+                    93002,
+                    93003,
+                    93004,
+                    93005,
+                    93006,
+                    93007,
+                    93008,
+                    93009
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.42156278278393533,
+                    0.5588141237494437
+                ],
+                "win_rate": 0.49,
+                "wins": 98
+            }
+        },
+        "status": "EXECUTED"
+    },
+    "current_meta": {
+        "games": 0,
+        "members": {},
+        "status": "BENCHMARK_BLOCKED_INSUFFICIENT_ACTIVE_POPULATION"
+    },
+    "overall": {
+        "attribution_available": true,
+        "attribution_missing_games": 0,
+        "candidate_exception": 0,
+        "candidate_fallback_games": 0,
+        "candidate_fallback_total": 0,
+        "candidate_invalid": 0,
+        "candidate_timeout": 0,
+        "crashes": 0,
+        "decided_games": 400,
+        "draws": 0,
+        "fallbacks": 0,
+        "game_length_steps": {
+            "p50": 34.0,
+            "p95": 168.04999999999995
+        },
+        "games": 400,
+        "invalid_actions": 0,
+        "losses": 165,
+        "match_latency_seconds": {
+            "max": 1.685024,
+            "p50": 0.1953855,
+            "p95": 1.1376617499999988
+        },
+        "opponent_exception": 0,
+        "opponent_fallback_games": 0,
+        "opponent_fallback_total": 0,
+        "opponent_invalid": 0,
+        "opponent_timeout": 0,
+        "reproducible": true,
+        "seat_wld": {
+            "champion_player_0": {
+                "draws": 0,
+                "losses": 84,
+                "wins": 116
+            },
+            "champion_player_1": {
+                "draws": 0,
+                "losses": 81,
+                "wins": 119
+            }
+        },
+        "seeds": [
+            93000,
+            93001,
+            93002,
+            93003,
+            93004,
+            93005,
+            93006,
+            93007,
+            93008,
+            93009,
+            93000,
+            93001,
+            93002,
+            93003,
+            93004,
+            93005,
+            93006,
+            93007,
+            93008,
+            93009
+        ],
+        "timeouts": 0,
+        "wilson_ci_95": [
+            0.5386474922018407,
+            0.6346878562636461
+        ],
+        "win_rate": 0.5875,
+        "wins": 235
+    },
+    "safety": {
+        "games": 0,
+        "members": {},
+        "status": "EXCLUDED_BY_BENCHMARK_KIND"
+    }
+}

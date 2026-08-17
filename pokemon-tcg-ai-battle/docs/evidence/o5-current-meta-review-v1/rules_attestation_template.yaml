@@ -1,0 +1,22 @@
+{
+  "schema_version": "competition-rules-attestation-v2",
+  "competition": "",
+  "review_status": "UNVERIFIED",
+  "reviewed_at": null,
+  "reviewed_by_hash": null,
+  "allowed_use": {
+    "leaderboard_archive": false,
+    "public_replay_archive": false,
+    "deck_extraction": false,
+    "archetype_classification": false,
+    "aggregate_meta_analysis": false,
+    "behavior_analysis": false,
+    "local_evaluation": false,
+    "training": false,
+    "redistribution": false
+  },
+  "evidence": {
+    "source_hashes": [],
+    "notes": ""
+  }
+}

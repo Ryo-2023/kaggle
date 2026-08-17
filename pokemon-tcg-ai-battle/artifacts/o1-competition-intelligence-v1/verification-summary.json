@@ -1,0 +1,108 @@
+{
+  "schema_version": "o1-verification-summary-v1",
+  "generated_at": "2026-07-18",
+  "worktree": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle-o1-intelligence",
+  "base_commit": "6782e687a6bb667c3ca5343df9974352ddd7cd2c",
+  "slice0_2_final_head": "9efe409f05727c30f23122bc2d1ddf683ca12645",
+  "final_head": "64d754250e2532b211bc034004f5d7e954c40996",
+  "canonical_branch_touched": false,
+  "remote_push": false,
+  "new_remote_branch": false,
+  "champion_changed": false,
+  "promotion_changed": false,
+  "kaggle_submitted": false,
+  "protected_artifacts_changed": false,
+  "scope_implemented": [
+    "O1-0 Guardrails",
+    "O1-1 Foundation (contracts, permissions, provenance, archive, runstate, catalog, config, CLI subset)",
+    "O1-2 Local Replay Normalization and Analytics",
+    "O1-3 Knowledge Registry",
+    "O1-4 Immutable Intelligence Snapshot and Offline Training Adapter"
+  ],
+  "scope_not_implemented": [
+    "O1-5 External/Kaggle/team-bundle adapters",
+    "O1-6 Meta posterior/Opponent Surrogate/Promotion Report"
+  ],
+  "tests": {
+    "new_focused_tests_slice0_2": {
+      "passed": 127,
+      "failed": 0
+    },
+    "new_focused_tests_slice2_4": {
+      "command": "env -u PYTHONPATH python3 -m pytest tests/competition_intelligence/ tests/test_competition_intelligence_cli_end_to_end.py tests/test_competition_intelligence_runtime_isolation.py tests/test_check_o1_protected_files.py -q",
+      "passed": 258,
+      "failed": 0,
+      "note": "258 total = 127 (slice0-2, unchanged) + 131 new (slice2-4)"
+    },
+    "repository_full_suite": {
+      "command": "nice -n 10 env -u PYTHONPATH python3 -m pytest tests/ -q",
+      "passed": 1277,
+      "failed": 0,
+      "single_process": true,
+      "no_xdist": true,
+      "niced": true,
+      "duration_seconds": 162.04,
+      "note": "the known flaky test_actual_agent_viability.py::test_viability_runner_redacts_raw_runner_values_and_resumes (see slice0-1 evidence for its diagnosed root cause) did not trigger in this run; it is non-deterministic and unrelated to this session's changes either way"
+    },
+    "compileall": "pass (src/, scripts/, main.py, agents/)",
+    "git_diff_check": "pass",
+    "docs_validator": "Validated 12 canonical documents."
+  },
+  "self_review_findings": {
+    "slice0_2": [
+      {
+        "category": "privacy",
+        "summary": "origin_reference stored raw absolute local path (incl. username) in a canonical SourceEnvelope manifest",
+        "fix": "reuse mage_ptcg.competition.redaction.redact_value to strip home-directory prefixes before persisting",
+        "regression_test": "tests/competition_intelligence/test_privacy.py"
+      },
+      {
+        "category": "permission",
+        "summary": "PUBLIC_OTHER source could be granted TRAINING/REDISTRIBUTION if a caller explicitly requested it, contradicting the design's unconditional denial for PUBLIC_OTHER",
+        "fix": "SourceEnvelope.__post_init__ now hard-rejects PUBLIC_OTHER + TRAINING/REDISTRIBUTION regardless of caller input",
+        "regression_test": "tests/competition_intelligence/test_contracts.py::TestSourceEnvelope (4 new cases)"
+      }
+    ],
+    "slice2_4": [
+      {
+        "category": "correctness (leakage prevention)",
+        "summary": "group_split.py's composite grouping key included episode_id (always unique per episode), which made every episode its own singleton group, silently defeating group-aware leakage prevention entirely -- episodes sharing the same opponent/deck/agent/source were never actually grouped together",
+        "fix": "removed episode_id from GroupKey's hashed dimensions; fallback_episode_id is used only when every real grouping dimension is None",
+        "regression_test": "tests/competition_intelligence/test_snapshot_and_adapter.py::TestGroupSplit::test_same_opponent_grouped_together_across_episodes"
+      }
+    ]
+  },
+  "protected_files_check": {
+    "tool": "scripts/check_o1_protected_files.py",
+    "before": "artifacts/o1-competition-intelligence-v1/protected-files-before.json",
+    "after": "artifacts/o1-competition-intelligence-v1/protected-files-after.json",
+    "diff_count": 0,
+    "unchanged": true,
+    "note": "runs/, submissions/, data/ are git-ignored and absent in this detached worktree; presence-only checked, not hashed"
+  },
+  "runtime_isolation": {
+    "test": "tests/test_competition_intelligence_runtime_isolation.py",
+    "passed": true,
+    "additional_check": "grep of all new O1-2..O1-4 modules confirms the only external mage_ptcg imports are mage_ptcg.competition.redaction and mage_ptcg.offline_training_v1_support.statistics; no import of mage_ptcg.student or mage_ptcg.offline_training.dataset anywhere in the sidecar"
+  },
+  "end_to_end_pipeline": {
+    "stages": ["ingest-local", "normalize", "analyze", "import-knowledge", "build-knowledge-snapshot", "build-snapshot", "export-offline-dataset", "rebuild-catalog", "report"],
+    "run_twice_from_clean_roots": true,
+    "deterministic_hashes_confirmed": ["knowledge_snapshot.snapshot_sha256", "intelligence_snapshot.snapshot_sha256", "normalized/episodes.jsonl (byte-identical)", "normalized/decisions.jsonl (byte-identical)", "exported offline-training-compatible dataset (byte-identical)"],
+    "tests": ["tests/competition_intelligence/test_pipeline_end_to_end.py", "tests/test_competition_intelligence_cli_end_to_end.py"]
+  },
+  "old_checkpoint_tag_preserved": {
+    "name": "checkpoint/o1-competition-intelligence-v1",
+    "target": "9efe409f05727c30f23122bc2d1ddf683ca12645",
+    "note": "preserved unmoved; marks the O1-0/O1-1 (Slice 0-2) completion point"
+  },
+  "checkpoint_tag": "checkpoint/o1-competition-intelligence-v1-slice0-4",
+  "checkpoint_tag_pushed": false,
+  "patch_series_path": "artifacts/o1-competition-intelligence-v1/patches/",
+  "single_patch_path": "artifacts/o1-competition-intelligence-v1/implementation.patch",
+  "bundle_path": "artifacts/o1-competition-intelligence-v1/checkpoint.bundle",
+  "evidence_docs": [
+    "docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md",
+    "docs/evidence/o1-competition-intelligence-sidecar-slice2-4.md"
+  ]
+}

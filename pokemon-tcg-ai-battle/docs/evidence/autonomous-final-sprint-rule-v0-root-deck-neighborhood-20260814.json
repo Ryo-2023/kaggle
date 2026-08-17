@@ -1,0 +1,61 @@
+{
+  "schema_version": "final-sprint-rule-v0-root-deck-neighborhood-v1",
+  "date": "2026-08-14",
+  "purpose": "Short Rule v0 fixed-policy discovery over two new bundle-compatible root-deck one-card mutations",
+  "policy_sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+  "evaluator_sha256": "0cbac2789e08758d14783922c5c7145f25701a47d978b3d9df9d132aec4eed84",
+  "pool": {
+    "opponent_count": 12,
+    "games_per_seat": 2,
+    "base_seed": 23300000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "fault_inclusive_denominator": true,
+    "native_behavior_labels_saved": false,
+    "authority": {
+      "training": false,
+      "promotion": false,
+      "submission": false
+    }
+  },
+  "parent": {
+    "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+    "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-root-deck-neighborhood-20260814/parent-48",
+    "summary_sha256": "bdef62332649e02d40e6c624fc15087c8c78ba083b7144d16ae14e30be4c974d",
+    "manifest_sha256": "d223f82f762788137c0f1c97d8d1940ea9e48b28bc84a9d17d4564c2ddd4d1c4",
+    "ledger_sha256": "4083220e50c6d7bdc750208fd1586698c465af3d84704506883ae30b282eb041",
+    "wdlf": "4-0-44-0",
+    "score_rate": 0.08333333333333333
+  },
+  "candidates": [
+    {
+      "candidate_id": "boss-to-judge",
+      "mutation": "1182 Boss's Orders -> 1213 Judge",
+      "deck_sha256": "f5d8424a78e36977c2c07ddb1bc44d0581831c07188b5565ce1ce72534227919",
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-root-deck-neighborhood-20260814/boss-to-judge-48",
+      "summary_sha256": "fcaf4735a0ea0bf8f59c11ddc533b0ba334a5de34f6eecdbb5afb2c22e5c4486",
+      "ledger_sha256": "90ab37aee3ad556671643b77e255ee128412a75466c63e095290cbcd9be3fd9a",
+      "wdlf": "3-0-45-0",
+      "score_rate": 0.0625,
+      "delta_vs_parent_points": -2.083333333333333
+    },
+    {
+      "candidate_id": "pad-to-explorer",
+      "mutation": "1152 Poke Pad -> 1185 Explorer",
+      "deck_sha256": "68e405b1ebd13713fe4ddcded7038c62500bd6944aba6a2aeb80866c2299214b",
+      "root": "runs/final-sprint-autonomous/final-sprint-rule-v0-root-deck-neighborhood-20260814/pad-to-explorer-48",
+      "summary_sha256": "426ed27e7c7f3b4dd74bc22aeac6379e2dd9544fa811d93a30cf11ddccbde29b",
+      "ledger_sha256": "83226a53381b6084f1c8fc94d316f5caed958f72bc46f44a9566fd4b81d11d25",
+      "wdlf": "1-0-47-0",
+      "score_rate": 0.020833333333333332,
+      "delta_vs_parent_points": -6.25
+    }
+  ],
+  "decision": {
+    "status": "CANDIDATE_ONLY_STOP",
+    "common24_started": false,
+    "confirmation_384_started": false,
+    "reason": "Both new root-deck mutations were negative in the 48-game discovery screen; no candidate passed the positive gate.",
+    "next": "Do not repeat these surfaces. Keep P0=Rule v0 and D0=root deck, and select one non-overlapping surface only after hard-negative review."
+  }
+}

@@ -1,0 +1,1924 @@
+{
+  "digest_basis": "independently_verified",
+  "independent_verification": {
+    "digest_mismatches": 0,
+    "game_count": 60,
+    "independently_verified_count": 60,
+    "malformed_trajectories": 0,
+    "parsed_event_count": 6331,
+    "privacy_violations": 0,
+    "schema_version": "o6-independent-verification-summary-v1",
+    "schema_violations": 0,
+    "unique_action_traces": 60,
+    "unique_complete_trajectories": 60,
+    "unique_initial_observations": 1,
+    "unique_terminal_observations": 60
+  },
+  "league_run_id": "o6-team-league-f4c8f9b87ae6-public-v2",
+  "pairs": {
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+      "attribution_available": true,
+      "attribution_missing_games": 0,
+      "candidate_exception": 0,
+      "candidate_fallback_games": 0,
+      "candidate_fallback_total": 0,
+      "candidate_invalid": 0,
+      "candidate_timeout": 0,
+      "completed_match_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "base_seed": 92000,
+        "challenger": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "champion": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+        "deck_fingerprint": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f|9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "environment_version": "cabt/kaggle-environments-1.32.0",
+        "games": 10,
+        "max_steps": 10000
+      },
+      "config_hash": "d554be9ea38e5d671ebaa534cac1ec74a19c4918e4d40adf92b3d0e0db4b824d",
+      "crashes": 0,
+      "draws": 0,
+      "fallbacks": 0,
+      "games": 10,
+      "invalid_actions": 0,
+      "losses": 4,
+      "match_latency_seconds": {
+        "max": 0.583,
+        "p50": 0.35250000000000004,
+        "p95": 0.5744499999999999
+      },
+      "opponent_exception": 0,
+      "opponent_fallback_games": 0,
+      "opponent_fallback_total": 0,
+      "opponent_invalid": 0,
+      "opponent_timeout": 0,
+      "privacy_violations": 0,
+      "records": [
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.377,
+          "fallback_count": 0,
+          "match_index": 0,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.182,
+          "fallback_count": 0,
+          "match_index": 1,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.316,
+          "fallback_count": 0,
+          "match_index": 2,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.428,
+          "fallback_count": 0,
+          "match_index": 3,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.123,
+          "fallback_count": 0,
+          "match_index": 4,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.583,
+          "fallback_count": 0,
+          "match_index": 5,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.564,
+          "fallback_count": 0,
+          "match_index": 6,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.513,
+          "fallback_count": 0,
+          "match_index": 7,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.328,
+          "fallback_count": 0,
+          "match_index": 8,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.318,
+          "fallback_count": 0,
+          "match_index": 9,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        }
+      ],
+      "reproducible": true,
+      "schedule": [
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 0,
+          "seed": 92000
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 1,
+          "seed": 92001
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 2,
+          "seed": 92002
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 3,
+          "seed": 92003
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 4,
+          "seed": 92004
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 5,
+          "seed": 92005
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 6,
+          "seed": 92006
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 7,
+          "seed": 92007
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 8,
+          "seed": 92008
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 9,
+          "seed": 92009
+        }
+      ],
+      "schema_version": "c5-actual-league-v1",
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        }
+      },
+      "timeouts": 0,
+      "wins": 6
+    },
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+      "attribution_available": true,
+      "attribution_missing_games": 0,
+      "candidate_exception": 0,
+      "candidate_fallback_games": 0,
+      "candidate_fallback_total": 0,
+      "candidate_invalid": 0,
+      "candidate_timeout": 0,
+      "completed_match_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "base_seed": 93000,
+        "challenger": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "champion": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+        "deck_fingerprint": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f|973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "environment_version": "cabt/kaggle-environments-1.32.0",
+        "games": 10,
+        "max_steps": 10000
+      },
+      "config_hash": "3273872072cda8e833a4b846ec27f3a79fb13143263f6964ba80ca2e1fb54803",
+      "crashes": 0,
+      "draws": 0,
+      "fallbacks": 0,
+      "games": 10,
+      "invalid_actions": 0,
+      "losses": 3,
+      "match_latency_seconds": {
+        "max": 0.649,
+        "p50": 0.357,
+        "p95": 0.61435
+      },
+      "opponent_exception": 0,
+      "opponent_fallback_games": 0,
+      "opponent_fallback_total": 0,
+      "opponent_invalid": 0,
+      "opponent_timeout": 0,
+      "privacy_violations": 0,
+      "records": [
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.496,
+          "fallback_count": 0,
+          "match_index": 0,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.308,
+          "fallback_count": 0,
+          "match_index": 1,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.116,
+          "fallback_count": 0,
+          "match_index": 2,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.572,
+          "fallback_count": 0,
+          "match_index": 3,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.304,
+          "fallback_count": 0,
+          "match_index": 4,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.321,
+          "fallback_count": 0,
+          "match_index": 5,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.455,
+          "fallback_count": 0,
+          "match_index": 6,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.393,
+          "fallback_count": 0,
+          "match_index": 7,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.309,
+          "fallback_count": 0,
+          "match_index": 8,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.649,
+          "fallback_count": 0,
+          "match_index": 9,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        }
+      ],
+      "reproducible": true,
+      "schedule": [
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 0,
+          "seed": 93000
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 1,
+          "seed": 93001
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 2,
+          "seed": 93002
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 3,
+          "seed": 93003
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 4,
+          "seed": 93004
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 5,
+          "seed": 93005
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 6,
+          "seed": 93006
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 7,
+          "seed": 93007
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 8,
+          "seed": 93008
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 9,
+          "seed": 93009
+        }
+      ],
+      "schema_version": "c5-actual-league-v1",
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 1,
+          "wins": 4
+        }
+      },
+      "timeouts": 0,
+      "wins": 7
+    },
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__rule-agent-v0": {
+      "attribution_available": true,
+      "attribution_missing_games": 0,
+      "candidate_exception": 0,
+      "candidate_fallback_games": 0,
+      "candidate_fallback_total": 0,
+      "candidate_invalid": 0,
+      "candidate_timeout": 0,
+      "completed_match_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "base_seed": 94000,
+        "challenger": "rule-agent-v0",
+        "champion": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+        "deck_fingerprint": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f|rule-agent-v0",
+        "environment_version": "cabt/kaggle-environments-1.32.0",
+        "games": 10,
+        "max_steps": 10000
+      },
+      "config_hash": "c2daec65d2e93bbe95a2864559a79041716d807ad359de5d6d1d6e77459dd75b",
+      "crashes": 0,
+      "draws": 0,
+      "fallbacks": 0,
+      "games": 10,
+      "invalid_actions": 0,
+      "losses": 4,
+      "match_latency_seconds": {
+        "max": 0.369,
+        "p50": 0.247,
+        "p95": 0.35414999999999996
+      },
+      "opponent_exception": 0,
+      "opponent_fallback_games": 0,
+      "opponent_fallback_total": 0,
+      "opponent_invalid": 0,
+      "opponent_timeout": 0,
+      "privacy_violations": 0,
+      "records": [
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.336,
+          "fallback_count": 0,
+          "match_index": 0,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.228,
+          "fallback_count": 0,
+          "match_index": 1,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.163,
+          "fallback_count": 0,
+          "match_index": 2,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.249,
+          "fallback_count": 0,
+          "match_index": 3,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.129,
+          "fallback_count": 0,
+          "match_index": 4,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.3,
+          "fallback_count": 0,
+          "match_index": 5,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.369,
+          "fallback_count": 0,
+          "match_index": 6,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.258,
+          "fallback_count": 0,
+          "match_index": 7,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.245,
+          "fallback_count": 0,
+          "match_index": 8,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.09,
+          "fallback_count": 0,
+          "match_index": 9,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        }
+      ],
+      "reproducible": true,
+      "schedule": [
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 0,
+          "seed": 94000
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 1,
+          "seed": 94001
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 2,
+          "seed": 94002
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 3,
+          "seed": 94003
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 4,
+          "seed": 94004
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 5,
+          "seed": 94005
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 6,
+          "seed": 94006
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 7,
+          "seed": 94007
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 8,
+          "seed": 94008
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 9,
+          "seed": 94009
+        }
+      ],
+      "schema_version": "c5-actual-league-v1",
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        }
+      },
+      "timeouts": 0,
+      "wins": 6
+    },
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+      "attribution_available": true,
+      "attribution_missing_games": 0,
+      "candidate_exception": 0,
+      "candidate_fallback_games": 0,
+      "candidate_fallback_total": 0,
+      "candidate_invalid": 0,
+      "candidate_timeout": 0,
+      "completed_match_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "base_seed": 95000,
+        "challenger": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "champion": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "deck_fingerprint": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812|973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "environment_version": "cabt/kaggle-environments-1.32.0",
+        "games": 10,
+        "max_steps": 10000
+      },
+      "config_hash": "9dd001132f6b012eb53999593a9c7a20d5a85d5d4391729a1bb0026a729eb895",
+      "crashes": 0,
+      "draws": 0,
+      "fallbacks": 0,
+      "games": 10,
+      "invalid_actions": 0,
+      "losses": 2,
+      "match_latency_seconds": {
+        "max": 1.189,
+        "p50": 0.4675,
+        "p95": 0.9522999999999995
+      },
+      "opponent_exception": 0,
+      "opponent_fallback_games": 0,
+      "opponent_fallback_total": 0,
+      "opponent_invalid": 0,
+      "opponent_timeout": 0,
+      "privacy_violations": 0,
+      "records": [
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.663,
+          "fallback_count": 0,
+          "match_index": 0,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.358,
+          "fallback_count": 0,
+          "match_index": 1,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.474,
+          "fallback_count": 0,
+          "match_index": 2,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.499,
+          "fallback_count": 0,
+          "match_index": 3,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.45,
+          "fallback_count": 0,
+          "match_index": 4,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.461,
+          "fallback_count": 0,
+          "match_index": 5,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.503,
+          "fallback_count": 0,
+          "match_index": 6,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.342,
+          "fallback_count": 0,
+          "match_index": 7,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.451,
+          "fallback_count": 0,
+          "match_index": 8,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 1.189,
+          "fallback_count": 0,
+          "match_index": 9,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        }
+      ],
+      "reproducible": true,
+      "schedule": [
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 0,
+          "seed": 95000
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 1,
+          "seed": 95001
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 2,
+          "seed": 95002
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 3,
+          "seed": 95003
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 4,
+          "seed": 95004
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 5,
+          "seed": 95005
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 6,
+          "seed": 95006
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 7,
+          "seed": 95007
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 8,
+          "seed": 95008
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 9,
+          "seed": 95009
+        }
+      ],
+      "schema_version": "c5-actual-league-v1",
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 2,
+          "wins": 3
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        }
+      },
+      "timeouts": 0,
+      "wins": 8
+    },
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__rule-agent-v0": {
+      "attribution_available": true,
+      "attribution_missing_games": 0,
+      "candidate_exception": 0,
+      "candidate_fallback_games": 0,
+      "candidate_fallback_total": 0,
+      "candidate_invalid": 0,
+      "candidate_timeout": 0,
+      "completed_match_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "base_seed": 96000,
+        "challenger": "rule-agent-v0",
+        "champion": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "deck_fingerprint": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812|rule-agent-v0",
+        "environment_version": "cabt/kaggle-environments-1.32.0",
+        "games": 10,
+        "max_steps": 10000
+      },
+      "config_hash": "7c418d6301600286201fd8fa5f4667f277aaa078565f1235cf0b9d9d4697b8af",
+      "crashes": 0,
+      "draws": 0,
+      "fallbacks": 0,
+      "games": 10,
+      "invalid_actions": 0,
+      "losses": 0,
+      "match_latency_seconds": {
+        "max": 0.654,
+        "p50": 0.26849999999999996,
+        "p95": 0.5680499999999998
+      },
+      "opponent_exception": 0,
+      "opponent_fallback_games": 0,
+      "opponent_fallback_total": 0,
+      "opponent_invalid": 0,
+      "opponent_timeout": 0,
+      "privacy_violations": 0,
+      "records": [
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.654,
+          "fallback_count": 0,
+          "match_index": 0,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.185,
+          "fallback_count": 0,
+          "match_index": 1,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.25,
+          "fallback_count": 0,
+          "match_index": 2,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.437,
+          "fallback_count": 0,
+          "match_index": 3,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.24,
+          "fallback_count": 0,
+          "match_index": 4,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.287,
+          "fallback_count": 0,
+          "match_index": 5,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.32,
+          "fallback_count": 0,
+          "match_index": 6,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.463,
+          "fallback_count": 0,
+          "match_index": 7,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.177,
+          "fallback_count": 0,
+          "match_index": 8,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.173,
+          "fallback_count": 0,
+          "match_index": 9,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        }
+      ],
+      "reproducible": true,
+      "schedule": [
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 0,
+          "seed": 96000
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 1,
+          "seed": 96001
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 2,
+          "seed": 96002
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 3,
+          "seed": 96003
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 4,
+          "seed": 96004
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 5,
+          "seed": 96005
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 6,
+          "seed": 96006
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 7,
+          "seed": 96007
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 8,
+          "seed": 96008
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 9,
+          "seed": 96009
+        }
+      ],
+      "schema_version": "c5-actual-league-v1",
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        }
+      },
+      "timeouts": 0,
+      "wins": 10
+    },
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899__vs__rule-agent-v0": {
+      "attribution_available": true,
+      "attribution_missing_games": 0,
+      "candidate_exception": 0,
+      "candidate_fallback_games": 0,
+      "candidate_fallback_total": 0,
+      "candidate_invalid": 0,
+      "candidate_timeout": 0,
+      "completed_match_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "base_seed": 97000,
+        "challenger": "rule-agent-v0",
+        "champion": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "deck_fingerprint": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899|rule-agent-v0",
+        "environment_version": "cabt/kaggle-environments-1.32.0",
+        "games": 10,
+        "max_steps": 10000
+      },
+      "config_hash": "d38f1327009936c45ac6aba748f86fef2a3ca0a6c9a3b6e930789a59c2c90887",
+      "crashes": 0,
+      "draws": 0,
+      "fallbacks": 0,
+      "games": 10,
+      "invalid_actions": 0,
+      "losses": 1,
+      "match_latency_seconds": {
+        "max": 0.488,
+        "p50": 0.248,
+        "p95": 0.4479499999999999
+      },
+      "opponent_exception": 0,
+      "opponent_fallback_games": 0,
+      "opponent_fallback_total": 0,
+      "opponent_invalid": 0,
+      "opponent_timeout": 0,
+      "privacy_violations": 0,
+      "records": [
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.133,
+          "fallback_count": 0,
+          "match_index": 0,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.073,
+          "fallback_count": 0,
+          "match_index": 1,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "challenger"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.24,
+          "fallback_count": 0,
+          "match_index": 2,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.282,
+          "fallback_count": 0,
+          "match_index": 3,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.399,
+          "fallback_count": 0,
+          "match_index": 4,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.268,
+          "fallback_count": 0,
+          "match_index": 5,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.488,
+          "fallback_count": 0,
+          "match_index": 6,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.093,
+          "fallback_count": 0,
+          "match_index": 7,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.256,
+          "fallback_count": 0,
+          "match_index": 8,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        },
+        {
+          "challenger_fallback_count": "NOT_OBSERVABLE",
+          "challenger_status": "DONE",
+          "champion_fallback_count": "NOT_OBSERVABLE",
+          "champion_status": "DONE",
+          "elapsed_seconds": 0.204,
+          "fallback_count": 0,
+          "match_index": 9,
+          "status": "DONE",
+          "steps": null,
+          "winner_agent": "champion"
+        }
+      ],
+      "reproducible": true,
+      "schedule": [
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 0,
+          "seed": 97000
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 1,
+          "seed": 97001
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 2,
+          "seed": 97002
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 3,
+          "seed": 97003
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 4,
+          "seed": 97004
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 5,
+          "seed": 97005
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 6,
+          "seed": 97006
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 7,
+          "seed": 97007
+        },
+        {
+          "challenger_player_index": 1,
+          "champion_player_index": 0,
+          "match_index": 8,
+          "seed": 97008
+        },
+        {
+          "challenger_player_index": 0,
+          "champion_player_index": 1,
+          "match_index": 9,
+          "seed": 97009
+        }
+      ],
+      "schema_version": "c5-actual-league-v1",
+      "seat_wld": {
+        "champion_player_0": {
+          "draws": 0,
+          "losses": 0,
+          "wins": 5
+        },
+        "champion_player_1": {
+          "draws": 0,
+          "losses": 1,
+          "wins": 4
+        }
+      },
+      "timeouts": 0,
+      "wins": 9
+    }
+  },
+  "participants": [
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+    "rule-agent-v0"
+  ],
+  "population_id": "team-agents-v1-f4c8f9b87ae6601a",
+  "population_identity_hash": "f4c8f9b87ae6601ab86805203a51df7b10e5c505a4d30558b26be2c238419ad1",
+  "schema_version": "o6-team-league-summary-v3",
+  "trajectory_statistics": {
+    "actual_student": {
+      "merge_blocker": false,
+      "reason": "this runner's _load_participants() only constructs rule-agent-v0 plus VALIDATED native Population specs; no actual-Student adapter/runtime participant is wired into this script, so the League establishes Team-Agent-vs-Rule-Agent comparisons only, never Student fairness or strength",
+      "status": "NOT_CONNECTED_TO_POPULATION_FACTORY"
+    },
+    "bradley_terry_deduplicated_trajectory": {
+      "components": [
+        [
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+          "rule-agent-v0"
+        ]
+      ],
+      "descriptive_only": true,
+      "graph_connected": true,
+      "identifiability_warning": null,
+      "log_strength": {
+        "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 0.48608016720620406,
+        "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 0.8503335139561403,
+        "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": -0.09169278333588887,
+        "rule-agent-v0": -1.2447208978264555
+      },
+      "normalization": "mean_log_strength_zero",
+      "schema_version": "o6-bradley-terry-v1",
+      "statistically_supported_ranking": false
+    },
+    "bradley_terry_raw_execution": {
+      "components": [
+        [
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+          "rule-agent-v0"
+        ]
+      ],
+      "descriptive_only": true,
+      "graph_connected": true,
+      "identifiability_warning": null,
+      "log_strength": {
+        "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 0.48608016720620406,
+        "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 0.8503335139561403,
+        "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": -0.09169278333588887,
+        "rule-agent-v0": -1.2447208978264555
+      },
+      "normalization": "mean_log_strength_zero",
+      "schema_version": "o6-bradley-terry-v1",
+      "statistically_supported_ranking": false
+    },
+    "effective_independent_sample_size_total": 60,
+    "engine_seed_support_status": "ENGINE_SEED_UNSUPPORTED",
+    "min_effective_independent_sample_size_threshold": 5,
+    "per_pair": {
+      "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+        "effective_independent_sample_size": 10,
+        "min_effective_independent_sample_size_threshold": 5,
+        "raw_execution_draws": 0,
+        "raw_execution_total": 10,
+        "raw_execution_wilson_ci_a": [
+          0.3126737697336583,
+          0.8318196702937638
+        ],
+        "raw_execution_wilson_ci_is_descriptive_only": true,
+        "raw_execution_win_rate_a": 0.6,
+        "raw_execution_wins": {
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 6,
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 4
+        },
+        "schema_version": "o6-pair-win-rate-statistics-v1",
+        "side_a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+        "side_b": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "statistically_interpretable": true,
+        "unique_trajectory_draws": 0,
+        "unique_trajectory_total": 10,
+        "unique_trajectory_wilson_ci_a": [
+          0.3126737697336583,
+          0.8318196702937638
+        ],
+        "unique_trajectory_wilson_ci_status": "COMPUTED",
+        "unique_trajectory_win_rate_a": 0.6,
+        "unique_trajectory_wins": {
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 6,
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 4
+        },
+        "uniqueness_by_seat_direction": {
+          "seat_0=03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          },
+          "seat_0=9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          }
+        }
+      },
+      "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+        "effective_independent_sample_size": 10,
+        "min_effective_independent_sample_size_threshold": 5,
+        "raw_execution_draws": 0,
+        "raw_execution_total": 10,
+        "raw_execution_wilson_ci_a": [
+          0.3967781474611453,
+          0.8922087325936988
+        ],
+        "raw_execution_wilson_ci_is_descriptive_only": true,
+        "raw_execution_win_rate_a": 0.7,
+        "raw_execution_wins": {
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 7,
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 3
+        },
+        "schema_version": "o6-pair-win-rate-statistics-v1",
+        "side_a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+        "side_b": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "statistically_interpretable": true,
+        "unique_trajectory_draws": 0,
+        "unique_trajectory_total": 10,
+        "unique_trajectory_wilson_ci_a": [
+          0.3967781474611453,
+          0.8922087325936988
+        ],
+        "unique_trajectory_wilson_ci_status": "COMPUTED",
+        "unique_trajectory_win_rate_a": 0.7,
+        "unique_trajectory_wins": {
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 7,
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 3
+        },
+        "uniqueness_by_seat_direction": {
+          "seat_0=03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          },
+          "seat_0=973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          }
+        }
+      },
+      "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__rule-agent-v0": {
+        "effective_independent_sample_size": 10,
+        "min_effective_independent_sample_size_threshold": 5,
+        "raw_execution_draws": 0,
+        "raw_execution_total": 10,
+        "raw_execution_wilson_ci_a": [
+          0.3126737697336583,
+          0.8318196702937638
+        ],
+        "raw_execution_wilson_ci_is_descriptive_only": true,
+        "raw_execution_win_rate_a": 0.6,
+        "raw_execution_wins": {
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 6,
+          "rule-agent-v0": 4
+        },
+        "schema_version": "o6-pair-win-rate-statistics-v1",
+        "side_a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+        "side_b": "rule-agent-v0",
+        "statistically_interpretable": true,
+        "unique_trajectory_draws": 0,
+        "unique_trajectory_total": 10,
+        "unique_trajectory_wilson_ci_a": [
+          0.3126737697336583,
+          0.8318196702937638
+        ],
+        "unique_trajectory_wilson_ci_status": "COMPUTED",
+        "unique_trajectory_win_rate_a": 0.6,
+        "unique_trajectory_wins": {
+          "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": 6,
+          "rule-agent-v0": 4
+        },
+        "uniqueness_by_seat_direction": {
+          "seat_0=03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          },
+          "seat_0=rule-agent-v0": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          }
+        }
+      },
+      "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+        "effective_independent_sample_size": 10,
+        "min_effective_independent_sample_size_threshold": 5,
+        "raw_execution_draws": 0,
+        "raw_execution_total": 10,
+        "raw_execution_wilson_ci_a": [
+          0.4901624715366418,
+          0.9433178485456247
+        ],
+        "raw_execution_wilson_ci_is_descriptive_only": true,
+        "raw_execution_win_rate_a": 0.8,
+        "raw_execution_wins": {
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 8,
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 2
+        },
+        "schema_version": "o6-pair-win-rate-statistics-v1",
+        "side_a": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "side_b": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "statistically_interpretable": true,
+        "unique_trajectory_draws": 0,
+        "unique_trajectory_total": 10,
+        "unique_trajectory_wilson_ci_a": [
+          0.4901624715366418,
+          0.9433178485456247
+        ],
+        "unique_trajectory_wilson_ci_status": "COMPUTED",
+        "unique_trajectory_win_rate_a": 0.8,
+        "unique_trajectory_wins": {
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 8,
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 2
+        },
+        "uniqueness_by_seat_direction": {
+          "seat_0=9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          },
+          "seat_0=973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          }
+        }
+      },
+      "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812__vs__rule-agent-v0": {
+        "effective_independent_sample_size": 10,
+        "min_effective_independent_sample_size_threshold": 5,
+        "raw_execution_draws": 0,
+        "raw_execution_total": 10,
+        "raw_execution_wilson_ci_a": [
+          0.7224672001371106,
+          0.9999999999999999
+        ],
+        "raw_execution_wilson_ci_is_descriptive_only": true,
+        "raw_execution_win_rate_a": 1.0,
+        "raw_execution_wins": {
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 10,
+          "rule-agent-v0": 0
+        },
+        "schema_version": "o6-pair-win-rate-statistics-v1",
+        "side_a": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+        "side_b": "rule-agent-v0",
+        "statistically_interpretable": true,
+        "unique_trajectory_draws": 0,
+        "unique_trajectory_total": 10,
+        "unique_trajectory_wilson_ci_a": [
+          0.7224672001371106,
+          0.9999999999999999
+        ],
+        "unique_trajectory_wilson_ci_status": "COMPUTED",
+        "unique_trajectory_win_rate_a": 1.0,
+        "unique_trajectory_wins": {
+          "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": 10,
+          "rule-agent-v0": 0
+        },
+        "uniqueness_by_seat_direction": {
+          "seat_0=9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          },
+          "seat_0=rule-agent-v0": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          }
+        }
+      },
+      "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899__vs__rule-agent-v0": {
+        "effective_independent_sample_size": 10,
+        "min_effective_independent_sample_size_threshold": 5,
+        "raw_execution_draws": 0,
+        "raw_execution_total": 10,
+        "raw_execution_wilson_ci_a": [
+          0.5958499732047616,
+          0.9821237869049271
+        ],
+        "raw_execution_wilson_ci_is_descriptive_only": true,
+        "raw_execution_win_rate_a": 0.9,
+        "raw_execution_wins": {
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 9,
+          "rule-agent-v0": 1
+        },
+        "schema_version": "o6-pair-win-rate-statistics-v1",
+        "side_a": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+        "side_b": "rule-agent-v0",
+        "statistically_interpretable": true,
+        "unique_trajectory_draws": 0,
+        "unique_trajectory_total": 10,
+        "unique_trajectory_wilson_ci_a": [
+          0.5958499732047616,
+          0.9821237869049271
+        ],
+        "unique_trajectory_wilson_ci_status": "COMPUTED",
+        "unique_trajectory_win_rate_a": 0.9,
+        "unique_trajectory_wins": {
+          "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": 9,
+          "rule-agent-v0": 1
+        },
+        "uniqueness_by_seat_direction": {
+          "seat_0=973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          },
+          "seat_0=rule-agent-v0": {
+            "duplicate_trajectory_groups": {},
+            "effective_independent_sample_size": 5,
+            "independence_limitation": "cabt has no effective/controllable seed for this run (see engine_seed_support_status); effective_independent_sample_size counts distinct observed complete_trajectory_digest values, treating repeated identical trajectories as one independent outcome rather than N separate votes",
+            "max_multiplicity": 1,
+            "raw_executions": 5,
+            "schema_version": "o6-trajectory-uniqueness-v1",
+            "unique_action_traces": 5,
+            "unique_complete_trajectories": 5,
+            "unique_initial_states": 1,
+            "unique_terminal_states": 5
+          }
+        }
+      }
+    },
+    "raw_executions_total": 60,
+    "schema_version": "o6-team-league-trajectory-statistics-v2",
+    "unique_complete_trajectories_total": 60
+  }
+}

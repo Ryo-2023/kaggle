@@ -1,0 +1,7 @@
+{
+  "schema_version": "kaggle-agent-package-config-v1",
+  "competition_slug": "pokemon-tcg-ai-battle",
+  "agent_kind": "rule",
+  "output_dir": "dist/kaggle/rule-v0",
+  "contract": {"submission_method": "UNKNOWN", "archive_type": "UNKNOWN", "entrypoint": "main.py"}
+}

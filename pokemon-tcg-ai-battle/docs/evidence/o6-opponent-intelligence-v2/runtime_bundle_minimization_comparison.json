@@ -1,0 +1,66 @@
+{
+  "new_population_id": "team-agents-v1-f4c8f9b87ae6601a",
+  "new_population_identity_hash": "f4c8f9b87ae6601ab86805203a51df7b10e5c505a4d30558b26be2c238419ad1",
+  "new_total_bytes": 4422419,
+  "new_total_file_count": 42,
+  "old_population_id": "team-agents-v1-a3976401cae4fd38",
+  "old_population_identity_hash": "a3976401cae4fd386c4e962b402e6303c69706337432cc6343b7c42654200370",
+  "old_total_bytes": 19576727,
+  "old_total_file_count": 315,
+  "per_agent": {
+    "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f": {
+      "new_file_count": 14,
+      "new_native_binaries_bundled": [
+        "source/cg/libcg.so"
+      ],
+      "new_runtime_bundle_hash": "1583e4f777de144606a0c9aaca291219879a51af62cc36849f6db71fa2f471e7",
+      "new_total_bytes": 1489724,
+      "old_file_count": 56,
+      "old_native_binaries_bundled": [
+        "source/cg/libcg.so",
+        "source/cg/libcg-arm64.so",
+        "source/cg/cg.dll",
+        "source/cg/libcg.dylib"
+      ],
+      "old_runtime_bundle_hash": "e2466427054766498cae95362653d88a769975ad6bdaa7435f7f71178dd91a2f",
+      "old_total_bytes": 5880264,
+      "source_branch": "origin/agents/nihei-festival-lead"
+    },
+    "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812": {
+      "new_file_count": 14,
+      "new_native_binaries_bundled": [
+        "source/cg/libcg.so"
+      ],
+      "new_runtime_bundle_hash": "70c2c724da7c917606978a463663b77efba62ffa140986f7532e4a86e0163795",
+      "new_total_bytes": 1460161,
+      "old_file_count": 54,
+      "old_native_binaries_bundled": [
+        "source/cg/libcg.so",
+        "source/cg/libcg-arm64.so",
+        "source/cg/cg.dll",
+        "source/cg/libcg.dylib"
+      ],
+      "old_runtime_bundle_hash": "f5eab0965d15bc1e87f03c0132da1884e7b695f71df38cea711acf95b7736da3",
+      "old_total_bytes": 5830456,
+      "source_branch": "origin/agents/nihei-alakazam"
+    },
+    "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899": {
+      "new_file_count": 14,
+      "new_native_binaries_bundled": [
+        "source/cg/libcg.so"
+      ],
+      "new_runtime_bundle_hash": "cc6011f4baa95c548b722bce87a891575f31c9e3f21dee13501c30415292c9b7",
+      "new_total_bytes": 1472534,
+      "old_file_count": 205,
+      "old_native_binaries_bundled": [
+        "source/cg/libcg.so",
+        "source/cg/libcg-arm64.so",
+        "source/cg/cg.dll",
+        "source/cg/libcg.dylib"
+      ],
+      "old_runtime_bundle_hash": "4a97281312c67b68c2a6e81dc81d0eab7ea7ba936fc7663795368819c03fe842",
+      "old_total_bytes": 7866007,
+      "source_branch": "origin/agents/ozawa-crustle-rule"
+    }
+  }
+}

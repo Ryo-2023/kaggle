@@ -1,0 +1,28 @@
+{
+  "schema_version": "cg-p1-cem-identity-initial-v1",
+  "purpose": "fresh legalized-public-meta CEM の P1 identity center",
+  "research_only": true,
+  "config": {
+    "ability_bonus": 25000,
+    "attach_mega_2energy_bonus": 10000,
+    "attach_mega_lucario": 45000,
+    "attach_overenergy_penalty": -30000,
+    "attack_982_base": 36000,
+    "attack_983_base": 50000,
+    "attack_damage_weight_milli": 1000,
+    "attack_generic_base": 10000,
+    "evolve_mega_lucario": 50000,
+    "lethal_bonus": 12000,
+    "lethal_hp_margin": 0,
+    "retreat_good_score": 12000,
+    "search_mega_lucario": 50000,
+    "setup_active_riolu": 40000,
+    "setup_bench_riolu": 36000
+  },
+  "authority": {
+    "training_allowed": false,
+    "longrun_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "cg-weekend-meta-splits-v1",
+  "research_only": true,
+  "candidate_exclusion_ids": ["tomatomato_archaludon"],
+  "bindings": {
+    "p1_policy_sha256": "1c505b2b5d345bfd897573a7586fb1232d1946d6a3405d8fb1e8486e4e8578e9",
+    "p1_deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+    "meta_manifest_sha256": "e430f1284e587e7f301f9e29abe377faad79ff5120a39c42b7b2f6a5223dd2ae",
+    "pool_manifest_sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca",
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08"
+  },
+  "sources": {
+    "meta_manifest_path": "runs/final-sprint-autonomous/meta-distribution-v1/manifest.json",
+    "pool_manifest_path": "opponents/pool_manifest.json"
+  },
+  "evaluation_contract": {
+    "both_seats": true,
+    "fault_inclusive": true,
+    "training_exposure": 0,
+    "teacher_labels_saved": false,
+    "train_games_per_opponent_seat": 6,
+    "train_games_per_candidate": 48,
+    "top6_independent_games_per_opponent_seat": 4,
+    "dev_games_per_opponent_seat": 8,
+    "dev_games": 96,
+    "final_games_per_opponent_seat": 8,
+    "final_results_read_during_search": false
+  },
+  "train_blocks": [
+    ["aman_crustleaware_fighting", "aristophanivan_probabilistic", "kiyotah_abomasnow", "kiyotah_dragapult"],
+    ["kiyotah_iono", "kojimar_lucario", "kokinnwakashuu_lucario_search", "makthanithin_baseline1084"],
+    ["masamikobayashi_garchomp", "naoto714_slowking", "naoto714_ursaluna", "nihei_comfey_library_out"]
+  ],
+  "splits": {
+    "META_TRAIN": [
+      {"opponent_id": "aman_crustleaware_fighting", "archetype": "Crustle", "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19", "policy_sha256": "67549fe5af8e8a842b9e84fce080a995dbf81aed4a594a7e06556c3fd7b64312", "source_sha256": "6d13e96faef4ac711bfbbb87ac7619658fca01269b35fce4caab1572e4f57853", "weight": 0.011432274682288879, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "aristophanivan_probabilistic", "archetype": "Other/Unknown", "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19", "policy_sha256": "202ae85a283d80bac5c5faa7514011cda232fa5a33132d7123db23390933bafe", "source_sha256": "194f4f6d3bee6fcb8f3d62f1abf3291690deee29ad011aae99f781b47fd02d07", "weight": 0.011957380716959249, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "kiyotah_abomasnow", "archetype": "Abomasnow", "deck_sha256": "90f308029355e7156470175f27ba6355c831116647bc8c5c3f206d585d6aca90", "policy_sha256": "441f42e47ea085ae0dc44a6b02921c1d6d7d5766f566c509f34fa3699b90f7f7", "source_sha256": "cfae167ab5cd950b0425b8378ebf5e29155e03e7a5b994590f3dc40eeab17f2a", "weight": 0.015667993933301604, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "kiyotah_dragapult", "archetype": "Dragapult", "deck_sha256": "008816603a8ac836007f2cfc1c5b238177d7c1853eb3bbbbb931eec24cf717a7", "policy_sha256": "fc22f35118e5161cc8a8fb6a400f1695544412a05ea715659ea85f38336d04ff", "source_sha256": "578e10806166d35f82a60cc553bfa09a51be7df2a87e4b079cf635d008729dd7", "weight": 0.012691214357502222, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "kiyotah_iono", "archetype": "Other/Unknown", "deck_sha256": "bb264cca591df66a505b825c819557580606308dca2cee687c027164026bea55", "policy_sha256": "d892ad0787c3f55700b6c2aec4ce895cdc242fa44ed21e3caeb3cd1953fbe372", "source_sha256": "f0b472c750c1d0ce23d282c4994d10b1a7546d92376b9fbcea4482c3e88440d3", "weight": 0.012545933535995733, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "kojimar_lucario", "archetype": "Lucario", "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19", "policy_sha256": "44187ca3031261cd47673330b4511963079722dd6fbee6b166e76582dc48e9e4", "source_sha256": "3162aac05e2d28236e734c9c711826fead55b2bfcb7425a730dcffa4a0516f00", "weight": 0.013554750747745559, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "kokinnwakashuu_lucario_search", "archetype": "Lucario", "deck_sha256": "b4464eb525a25e6598a972d00efc5e5b5156372e77f51853f4076d8ebb34fd7d", "policy_sha256": "240574c80101dce12eeaa37310ca08094dbf706de17b0459e7f15ba54122a8d2", "source_sha256": "625b0694ac7cfecdd096cd74b137f96db1062fa21064a120f8806f12f81321c2", "weight": 0.011633992235941247, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "makthanithin_baseline1084", "archetype": "Other/Unknown", "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19", "policy_sha256": "44187ca3031261cd47673330b4511963079722dd6fbee6b166e76582dc48e9e4", "source_sha256": "b1e3213ac012faf6b2aa494d89c7b671f3f01c782dfd447ac986004d2aa5a58b", "weight": 0.011188085859514769, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "masamikobayashi_garchomp", "archetype": "Garchomp", "deck_sha256": "f6fe420cb34f07dd9445a6b6eef6043e67487a2fc1869b923cf5617443a8ecdd", "policy_sha256": "6347a928757ddae2e1e62b9613d85852fc71bedc6c31ff1739069ab778c2f5af", "source_sha256": "dbbdbe91a7d97359e61af0f8c3c45d473655d8352681aefd78066bbd6bfb75d9", "weight": 0.014238314679256799, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "naoto714_slowking", "archetype": "Slowking", "deck_sha256": "ad4c639f107f86f2d4c74d2a472c68c13549dfc0e76fbb9960177336ac198bd9", "policy_sha256": "a784dd2ae91db60fb972e0c92c13259730139c493262acb9746297dd78ef200e", "source_sha256": "4844a0707c5ec6fdc5d552c68b11f322559c44e8d762d2681173a081aa1d92d3", "weight": 0.013015747950997907, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "naoto714_ursaluna", "archetype": "Ursaluna", "deck_sha256": "5ffa2ab68390ddeb09517cbf53b97a405ddd88e5b430ef34575e3a18baa856a9", "policy_sha256": "ddb9c63819351f367979ad1573b66a1dddc33e71372db741640392ffdc1c775e", "source_sha256": "1fca70b391546a4dd27fb9ebc69baa6a125b9e8ef8c04816231e1cd8c33a530b", "weight": 0.014438191444417037, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "nihei_comfey_library_out", "archetype": "Comfey/Library Out", "deck_sha256": "1f098c68280326430f454827e04edf9c29892e1ac85b6a73be0de547b8f724a3", "policy_sha256": "e72e83e84031fb1988051a9f92a3c2e3ba917db86a04dfcc94173d2ab4b8062d", "source_sha256": "dc9b57e7c4d8827455189994287d92016466182b011fcdee016334d52e764f41", "weight": 0.015033871705213333, "usage_boundary": "local_eval_only", "training_exposure": 0}
+    ],
+    "META_DEV": [
+      {"opponent_id": "kiyotah_lucario", "archetype": "Lucario", "deck_sha256": "b4464eb525a25e6598a972d00efc5e5b5156372e77f51853f4076d8ebb34fd7d", "policy_sha256": "f868e12e7a9d33bb35b78c9350878a5a967353500d1f3e1712e8a8c2817daeb2", "source_sha256": "a8a396b9eafcebe47e0e85902e37557db510e41d451a02258252b8944d1fb5c9", "weight": 0.010781587019605274, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "nihei_megalopunny", "archetype": "Mega Lopunny", "deck_sha256": "56e49277697078ded5167ed11a231c6e784a2605aca41e1fb1072d695fc20c4e", "policy_sha256": "9354ef4897d49e8826d483e840ce1721b6e6ed278e09ac79284671bcd46ddf45", "source_sha256": "141d1f39cecce0f6ac80c78bee7b68385a642715d7a529b7d5bfe7baee840a3f", "weight": 0.0123837152031973, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "ozawa_crustle_v2", "archetype": "Crustle", "deck_sha256": "5c45f8e7ca25a206c64e3e96872dad6f6016427a0864766aff145a460fdc3f95", "policy_sha256": "19a8ceb5c59087bbe61deac56713b15de4db947cbea5a6146461779204706b5e", "source_sha256": "b5fd10945474d55d9c58f90cd41b677171afb667be48b932bcd094308c6b1d5d", "weight": 0.011737804973447943, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "skarin_dragapult", "archetype": "Dragapult", "deck_sha256": "4285ab2c575173fbb86c4f1aba8902ae7a317413cab1cc97fe3c67bef3b159f0", "policy_sha256": "fc22f35118e5161cc8a8fb6a400f1695544412a05ea715659ea85f38336d04ff", "source_sha256": "40430a4b7aec8b8ee1a523ea40f010318c5adf04b34f9f08df9a3bfc939f7f7e", "weight": 0.012729533610380369, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "sue124_alakazam", "archetype": "Alakazam", "deck_sha256": "7b413177e5077777f2178143839c0155b03b92bbc8b3a6607621a7d43f351141", "policy_sha256": "e81d3ecd7272da2e9f2e5b04b26733783fafa9f51bbf3b8dd039137df4fb45c1", "source_sha256": "44714ded7d2c389bd7a472de602991d6c60ed206dfa92e7459420ff3b2c7c967", "weight": 0.012001788050535653, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "yaroslav_crustleaware_lucario", "archetype": "Crustle", "deck_sha256": "b4464eb525a25e6598a972d00efc5e5b5156372e77f51853f4076d8ebb34fd7d", "policy_sha256": "05cc0c506c15aa008646cea86159ab8594b0f11ad0f6d82817d284578d045bd1", "source_sha256": "d07a636657598c5edc33125a56dbdcef2a2bcfd7e73ccb8f5e875669b9c47ee6", "weight": 0.010816011407529321, "usage_boundary": "local_eval_only", "training_exposure": 0}
+    ],
+    "META_FINAL": [
+      {"opponent_id": "aristophanivan_multiply", "archetype": "Other/Unknown", "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19", "policy_sha256": "8f108c57c14714d6ad77d7ca68a5b3cdafe36b3d137e8f4604c849814898be9e", "source_sha256": "d03bd6d191d4fe0e72df200bce8a60ee2361e5a6e8a24e2920b3acc372482fc7", "weight": 0.013130082973906958, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "dashimaki360_crustlecounter", "archetype": "Crustle", "deck_sha256": "9c2647bd80d51bfd9cf89c74026e6a53607903b94cae9c235fad0c2128aad3aa", "policy_sha256": "881a239cc6b9f74be62c610bed08a98749afcbc51fddb137d1ba2f2375688660", "source_sha256": "1ca26a23ac1519ea9ace8f2b352fcc0d89b9f58dc64f39fc0eb54ea7e4240812", "weight": 0.01268601882611814, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "nihei_alakazam", "archetype": "Alakazam", "deck_sha256": "167d43335013f7b68441356d750dab335088171c1ab929e083deb85a2c79e5b1", "policy_sha256": "a502b37132b5558fdd329a40337c2cc8a0b27098ed278b249b7c2222fd2df711", "source_sha256": "57e0827394bb310ecf5d6add0369a9444d0fc79024a795a6d57aa72769b4ea47", "weight": 0.012808357420714449, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "ozawa_starmie", "archetype": "Water Box/Starmie", "deck_sha256": "82443d0c366fa0f54f8df33a838568de9a46c667c8310613a83a9bbe8f22902c", "policy_sha256": "12fa42bb99783b2f07cad6de19dd3895cda2965818660a08e828924818636212", "source_sha256": "dbe3604611cbd3aa931570da365d4768d7b98daadf1c69988c85f1587db933ea", "weight": 0.011310442876096687, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "plamen06_steel", "archetype": "Metal/Psychic", "deck_sha256": "fbe6ab59992260b0d6774abed19469be315521b5ed0546de8c20f329607693e6", "policy_sha256": "8a40be6825612ea927f5a6fd3396bb18e78a198d554e44cbb572acbab1b74ac3", "source_sha256": "167c155b93f9290be6d5b38a9b434b49a38850faeddbde1b92b9abc797d76f5f", "weight": 0.015519215409233886, "usage_boundary": "local_eval_only", "training_exposure": 0},
+      {"opponent_id": "prvsiyan_grimmsnarl", "archetype": "Grimmsnarl", "deck_sha256": "92b92bac9f9163ecff933b3dc39294d2cc154c8684f3c8497877661419ebc59d", "policy_sha256": "9b369c7d26dfce6b5b5fb89c28eff7d9189b7287d646ae165c9bdbc08eeff5a1", "source_sha256": "9cee3a5f269abe5c969159067780ab156eaf32ef621a9c1f909910e845e2068a", "weight": 0.012682670092928906, "usage_boundary": "local_eval_only", "training_exposure": 0}
+    ]
+  },
+  "notes": [
+    "META_TRAIN is a 12-ref high-weight block partitioned into three rotating blocks; tomatomato_archaludon is explicitly excluded from candidate matchups.",
+    "META_DEV and META_FINAL are campaign-immutable and are not used to update the CEM distribution. Historical all-time candidate-selection exposure is not inferable from local artifacts and is recorded as unknown rather than claimed clean.",
+    "The final cohort replaces the historical training_allowed=true lucifer19 row with prvsiyan_grimmsnarl; no native action labels are saved."
+  ]
+}

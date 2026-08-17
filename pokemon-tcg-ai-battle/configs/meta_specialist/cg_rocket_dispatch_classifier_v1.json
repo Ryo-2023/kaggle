@@ -1,0 +1,34 @@
+{
+  "base_root": "runs/cg-fresh-internal-meta-intake-20260815-f/internal_ozawa-rocket-rule_de797c3646e9",
+  "output_root": "runs/cg-rocket-dispatch-classifier-meta-20260815-c",
+  "seed_namespace": "cg-rocket-dispatch-classifier-v1-c",
+  "source_epoch": "20260815-rocket-dispatch-classifier-v1",
+  "variants": [
+    "A01_ENGINE_TO_A09",
+    "A01_LUCARIO_TO_A09",
+    "A01_ENGINE_TO_A11",
+    "A01_LUCARIO_TO_A11",
+    "A09_LINE_TO_A01",
+    "A09_LINE_TO_A07",
+    "A07_LINE_TO_A09",
+    "A07_LINE_TO_A11",
+    "A11_LINE_TO_A07",
+    "A11_LINE_TO_A01",
+    "A01_MIX_ENGINE_LUCARIO",
+    "A09_SPLIT_TO_A07"
+  ],
+  "split_by_variant": {
+    "A01_ENGINE_TO_A09": "META_TRAIN",
+    "A01_LUCARIO_TO_A09": "META_TRAIN",
+    "A01_ENGINE_TO_A11": "META_TRAIN",
+    "A01_LUCARIO_TO_A11": "META_TRAIN",
+    "A09_LINE_TO_A01": "META_TRAIN",
+    "A09_LINE_TO_A07": "META_TRAIN",
+    "A07_LINE_TO_A09": "META_TRAIN",
+    "A07_LINE_TO_A11": "META_TRAIN",
+    "A11_LINE_TO_A07": "META_DEV",
+    "A11_LINE_TO_A01": "META_DEV",
+    "A01_MIX_ENGINE_LUCARIO": "META_FINAL",
+    "A09_SPLIT_TO_A07": "META_FINAL"
+  }
+}

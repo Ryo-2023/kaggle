@@ -1,0 +1,40 @@
+{
+  "verdict": "REJECTED_KAGGLE_VALIDATION",
+  "archive_sha256": "dd33517fb7758fc671b27cfe672a0367835761061f2121747430e084895178d8",
+  "model_sha256": "2318b7ff7f1d981ec4181ae01cc681b15c057f5b4daba3d5f900e71e2144eb8f",
+  "semantic_model_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+  "verification_script_commit": "b35353e39c16ef7189ce863a1c10633105c07969",
+  "verification_script_sha256": "f80dce84c428ee26e229a7cc0e07584d14e215e815c155028eab470041da0b4a",
+  "archive_only_verification": true,
+  "external_files_read": [],
+  "g6_runtime_source": "extracted_archive/main.py",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": {"status": "PASS", "statuses": ["DONE", "DONE"], "steps": 53},
+    "G6": {"status": "PASS", "games": 20, "seed": 34000, "crashes": 0, "invalid_actions": 0, "timeouts": 0, "wins": 15, "losses": 5, "draws": 0}
+  },
+  "fallback_telemetry": {"status": "AVAILABLE", "selected_count": 816, "fallback_reasons": []},
+  "focused_tests": {"status": "PASS", "safety_gate_core": 39, "g6_archive_only": 9, "offline_training_v1": 32},
+  "full_regression": {
+    "status": "FULL_REGRESSION_BLOCKED",
+    "collected": 1055,
+    "maxfail_run": {"passed": 200, "failed": 1, "errors": 0, "skipped": 0},
+    "failed_test": "tests/test_collect_offline_training_v1_evidence.py::test_run_command_safe_timeout_and_child_cleanup",
+    "isolated_reproduction": {"passed": 0, "failed": 1, "errors": 0, "skipped": 0},
+    "note": "既知 flaky を再現。全件完走の JUnit は未生成であり、PASS と扱わない。"
+  },
+  "findings": {
+    "critical": [],
+    "high": ["旧G6はarchive外sidecar manifestとworkspace adapterを使用していたため撤回・置換した"],
+    "medium": ["wrapperはverifier bytes SHA一致とancestor commitを検証する"],
+    "low": ["repository root main.py はraw-exec安全でなく、直接提出禁止"]
+  },
+  "local_submission_ready": false,
+  "kaggle_validation_passed": false,
+  "kaggle_resubmission_executed": true,
+  "superseded_by": "docs/evidence/kaggle-submission-safety-gate-cwd-decoupled-20260718.json",
+  "rejection_reason": "Kaggle Validation Episode exposed that __file__-absent execution used /kaggle/working rather than the distinct source root /kaggle_simulations/agent."
+}

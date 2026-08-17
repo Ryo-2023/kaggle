@@ -1,0 +1,16 @@
+schema_version: opponent-ingest-config-v1
+interval_hours: 12
+stale_lock_seconds: 3600
+per_source_timeout_seconds: 30
+retry:
+  max_attempts: 3
+  initial_backoff_seconds: 1
+sampling:
+  rule_v0_max_fraction: 0.20
+  team_native_fraction: 0.20
+  family_specific_fraction: 0.60
+sources:
+  scan_local_refs: true
+  scan_remote_tracking_refs: true
+  public_github: []
+  kaggle: []

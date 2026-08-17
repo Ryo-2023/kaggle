@@ -1,0 +1,46 @@
+model:
+  state_size: 128
+  action_size: 64
+  hidden_size: 256
+  recurrent_core: gru
+  atoms: 51
+  v_min: -1.0
+  v_max: 1.0
+  opponent_classes: 64
+  deck_family_classes: 32
+  action_type_classes: 32
+
+learner:
+  n_step: 5
+  # batch 32の250 updateとほぼ同じ8,000 sequenceごとに同期する。
+  target_update_interval: 16
+  gradient_clip: 40.0
+  demonstration_margin: 0.8
+  bc_weight: 0.0
+  auxiliary_weight: 0.01
+  conservative_weight: 0.05
+  priority_eta: 0.9
+  priority_epsilon: 0.000001
+  demonstration_priority_bonus: 1.0
+
+service:
+  batch_size: 512
+  # batch 32の1e-4を平方根則で拡大し、既存controllerの上限に合わせる。
+  learning_rate: 0.0004
+  demonstration_ratio: 0.03125
+  beta_start: 0.4
+  # batch 32の200,000 updateと同じ6.4M sequenceでbeta=1へ到達する。
+  beta_steps: 12500
+  # 実測約10分ごと。停止要求時はinterval外でも最終保存する。
+  checkpoint_interval: 10000
+  progress_interval_seconds: 10.0
+  seed: 71000
+  device: cuda:0
+  prepack_replay: true
+  # WSLではGPU常駐ReplayがWindows host commitへ重なり、vmmemWSLを枯渇させる。
+  # prepack＋pinned転送をWSL長時間学習の標準経路とする。
+  resident_replay: false
+  pin_memory: true
+  mixed_precision: bf16
+  fused_optimizer: true
+  matmul_precision: high

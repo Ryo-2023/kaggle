@@ -1,0 +1,51 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_broad_support_v7_20260816",
+  "seed_namespace": "self-owned-cg-broad-support-v7-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-generation-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v2-20260816-00",
+    "runs/cg-self-owned-deck-generation-v2-20260816-01",
+    "runs/cg-self-owned-deck-generation-v2-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-00",
+    "runs/cg-self-owned-deck-generation-v3-20260816-01",
+    "runs/cg-self-owned-deck-generation-v3-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-03",
+    "runs/cg-self-owned-deck-generation-v3-20260816-04",
+    "runs/cg-self-owned-deck-generation-v3-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-00",
+    "runs/cg-self-owned-deck-generation-v4-20260816-03",
+    "runs/cg-self-owned-deck-generation-v4-20260816-04",
+    "runs/cg-self-owned-deck-generation-v4-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06",
+    "runs/cg-self-owned-cg-policy-factorial-v1-20260816-retry1",
+    "runs/cg-self-owned-cg-meta-batch-v2-20260816-promoted",
+    "runs/cg-self-owned-cg-meta-batch-v3-20260816-promoted",
+    "runs/cg-self-owned-cg-meta-batch-v4-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-factorial-v2-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v5-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v6-cross-archetype-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "broad-support-v7-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261200, "ordinal": 0},
+    {"id": "broad-support-v7-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261201, "ordinal": 1},
+    {"id": "broad-support-v7-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261202, "ordinal": 2},
+    {"id": "broad-support-v7-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261203, "ordinal": 3},
+    {"id": "broad-support-v7-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261204, "ordinal": 4},
+    {"id": "broad-support-v7-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261205, "ordinal": 5},
+    {"id": "broad-support-v7-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261206, "ordinal": 6},
+    {"id": "broad-support-v7-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261207, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "balanced-v7-00", "deck_recipe_id": "broad-support-v7-00", "overrides": {"lethal_bonus": 14000, "attack_damage_weight_milli": 1200}},
+    {"id": "lethal-v7-01", "deck_recipe_id": "broad-support-v7-01", "overrides": {"lethal_bonus": 26000, "lethal_hp_margin": -6, "attack_damage_weight_milli": 1900}},
+    {"id": "setup-v7-02", "deck_recipe_id": "broad-support-v7-02", "overrides": {"setup_active_riolu": 60000, "setup_bench_riolu": 56000, "search_mega_lucario": 66000, "evolve_mega_lucario": 64000}},
+    {"id": "attack-v7-03", "deck_recipe_id": "broad-support-v7-03", "overrides": {"attack_generic_base": 20000, "attack_982_base": 58000, "attack_983_base": 70000, "attack_damage_weight_milli": 2500}},
+    {"id": "attach-v7-04", "deck_recipe_id": "broad-support-v7-04", "overrides": {"attach_mega_lucario": 62000, "attach_mega_2energy_bonus": 18000, "attach_overenergy_penalty": -56000, "retreat_good_score": 16000}},
+    {"id": "retreat-v7-05", "deck_recipe_id": "broad-support-v7-05", "overrides": {"attach_mega_lucario": 42000, "attach_mega_2energy_bonus": 6000, "attach_overenergy_penalty": -12000, "retreat_good_score": 25000}},
+    {"id": "ability-v7-06", "deck_recipe_id": "broad-support-v7-06", "overrides": {"ability_bonus": 50000, "search_mega_lucario": 68000, "setup_active_riolu": 52000}},
+    {"id": "conservative-v7-07", "deck_recipe_id": "broad-support-v7-07", "overrides": {"lethal_bonus": 9000, "attack_damage_weight_milli": 700, "attack_generic_base": 9000, "attach_mega_lucario": 54000, "attach_overenergy_penalty": -60000}}
+  ]
+}

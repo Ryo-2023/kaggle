@@ -1,0 +1,44 @@
+{
+  "schema_version": "meta-specialist-archetypes-v1",
+  "primary_order": [
+    "grimmsnarl_froslass_munkidori",
+    "alakazam",
+    "crustle_mega_kangaskhan"
+  ],
+  "replacement_order": [
+    "rocket_mewtwo_spidops",
+    "archaludon"
+  ],
+  "archetypes": [
+    {
+      "runtime_id": "alakazam",
+      "aliases": [],
+      "core_card_ids": [741, 742, 743],
+      "candidate_status": "registered_unqualified"
+    },
+    {
+      "runtime_id": "grimmsnarl_froslass_munkidori",
+      "aliases": ["grimmsnarl_froslass"],
+      "core_card_ids": [104, 112, 646, 647, 648, 860],
+      "candidate_status": "registered_unqualified"
+    },
+    {
+      "runtime_id": "crustle_mega_kangaskhan",
+      "aliases": [],
+      "core_card_ids": [344, 345, 756],
+      "candidate_status": "registered_unqualified"
+    },
+    {
+      "runtime_id": "rocket_mewtwo_spidops",
+      "aliases": [],
+      "core_card_ids": [400, 401, 431],
+      "candidate_status": "registered_unqualified"
+    },
+    {
+      "runtime_id": "archaludon",
+      "aliases": [],
+      "core_card_ids": [169, 190],
+      "candidate_status": "registered_unqualified"
+    }
+  ]
+}

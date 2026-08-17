@@ -1,0 +1,11 @@
+model:
+  state_size: 128
+  action_size: 64
+  hidden_size: 256
+  recurrent_core: gru
+  atoms: 51
+  v_min: -1.0
+  v_max: 1.0
+  opponent_classes: 64
+  deck_family_classes: 32
+  action_type_classes: 32

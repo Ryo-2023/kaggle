@@ -1,0 +1,15 @@
+{
+  "docs/plan/design/00_overall_plan.md": "52a945533351447442aea6721a3a03a741695eb707d897c7594db71466a2374e",
+  "docs/plan/design/01_domain_knowledge_and_deck_strategy_plan.md": "7feae2b446c5726d1fc0f77ec9272f8103aa0674317933f2dfabb82181d89660",
+  "docs/plan/design/02_structured_public_belief_and_solver_plan.md": "e31a2971939aabbdb2deead99409f92285f36deaff5220ee27edb3b53203649c",
+  "docs/plan/design/03_machine_learning_teacher_student_plan.md": "88a6ee676d5a504a8d3ad7be2e9ad3bc7f047a0d1e64317568e85d1a18571228",
+  "docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": "926e126631c05b6101c882a3798b1d3d22c08558e481fd0abe8652b7be33e37c",
+  "docs/plan/design/05_evaluation_submission_and_strategy_plan.md": "a6672400f91ec44ed1d822c3be52ef4a67cd13b5426686ea094fd574467d3c67",
+  "docs/plan/design/06_continuous_league_benchmark_and_training_specification.md": "57aabfaa65fbb39ba4d6892475bc73fa9c0cbd028ee33cdcca7ded00efb7dc26",
+  "docs/plan/implementation/00_overall_implementation_plan.md": "9f181cc165bcdbec3384579010fe897ee5397a75342c12701426c4ea804dde77",
+  "docs/plan/implementation/01_domain_knowledge_and_deck_strategy_implementation_plan.md": "079fcffbbf34fa9606dc99c30075dc7b675e0a6f60316c6c7b0caf6020623ac8",
+  "docs/plan/implementation/02_structured_public_belief_and_solver_implementation_plan.md": "803a935d517e252427c03c9d894ce072c9b0c5e0cc3c3b8bb65280d604453fe9",
+  "docs/plan/implementation/03_machine_learning_teacher_student_implementation_plan.md": "0b81e15de69c54b8394a86112af101553fac6a06e8229920b530a8a20f83ed99",
+  "docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": "1aa5b21a3d9dae7c63dcfc1c09449d0842c192164c2cc17a26ab55eeb8641250",
+  "docs/plan/implementation/05_evaluation_submission_and_strategy_implementation_plan.md": "61c4c8468a006b2d8b9aa0123dab741159dad61982b3cda9fab85a5f2333c06a"
+}

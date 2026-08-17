@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "canonical_source": "git",
+  "source_branch": "feature/belief-guided-search",
+  "initial_source": "notion",
+  "generated_at": "2026-07-14T23:48:46+09:00",
+  "git_commit": "4b58404c3edf6ee88a70c9777b2df0040764a1c9",
+  "sync_status": "SYNCED_AND_VERIFIED",
+  "verified_notion_pages": [
+    "39dfefac-d260-8152-88d0-c362991cd8d7",
+    "39dfefac-d260-81d2-8653-e2469bf4f170",
+    "39dfefac-d260-81d7-8874-d4064736a94b",
+    "39dfefac-d260-8166-af3f-c01c13203d6f",
+    "39dfefac-d260-81f9-a47e-ee0cf2ce8b94",
+    "39dfefac-d260-81f3-bc8f-f65aa6d62271",
+    "39dfefac-d260-814c-afdf-c3d3e3efc24d",
+    "39dfefac-d260-817b-8f41-d80e1ea8585b",
+    "39dfefac-d260-8107-94dc-ca2501151908",
+    "39dfefac-d260-819c-b31c-d511576583e5",
+    "39dfefac-d260-8174-8ea0-e73dc7e4fdc7",
+    "39dfefac-d260-817c-832b-c4bbc0854103",
+    "39bfefac-d260-8143-b980-d17e9fb958a7"
+  ],
+  "written_page_ids": [
+    "39bfefac-d260-8143-b980-d17e9fb958a7"
+  ],
+  "verified_no_write_page_ids": [
+    "39dfefac-d260-8152-88d0-c362991cd8d7",
+    "39dfefac-d260-81d2-8653-e2469bf4f170",
+    "39dfefac-d260-81d7-8874-d4064736a94b",
+    "39dfefac-d260-8166-af3f-c01c13203d6f",
+    "39dfefac-d260-81f9-a47e-ee0cf2ce8b94",
+    "39dfefac-d260-81f3-bc8f-f65aa6d62271",
+    "39dfefac-d260-814c-afdf-c3d3e3efc24d",
+    "39dfefac-d260-817b-8f41-d80e1ea8585b",
+    "39dfefac-d260-8107-94dc-ca2501151908",
+    "39dfefac-d260-819c-b31c-d511576583e5",
+    "39dfefac-d260-8174-8ea0-e73dc7e4fdc7",
+    "39dfefac-d260-817c-832b-c4bbc0854103"
+  ],
+  "skipped_page_ids": [],
+  "notes": [
+    "Commit the integrated files before changing Notion headers.",
+    "Record commit and hashes after the first verified Git-to-Notion sync.",
+    "Pages were fetched again after synchronization."
+  ]
+}

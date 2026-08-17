@@ -1,0 +1,30 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_broad_support_v10_20260816",
+  "seed_namespace": "self-owned-cg-broad-support-v10-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v9-c06-neighborhood-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "broad-support-v10-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261600, "ordinal": 0},
+    {"id": "broad-support-v10-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261601, "ordinal": 1},
+    {"id": "broad-support-v10-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261602, "ordinal": 2},
+    {"id": "broad-support-v10-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261603, "ordinal": 3},
+    {"id": "broad-support-v10-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261604, "ordinal": 4},
+    {"id": "broad-support-v10-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261605, "ordinal": 5},
+    {"id": "broad-support-v10-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261606, "ordinal": 6},
+    {"id": "broad-support-v10-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261607, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "core-v10-00", "deck_recipe_id": "broad-support-v10-00", "overrides": {"ability_bonus": 24138, "attach_mega_2energy_bonus": 7280, "attach_mega_lucario": 33840, "attach_overenergy_penalty": -17689, "attack_982_base": 28773, "attack_983_base": 60706, "attack_damage_weight_milli": 1605, "attack_generic_base": 2066, "evolve_mega_lucario": 52585, "lethal_bonus": 15630, "lethal_hp_margin": 3, "retreat_good_score": 8983, "search_mega_lucario": 27932, "setup_active_riolu": 31519, "setup_bench_riolu": 43907}},
+    {"id": "attack-v10-01", "deck_recipe_id": "broad-support-v10-01", "overrides": {"ability_bonus": 24138, "attach_mega_2energy_bonus": 7280, "attach_mega_lucario": 33840, "attach_overenergy_penalty": -17689, "attack_982_base": 30000, "attack_983_base": 62500, "attack_damage_weight_milli": 1700, "attack_generic_base": 3500, "evolve_mega_lucario": 52585, "lethal_bonus": 16500, "lethal_hp_margin": 3, "retreat_good_score": 8983, "search_mega_lucario": 27932, "setup_active_riolu": 31519, "setup_bench_riolu": 43907}},
+    {"id": "setup-v10-02", "deck_recipe_id": "broad-support-v10-02", "overrides": {"ability_bonus": 25000, "attach_mega_2energy_bonus": 7280, "attach_mega_lucario": 33840, "attach_overenergy_penalty": -17689, "attack_982_base": 28773, "attack_983_base": 60706, "attack_damage_weight_milli": 1605, "attack_generic_base": 2066, "evolve_mega_lucario": 52585, "lethal_bonus": 15630, "lethal_hp_margin": 3, "retreat_good_score": 8983, "search_mega_lucario": 30000, "setup_active_riolu": 35000, "setup_bench_riolu": 47000}},
+    {"id": "attach-v10-03", "deck_recipe_id": "broad-support-v10-03", "overrides": {"ability_bonus": 24138, "attach_mega_2energy_bonus": 8500, "attach_mega_lucario": 36500, "attach_overenergy_penalty": -19500, "attack_982_base": 28773, "attack_983_base": 60706, "attack_damage_weight_milli": 1605, "attack_generic_base": 2066, "evolve_mega_lucario": 52585, "lethal_bonus": 15630, "lethal_hp_margin": 3, "retreat_good_score": 10000, "search_mega_lucario": 27932, "setup_active_riolu": 31519, "setup_bench_riolu": 43907}},
+    {"id": "balanced-v10-04", "deck_recipe_id": "broad-support-v10-04", "overrides": {"ability_bonus": 24500, "attach_mega_2energy_bonus": 7600, "attach_mega_lucario": 34500, "attach_overenergy_penalty": -18000, "attack_982_base": 29500, "attack_983_base": 61000, "attack_damage_weight_milli": 1600, "attack_generic_base": 3000, "evolve_mega_lucario": 53000, "lethal_bonus": 16000, "lethal_hp_margin": 3, "retreat_good_score": 9500, "search_mega_lucario": 28500, "setup_active_riolu": 32500, "setup_bench_riolu": 44500}},
+    {"id": "lethal-v10-05", "deck_recipe_id": "broad-support-v10-05", "overrides": {"ability_bonus": 24138, "attach_mega_2energy_bonus": 7280, "attach_mega_lucario": 33840, "attach_overenergy_penalty": -17689, "attack_982_base": 29500, "attack_983_base": 62500, "attack_damage_weight_milli": 1725, "attack_generic_base": 2500, "evolve_mega_lucario": 52585, "lethal_bonus": 18000, "lethal_hp_margin": 2, "retreat_good_score": 8983, "search_mega_lucario": 27932, "setup_active_riolu": 31519, "setup_bench_riolu": 43907}},
+    {"id": "retreat-v10-06", "deck_recipe_id": "broad-support-v10-06", "overrides": {"ability_bonus": 24138, "attach_mega_2energy_bonus": 6800, "attach_mega_lucario": 32500, "attach_overenergy_penalty": -15500, "attack_982_base": 28773, "attack_983_base": 60706, "attack_damage_weight_milli": 1605, "attack_generic_base": 2066, "evolve_mega_lucario": 52585, "lethal_bonus": 15630, "lethal_hp_margin": 3, "retreat_good_score": 12000, "search_mega_lucario": 27932, "setup_active_riolu": 31519, "setup_bench_riolu": 43907}},
+    {"id": "ability-v10-07", "deck_recipe_id": "broad-support-v10-07", "overrides": {"ability_bonus": 28000, "attach_mega_2energy_bonus": 7280, "attach_mega_lucario": 33840, "attach_overenergy_penalty": -17689, "attack_982_base": 28773, "attack_983_base": 60706, "attack_damage_weight_milli": 1605, "attack_generic_base": 2066, "evolve_mega_lucario": 52585, "lethal_bonus": 15630, "lethal_hp_margin": 3, "retreat_good_score": 8983, "search_mega_lucario": 33000, "setup_active_riolu": 35000, "setup_bench_riolu": 43907}}
+  ]
+}

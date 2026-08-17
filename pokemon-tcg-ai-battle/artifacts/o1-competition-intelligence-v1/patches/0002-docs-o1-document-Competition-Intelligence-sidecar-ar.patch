@@ -1,0 +1,311 @@
+From 4f8339a54af693e72a667af09c7e40e0aec2902e Mon Sep 17 00:00:00 2001
+From: bfe-lab-ono <ono.ryosuke.36t@st.kyoto-u.ac.jp>
+Date: Sat, 18 Jul 2026 04:04:30 +0900
+Subject: [PATCH 2/5] docs(o1): document Competition Intelligence sidecar
+ architecture and Slice 0-2 evidence
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 設計書04 §20にデータガバナンス層 (SourceEnvelope/permissions/Knowledge
+  Claim/Immutable Snapshot/runtime isolation) を追記し、実装計画書04 §23に
+  モジュール配置・既存機能の再利用方針・未実装範囲(O1-2~O1-6)の継続計画を
+  記録する。
+- DEC-013、current_status.md、handoff.mdを更新し、Champion/Promotion
+  不変・protected files不変・canonical branch未変更を明記する。
+- Evidence一式 (テスト結果、自己レビューで検出/修正した2件、protected
+  files before/after比較) を追加する。
+
+Experiment: docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ ...mpetition-intelligence-sidecar-slice0-1.md | 90 +++++++++++++++++++
+ docs/notion/local_hashes.json                 |  4 +-
+ ...ntelligence_and_joint_optimization_plan.md | 22 +++++
+ ..._joint_optimization_implementation_plan.md | 55 ++++++++++++
+ docs/status/current_status.md                 |  6 ++
+ docs/status/decisions.md                      |  8 ++
+ docs/status/handoff.md                        | 17 ++++
+ 7 files changed, 200 insertions(+), 2 deletions(-)
+ create mode 100644 docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md
+
+diff --git a/docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md b/docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md
+new file mode 100644
+index 0000000..ac1a49a
+--- /dev/null
++++ b/docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md
+@@ -0,0 +1,90 @@
++---
++project: MAGE-PTCG
++document_status: evidence
++as_of: 2026-07-18
++---
++
++# Competition Intelligence Sidecar（O1）Slice 0–2 実装 Evidence
++
++## 結果
++
++O1 Competition Intelligence Framework（`docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md`§20、`docs/plan/implementation/`同§23）のうち、O1-0（Guardrails）とO1-1（Foundation）の一部（Slice 0–2）を実装した。O1-2（Replay正規化）以降のO1-6までは本セッションでは未実装であり、継続計画としてのみ記録する。Champion／submission default（Rule Agent v0）、Promotion（`NO_DECISION`）、canonical branch、Promotion Gate関連artifactは変更していない。
++
++## Baseと作業場所
++
++| 項目 | 値 |
++|---|---|
++| canonical repository | `/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle`（branch `feature/belief-guided-search`、HEAD `3ef1ba39794180cdc36162a0b0347d3ffbcc6239`。本セッションでは未変更） |
++| 作業worktree | `/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle-o1-intelligence`（既存の検証済みdetached worktree、本セッション開始前から存在） |
++| worktree HEAD | `6782e687a6bb667c3ca5343df9974352ddd7cd2c`（detached、本Slice作業前後で不変。commit後にNEW_HEADへ更新） |
++| 参照した長期実行Evidence | `docs/evidence/offline-training-v1-long-run-20260718.md`／`.json`（model_hash `94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4`、package SHA `d4e2cdcb4557b4bbb9968266a0990525a7e172b9a9e664b477a21f957892e67d`と一致確認済み。両hashを含むデータ実体`runs/`はこのworktreeには存在せず、canonical workspace側のgit管理外データ） |
++| Promotion Gate同時実行の確認 | 作業開始時に`ps aux`でtraining/promotion関連processを確認したが実行中プロセスは検出されなかった。GPU、cabt大量対戦、96,530 decisions全件解析、pytest-xdist、複数プロセス並列は本セッションで使用していない |
++
++## 実装範囲
++
++新規パッケージ`src/mage_ptcg/competition_intelligence/`（`canonical.py`、`atomic_io.py`、`contracts.py`、`permissions.py`、`provenance.py`、`archive.py`、`runstate.py`、`catalog.py`、`config.py`、`local_ingest.py`、`cli.py`、`__init__.py`）と、`scripts/run_competition_intelligence.py`、`scripts/check_o1_protected_files.py`を追加した。既存責務の再利用方針、モジュール対応表、未実装範囲の詳細は[実装計画書§23](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#23-competition-intelligence-sidecar-実装o1-2026-07-18)を正とする（本Evidenceでは複製しない）。
++
++主な設計上の決定：
++
++- `IntelligenceSnapshot`は内容ハッシュ自己検証（`build_intelligence_snapshot()`だけが構築経路）とし、同一入力から常に同一`snapshot_sha256`／`snapshot_id`を得る（決定性は`tests/competition_intelligence/test_contracts.py::TestIntelligenceSnapshot`で検証）
++- `KnowledgeClaim`のlifecycleは`validate_claim_transition()`が非合法遷移（`RAW→SUPPORTED`直行、terminal状態の再オープン等）を拒否し、`SUPPORTED`遷移には`E3_CONTROLLED_LOCAL_EVIDENCE`以上を要求する
++- SourceEnvelopeのpermissionはdefault deny（`PUBLIC_OTHER`は`ARCHIVE`のみ、`TEAM_SHARED`は空集合）とし、`intersect_allowed_uses()`で複数sourceを混ぜた場合に最も狭い許可へ収束させる
++- raw archiveはcontent-addressed（`raw/sha256/<prefix>/<hash>`）＋fsync-durable atomic writeとし、既存`mage_ptcg.competition.redaction.secret_scan`で事前scanしてunsafeな内容はquarantineへ隔離する
++- SQLite catalogは`source_manifests/*.json`から常に再構築可能な非正本キャッシュとした
++- Config（`CompetitionIntelligenceConfig`）は`auto_promote`／`auto_submit`／`public_other_training_enabled`を`__post_init__`で強制拒否する
++- CLI（`scripts/run_competition_intelligence.py`）は実装済みの`doctor`／`ingest-local`／`rebuild-catalog`のみを登録し、未実装コマンドをstubとして追加していない
++
++## テスト
++
++| 検証 | コマンド | 結果 |
++|---|---|---|
++| 新規focused tests | `env -u PYTHONPATH python3 -m pytest tests/competition_intelligence/ tests/test_competition_intelligence_runtime_isolation.py tests/test_check_o1_protected_files.py -q` | 123 passed（内訳：`tests/competition_intelligence/` 111、runtime isolation 4、protected files checker 8） |
++| repository全体tests | `nice -n 10 env -u PYTHONPATH python3 -m pytest tests/ -q` | 1145 passed／**1 failed**（下記参照）、130.63秒、single process |
++| byte-compile | `env -u PYTHONPATH python3 -m compileall -q src/ scripts/ main.py agents/` | pass |
++| `git diff --check` | — | pass（差分なし報告） |
++| protected files before/after | `scripts/check_o1_protected_files.py baseline` → `verify` | 下記参照 |
++
++### 既知の1件failについて
++
++`tests/test_actual_agent_viability.py::test_viability_runner_redacts_raw_runner_values_and_resumes`が失敗する。原因は、fixtureが埋め込むcard ID `700`という数字列が、同テスト実行で生成される`artifact_hash`（run固有のsha256 hex文字列）に偶然部分文字列として出現し、「`700`が出力に含まれない」という素朴なsubstringアサーションが誤って失敗すること（`git diff`で本セッションが変更したファイルにこのテスト・関連実装は含まれない）。`docs/status/current_status.md`が既に記録する「既存の環境依存flaky test、無変更worktreeでも同一再現を確認済みで本pilotとは無関係」という既知issueと一致するパターンであり、本Sliceの変更による regressionではない。
++
++### `env -u PYTHONPATH`について
++
++このリポジトリの`.venv`はcanonical workspaceへのsymlinkで、ROSインストールに由来する`PYTHONPATH`環境変数がpytest実行を汚染することが`docs/evidence/cabt-capability-recovery.md`で既に文書化されている。本セッションでも同じ理由で`env -u PYTHONPATH`を使用した（新規の回避策ではなく、既存文書化済みの実行手順を踏襲した）。
++
++## Runtime isolation
++
++`tests/test_competition_intelligence_runtime_isolation.py`は、`PYTHONPATH`を除いたclean subprocessで次を検証する。
++
++- 素の`import main`後、`sys.modules`に`mage_ptcg.competition_intelligence`、`mage_ptcg.dataops`、`sqlite3`、`pandas`、`sklearn`のいずれも現れない
++- `main.py`のソースコードに`competition_intelligence`という文字列参照が存在しない
++- `main.make_rule_agent(deck=...)`（既定Rule Agent v0経路）と`main.make_student_agent(deck=...)`（Student未接続時のRule v0 fallback経路）を実際に構築・1回実行した後も同様に到達禁止moduleが現れない
++
++## 自己レビュー
++
++実装コードに対して観点別の自己レビューを行い、2件の実質的な問題を修正した（見つけただけで放置していない）。
++
++| # | 観点 | 検出内容 | 修正 |
++|---|---|---|---|
++| 1 | Privacy／正本のabsolute path | `local_ingest.ingest_local_file`が`origin_reference`へ`str(source)`（ingestするマシンの絶対path、homeディレクトリ名を含み得る）をそのまま格納し、正本SourceEnvelope manifestへ保存していた | 既存`mage_ptcg.competition.redaction.redact_value`（C2b probeが既に使うhome path redaction）を再利用し、格納前にredactするよう修正。`tests/competition_intelligence/test_privacy.py`で配線を回帰確認 |
++| 2 | Permission／default deny | `PUBLIC_OTHER`向けSourceEnvelopeでも、呼び出し側が`allowed_uses`へ`TRAINING`／`REDISTRIBUTION`を明示指定すれば通ってしまい、設計書§16.4の「`PUBLIC_OTHER`は`TRAINING`／`REDISTRIBUTION`を常にfalse」という無条件denyの意図を満たしていなかった | `SourceEnvelope.__post_init__`に`PUBLIC_OTHER`＋`TRAINING`／`REDISTRIBUTION`の組を無条件拒否する検証を追加（`ARCHIVE`／`ANALYSIS`／`REPORTING`は引き続きmanifest次第で許可）。4件のテストを追加 |
++
++その他の観点（architecture／schema／crash・determinism／runtime・regression）は、既存責務の再利用（重複package化なし）、`runtime→sidecar`到達不可の実測、atomic write／content-addressed dedup／stale lock recovery／catalog再構築の実測、repository regression実測で確認済みであり、追加の修正事項は見つからなかった。data leakage観点（episode/opponent/temporal split）は、Snapshot builder自体が未実装（O1-4は継続計画）のため、本Sliceでは対象コードが存在せず評価対象外である。
++
++## Protected files before/after
++
++```bash
++python scripts/check_o1_protected_files.py baseline --output artifacts/o1-competition-intelligence-v1/protected-files-before.json
++# ... 実装作業 ...
++python scripts/check_o1_protected_files.py verify --baseline artifacts/o1-competition-intelligence-v1/protected-files-before.json
++```
++
++対象は`main.py`、`deck.csv`、`agents/`（Rule Agent v0/v1）、`src/mage_ptcg/evaluation/promotion.py`、`src/mage_ptcg/offline_training_v1_support/{promotion,statistics}.py`、Kaggle packaging/verification scripts一式、`configs/offline_training_v1/{production,final_acceptance_plan}.json`（git blob SHAで比較）と、`runs/`／`submissions/`／`data/`（git-ignoredデータルート、存在確認のみ）。git blob SHAはこのworktreeに存在するファイルの内容そのものを表すため、モデルartifactやrun-scoped packageのように別途SHA-256が公表されている対象との対応は、該当ファイルが本worktreeに存在する場合にのみ検証可能である（`runs/`はこのworktreeには存在しないため、`absent_in_this_worktree`として記録し、ハッシュを捏造していない）。
++
++`verify`結果：`protected_files_unchanged: true`（diff_count 0）。※コマンド実行ログは本ファイル執筆時点のものであり、最終commit直前に再実行した結果を完了報告へ転記する。
++
++## 残る制約
++
++- O1-2（Replay正規化・解析）〜O1-6（Meta/Surrogate）は未実装。継続順序は[実装計画書§23.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#233-未実装範囲継続計画)
++- live Kaggle capability probeの拡張（O1-5）は未確認のまま。既存C2b Evidence（[competition-probe-v0.md](competition-probe-v0.md)）の`LOCAL_ONLY`結論を変更しない
++- 96,530 decisions全件の重い再解析、Opponent Surrogateの大規模学習、Student再学習は本Sliceの完了条件に含めていない（意図的）
+diff --git a/docs/notion/local_hashes.json b/docs/notion/local_hashes.json
+index aceb4b8..8940a0f 100644
+--- a/docs/notion/local_hashes.json
++++ b/docs/notion/local_hashes.json
+@@ -3,12 +3,12 @@
+   "docs/plan/design/01_domain_knowledge_and_deck_strategy_plan.md": "7feae2b446c5726d1fc0f77ec9272f8103aa0674317933f2dfabb82181d89660",
+   "docs/plan/design/02_structured_public_belief_and_solver_plan.md": "e31a2971939aabbdb2deead99409f92285f36deaff5220ee27edb3b53203649c",
+   "docs/plan/design/03_machine_learning_teacher_student_plan.md": "0c06600dfaf6e92530c4336ece2aa2503e1bedd1cf688fb96c68772a1809e9d6",
+-  "docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": "2ffe02891dcef22563a7752a385bd1b59ca3f59d5e901f78277f2173a3edc33f",
++  "docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md": "926e126631c05b6101c882a3798b1d3d22c08558e481fd0abe8652b7be33e37c",
+   "docs/plan/design/05_evaluation_submission_and_strategy_plan.md": "294c8d865f5ab7bda56d701dbe36018235d77bb93f7f68f3cf8a4c9715973051",
+   "docs/plan/implementation/00_overall_implementation_plan.md": "9f181cc165bcdbec3384579010fe897ee5397a75342c12701426c4ea804dde77",
+   "docs/plan/implementation/01_domain_knowledge_and_deck_strategy_implementation_plan.md": "079fcffbbf34fa9606dc99c30075dc7b675e0a6f60316c6c7b0caf6020623ac8",
+   "docs/plan/implementation/02_structured_public_belief_and_solver_implementation_plan.md": "803a935d517e252427c03c9d894ce072c9b0c5e0cc3c3b8bb65280d604453fe9",
+   "docs/plan/implementation/03_machine_learning_teacher_student_implementation_plan.md": "c66744b66b72a2bef1c68f7d5c32c167d6dfa2463a28400743e90562a24860e7",
+-  "docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": "2bb7d56784f1d3994a868bbcb3b76353913a575c4bc9870ec281ffc705d837b2",
++  "docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md": "1aa5b21a3d9dae7c63dcfc1c09449d0842c192164c2cc17a26ab55eeb8641250",
+   "docs/plan/implementation/05_evaluation_submission_and_strategy_implementation_plan.md": "e6ef072c0d6936f4f2c51be9f3380f1d69f834a02864c43a7c4b322781859808"
+ }
+diff --git a/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md b/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
+index 08d9a0c..a643723 100644
+--- a/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
++++ b/docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md
+@@ -464,3 +464,25 @@ VOI(c)=\frac{E[\text{将来の選択改善}]}{\text{提出機会コスト}}
+ 
+ - Kaggle CLI Simulation Competitions：`https://github.com/Kaggle/kaggle-cli/blob/main/docs/simulation_competitions.md`
+ - 公式大会サイト：`https://ptcg-abc.pokemon.co.jp/`
++
++---
++
++## 20. Competition Intelligence Sidecar｜データガバナンス拡張（2026-07-18追記）
++
++本節は、§1–19が前提とする収集・解析ループへ証拠駆動のデータガバナンス層を追加する設計であり、§1–19の分析手法（Deck/Policy Fingerprint、Meta Posterior、Regret Mining、Surrogate等）の仕様を変更しない。実装配置と進捗は[実装計画書§23](../implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#23-competition-intelligence-sidecar-実装o1-2026-07-18)を正とする。
++
++### 20.1 Immutable Intelligence Snapshot
++
++進行中のOffline Training／Search／League／Evaluationは、収集直後のデータを直接読まない。「収集→正規化→解析→Knowledge Claim Registry」を経て、cutoff time、入力source ID一覧とhash、permission、split policy、source weightを持つ内容ハッシュ自己検証Snapshotとして固定された場合だけ、Offline TrainingがSelection-only（episode/source選択と分割のみ。損失・モデル形式は変更しない）で読み込める。
++
++### 20.2 SourceEnvelopeとAllowed Use
++
++すべての外部データはSourceEnvelope（`source_kind`、`acquisition_mode`、`allowed_uses`等）を伴う。`allowed_uses`が欠落・不明な場合は`ARCHIVE`のみを許可するdefault denyとし、「公開データだから使える」という推測で`ANALYSIS`／`TRAINING`／`REPORTING`／`REDISTRIBUTION`へ昇格させない。複数sourceを混ぜるSnapshotの許可範囲は、寄与する全sourceの`allowed_uses`の積集合とする。
++
++### 20.3 Knowledge Claim RegistryとC2a Knowledge Packの関係
++
++C2a Knowledge Pack（既存、[Evidence](../../evidence/knowledge-pack-v0.md)）はデッキ内容とRule tie-break用ActionPriorを保持する運用時immutable snapshotであり、本節が定めるKnowledge Claimはこれを置き換えない。Knowledge Claimは、人間の文章知識やReplay解析から得られる主張（`claim_type`、`scope`、`precondition`、`recommendation`、`evidence_grade`、lifecycle `status`）を保持する別の型である。ClaimがSUPPORTEDへ遷移するには`E3_CONTROLLED_LOCAL_EVIDENCE`以上のEvidence Gradeを要し、`E0`／`E1`はhard rule出力へ使用しない。矛盾するClaimは一方を上書きせず両方を保持する。
++
++### 20.4 Runtime Isolation
++
++提出runtime（`main.py`起点で到達可能な全import）は、本節のsidecar（`mage_ptcg.competition_intelligence`）、`mage_ptcg.dataops`、`sqlite3`、`pandas`、`scikit-learn`、学習用PyTorchのいずれもimportしない。既存C2b Capability Probe（`mage_ptcg.competition`）はsidecarから読み取り専用で再利用する対象であり、runtimeからの到達禁止という制約自体は変わらない。
+diff --git a/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md b/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
+index e3b7e31..bf1d6d4 100644
+--- a/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
++++ b/docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md
+@@ -679,3 +679,58 @@ accidental secret検出時は自動quarantineします。
+ - MAP-Elitesが常に合法デッキを評価
+ - Promotion Gateがraw ratingだけで昇格しない
+ - data-use manifestが全Competition Artifactに存在
++
++---
++
++## 23. Competition Intelligence Sidecar 実装（O1, 2026-07-18）
++
++本節は、[設計書§20](../design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md)のデータガバナンス層を実装した範囲を記録する。§1–22の収集・解析仕様自体は変更しない。作業はcanonical worktree（`feature/belief-guided-search`、`6782e68`）を変更しない検証済みdetached worktree（`pokemon-tcg-ai-battle-o1-intelligence`）で行った。
++
++### 23.1 モジュール配置と既存機能の再利用
++
++新規パッケージ`src/mage_ptcg/competition_intelligence/`を追加し、重複実装を避けるため既存機能を次のとおり再利用する。
++
++| 責務 | 再利用元 | 備考 |
++|---|---|---|
++| Capability probe／raw archive／redaction／schema fingerprint | `mage_ptcg.competition`（C2b、既存） | `secret_scan`を直接importして再利用。`CompetitionMode`／`ProbeRunner`は変更しない |
++| Stable ActionKey／ActorInformationView／Public Trace | `mage_ptcg.decision_state`、`mage_ptcg.public_belief`（既存） | `DecisionRecord.actor_information_view`は`ActorInformationView`の契約に従う想定。相手非公開情報を含めない |
++| Wilson信頼区間 | `mage_ptcg.offline_training_v1_support.statistics.wilson_score_interval`（既存） | 本セッションでは未使用（Matchup解析はO1-2以降）。実装時に直接importする方針のみ記録 |
++| Episode-group split手法 | `mage_ptcg.dataops.collector.split_by_episode_group`（既存） | O1-4 Snapshot群split実装時に同様のhash方式を踏襲する方針（未実装） |
++| canonical JSON／digest／atomic write | 独自実装（`competition_intelligence/canonical.py`、`atomic_io.py`） | リポジトリに共有utilityが存在しない（`knowledge.model`、`distillation.contracts`等が個別実装する既存慣習と同型）ため、sidecar専用のdomain-prefixed実装を追加した。cross-cutting util化はスコープ外として見送った |
++
++### 23.2 実装範囲（本セッション：Slice 0–2、O1-0とO1-1の一部）
++
++- `contracts.py`：`SourceEnvelope`、`EpisodeRecord`、`DecisionRecord`、`DeckObservation`、`KnowledgeClaim`、`IntelligenceSnapshot`の6契約。frozen dataclass + `__post_init__`検証（既存`knowledge.model.KnowledgePack`と同型の自己検証スタイル）。`IntelligenceSnapshot`は内容ハッシュ自己検証で、`build_intelligence_snapshot()`が唯一の構築経路（`snapshot_id`／`snapshot_sha256`を呼び出し側が指定することを拒否する）
++- `permissions.py`：default deny、`intersect_allowed_uses`、`require_permission`、`PUBLIC_OTHER`のTRAINING既定拒否
++- `provenance.py`：SourceEnvelope構築とmanifestシリアライズ。manifestファイル名は`source_id`のsha256から導出し、任意文字列によるpath traversalを構造的に防ぐ
++- `archive.py`：content-addressed raw archive（`raw/sha256/<prefix>/<hash>`）とquarantine。`mage_ptcg.competition.redaction.secret_scan`を再利用してarchive前にscanする
++- `runstate.py`：run manifest／single-writer lock（PID + `/proc`起動時刻マーカーによるstale lock判定。既存`offline_training.runstate`と同型の独自実装）
++- `catalog.py`：SQLite rebuildable catalog（現時点は`sources`テーブルのみ。`episodes`／`decisions`テーブルはO1-2実装時に追加予定で、削除しても`source_manifests/*.json`から再構築できる契約を維持する）
++- `config.py`：`CompetitionIntelligenceConfig`。`automation.auto_promote`／`automation.auto_submit`／`external.public_other_training_enabled`をv1で強制拒否（`__post_init__`が`ConfigError`を送出）
++- `local_ingest.py`、`cli.py`：`doctor`／`ingest-local`／`rebuild-catalog`の3コマンドのみ実装。`normalize`／`analyze`／`import-knowledge`／`build-knowledge-snapshot`／`build-meta-snapshot`／`build-snapshot`／`export-offline-dataset`／`report`は未実装（§23.3に継続計画を記録し、stubとしては追加していない）
++
++### 23.3 未実装範囲（継続計画）
++
++O1-2（Replay正規化・解析）、O1-3（Knowledge Claim取込CLIとcontradiction registry）、O1-4（Snapshot builderとOffline Training adapter）、O1-5（Kaggle live／Team bundle adapter）、O1-6（Meta posterior／Opponent Surrogate／Promotion Report）は未着手である。継続順序案：
++
++1. O1-2：local run readerが既存`offline_training`のrun manifest／shardを読み取り専用で走査し、`EpisodeRecord`/`DecisionRecord`へ正規化する。Stable ActionKeyは`decision_state.py`の契約をそのまま使う
++2. O1-3：Claim Bundle（YAML/JSON）parserとlifecycle registry（`contracts.KnowledgeClaim`と`validate_claim_transition`は実装済みのため、取込CLIとdeterministic contradiction検出を追加する）
++3. O1-4：cutoff／permission intersection／episode-group splitを適用したSnapshot builder。selection-only Offline Training adapterはlazy importで接続する
++4. O1-5：`mage_ptcg.competition`の`ProbeRunner`を拡張し、Team bundle validator（permission manifest必須、path traversal／symlink拒否）を追加する
++5. O1-6：Deck/Policy fingerprintのstdlib実装とDirichlet系meta posterior、empirical Opponent Surrogate
++
++### 23.4 Runtime isolation
++
++`mage_ptcg.competition_intelligence`は`main.py`から到達不能である。`tests/test_competition_intelligence_runtime_isolation.py`が、素の`import main`と既定Rule Agent v0経路（`main.make_rule_agent`／`main.make_student_agent`のRule v0 fallback）の両方について、cleanなsubprocess（`PYTHONPATH`除外）で`sys.modules`をscanし、sidecar・`mage_ptcg.dataops`・`sqlite3`・`pandas`・`sklearn`が現れないことを検証する。
++
++### 23.5 CLIとテスト
++
++```bash
++python scripts/run_competition_intelligence.py doctor
++python scripts/run_competition_intelligence.py ingest-local --run-dir runs/competition-intelligence/<run-id> --input <path>
++python scripts/run_competition_intelligence.py rebuild-catalog --run-dir runs/competition-intelligence/<run-id>
++python scripts/check_o1_protected_files.py baseline --output <path>
++python scripts/check_o1_protected_files.py verify --baseline <path>
++```
++
++新規focused test 127件（`tests/competition_intelligence/`115件＋`tests/test_competition_intelligence_runtime_isolation.py`4件＋`tests/test_check_o1_protected_files.py`8件、内訳は[Evidence](../../evidence/o1-competition-intelligence-sidecar-slice0-1.md)）がPASS。詳細な実行ログとPromotion Gateへの非干渉確認は同Evidenceを正とする。
+diff --git a/docs/status/current_status.md b/docs/status/current_status.md
+index 70c5893..6d5be32 100644
+--- a/docs/status/current_status.md
++++ b/docs/status/current_status.md
+@@ -150,6 +150,12 @@ as_of: 2026-07-17
+   - 4 seed合算400 gameのpaired evaluationにおいて、Challenger（neural Student）勝率 **57.75%** （95% Wilson CI **[52.86%, 62.50%]**）を記録し、対Rule Agent v0性能優位を実証。推論中のfallbackやinvalid等はすべて0回。
+   - 判定：`PROMOTION_CANDIDATE_NO_DECISION_MAINTAINED`。Challenger性能は昇格要件を満たすが、規則に基づきChampion/default Rule Agent v0、Promotion `NO_DECISION`を維持。
+   - Evidence：[../evidence/offline-training-v1-long-run-20260718.md](../evidence/offline-training-v1-long-run-20260718.md)、machine-readable：[../evidence/offline-training-v1-long-run-20260718.json](../evidence/offline-training-v1-long-run-20260718.json)
++- Competition Intelligence Sidecar（O1）Slice 0–2 基盤実装（2026-07-18、detached worktree `pokemon-tcg-ai-battle-o1-intelligence`、base `6782e68`）
++  - 新規パッケージ`mage_ptcg.competition_intelligence`にO1-0（Guardrails：protected-file checker、runtime isolation test、config skeleton）とO1-1（Foundation：SourceEnvelope／EpisodeRecord／DecisionRecord／DeckObservation／KnowledgeClaim／IntelligenceSnapshot contracts、permissions、content-addressed raw archive、quarantine、run manifest/lock、rebuildable SQLite catalog）を実装
++  - 既存C2b `mage_ptcg.competition`（Capability Probe／redaction／schema fingerprint）を再利用し重複実装しない設計とした。O1-2（Replay正規化）〜O1-6（Meta/Surrogate）は本セッションでは未着手（継続計画は[実装計画書§23.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#233-未実装範囲継続計画)）
++  - `main.py`から`mage_ptcg.competition_intelligence`が到達不能であることをclean subprocessで検証（`tests/test_competition_intelligence_runtime_isolation.py`）。新規focused test 127件PASS、repository full suite 1145 passed／1 failed（既存の環境依存flaky test`test_actual_agent_viability.py::test_viability_runner_redacts_raw_runner_values_and_resumes`で、本変更とは無関係。原因はfixtureのcard ID「700」がartifact_hashの16進数文字列と偶然部分一致すること）
++  - protected files（`main.py`、`deck.csv`、Rule Agent v0/v1、Promotion関連コード、Kaggle packaging scripts等）のgit blob SHA before/after比較で無変更を確認。Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま不変
++  - Evidence：[../evidence/o1-competition-intelligence-sidecar-slice0-1.md](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)
+ 
+ ## 回収不能な旧報告
+ 
+diff --git a/docs/status/decisions.md b/docs/status/decisions.md
+index 68a16e4..8c5e6a1 100644
+--- a/docs/status/decisions.md
++++ b/docs/status/decisions.md
+@@ -79,3 +79,11 @@ document_status: decision-log
+ - C5 canonical decision recordはpublic ActionKey payload/digestだけを保存し、C4 Rule BCのprivate ActionKey core digestを再保存しない。
+ - C4 Rule BC v1はactual cabt sourceをattestできないため、C5 CLIは`--actual-cabt`による再ラベルを拒否する。fixture、fake adapter、0-game Leagueはpromotion inputとして`NO_DECISION`に分離する。
+ - actual trace adapterとdocumented public League runnerが追加されるまで、Rule Agent v0をChampionとして維持する。
++
++## DEC-013｜Competition Intelligence Sidecar（O1）はCompetition Probeと別packageにし、Slice 0–2のみ実装する
++
++- 日付：2026-07-18
++- 新規`src/mage_ptcg/competition_intelligence/`を、既存C2b `mage_ptcg.competition`（Capability Probe／raw archive／redaction／schema fingerprint）とは別packageとして追加する。既存C2b機能はimportして再利用し、重複実装しない（[実装計画書§23.1](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#231-モジュール配置と既存機能の再利用)）。
++- 本セッションではO1-0（Guardrails）とO1-1（Foundation：contracts／permissions／provenance／archive／runstate／catalog／config／CLI 3コマンド）のみを実装する。O1-2（Replay正規化）以降のO1-6までは未着手とし、継続計画を[実装計画書§23.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#233-未実装範囲継続計画)に記録する。
++- `mage_ptcg.competition_intelligence`は`main.py`から到達不能とし、`tests/test_competition_intelligence_runtime_isolation.py`で検証する。Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま変更しない。
++- 詳細はEvidence（[o1-competition-intelligence-sidecar-slice0-1.md](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)）を正とする。
+diff --git a/docs/status/handoff.md b/docs/status/handoff.md
+index 437821b..716b97d 100644
+--- a/docs/status/handoff.md
++++ b/docs/status/handoff.md
+@@ -197,6 +197,14 @@ runtime既定にはpermitted priorがないためRule v1はRule v0へ明示fallb
+ - 判定：`PROMOTION_CANDIDATE_NO_DECISION_MAINTAINED`。Challenger性能は昇格要件を満たすが、規則に基づきChampion/default Rule Agent v0、Promotion `NO_DECISION`を維持。
+ - 詳細は[Evidence](../evidence/offline-training-v1-long-run-20260718.md)、machine-readable：[JSON](../evidence/offline-training-v1-long-run-20260718.json)。
+ 
++### Competition Intelligence Sidecar（O1）Slice 0–2（2026-07-18、detached worktree `pokemon-tcg-ai-battle-o1-intelligence`、base `6782e68`）
++
++- canonical worktree（`feature/belief-guided-search`）は変更せず、検証済みdetached worktreeで作業した。O1-0（Guardrails）とO1-1（Foundation）の一部のみを実装し、O1-2〜O1-6は未着手のまま[実装計画書§23.3](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#233-未実装範囲継続計画)に継続計画として記録した。設計・実装の詳細は[実装計画書§23](../plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md#23-competition-intelligence-sidecar-実装o1-2026-07-18)、決定は[DEC-013](decisions.md#dec-013competition-intelligence-sidecaro1はcompetition-probeと別packageにしslice-0–2のみ実装する)。
++- 新規`mage_ptcg.competition_intelligence`パッケージ（contracts／permissions／provenance／archive／runstate／catalog／config／CLI）を追加し、既存C2b `mage_ptcg.competition`（Capability Probe／redaction）を再利用。`main.py`からの到達不能性をclean subprocessで検証した。
++- 新規focused test 127件PASS、repository full suite 1145 passed／1 failed（既存の環境依存flaky testで無関係、詳細は[Evidence](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)）。protected files（`main.py`／`deck.csv`／Rule Agent v0/v1／Promotion関連コード等）のgit blob SHA before/afterは無変更。
++- Champion／submission defaultはRule Agent v0、Promotionは`NO_DECISION`のまま。Kaggle提出、canonical branchへの統合は未実施。
++- 詳細は[Evidence](../evidence/o1-competition-intelligence-sidecar-slice0-1.md)
++
+ #### 今後の長期的な課題（ユーザー承認が必要）
+ 
+ 1. **ChallengerモデルのChampion/default昇格判断と提出コード配線**:
+@@ -235,6 +243,15 @@ runtime既定にはpermitted priorがないためRule v1はRule v0へ明示fallb
+ - この環境のlive probeは公式CLI・公式Python client・認証を利用できず、`LOCAL_ONLY`（`no_remote_competition_capability_proven`）へ分類。これはリモート機能の不存在を断定せず、現環境では能力を証明できなかったことを表す。認証済みKaggle環境では未実測
+ - 正当な認証済み環境で再probeする場合も、観測・分類・安全なarchive保存に限定し、Replayを直接学習データ化せず、結果を新規Evidenceとして残す
+ 
++### Competition Intelligence Sidecar（O1）O1-2以降の再開条件
++
++- O1-2（Replay正規化・解析）：既存`offline_training`のrun manifest／shardを読み取り専用で走査するlocal run readerを追加し、`decision_state.py`のStable ActionKeyをそのまま使ってEpisodeRecord/DecisionRecordへ正規化する。96,530 decisions全件の重い再解析は本Sliceの完了条件にしない
++- O1-3（Knowledge Claim Registry）：`contracts.KnowledgeClaim`と`validate_claim_transition`は実装済みのため、Claim Bundle取込CLIとdeterministic contradiction検出のみを追加する
++- O1-4（Immutable Snapshot／Offline Training adapter）：cutoff／permission intersection／episode-group splitを適用したSnapshot builderと、既存Offline Training schemaを変更しないselection-onlyのlazy import adapterを追加する。Snapshotなしの既存Offline Training動作が不変であることを回帰確認する
++- O1-5（外部source）：`mage_ptcg.competition`の`ProbeRunner`を拡張し、Team bundle validator（permission manifest必須、path traversal／symlink拒否）を追加する。live Kaggle capabilityは本環境で未確認のままでよい
++- O1-6（Meta／Surrogate）：Deck/Policy fingerprintのstdlib実装とDirichlet系meta posterior、empirical Opponent Surrogateを追加する。Student教師への直接使用は禁止のまま維持する
++- いずれのSliceも、Champion／submission default（Rule Agent v0）、Promotion（`NO_DECISION`）、`main.py`からの到達不能性を変更しない
++
+ ## その後
+ 
+ `C2a Knowledge Pack v0 → C3 Bounded Search core`のVertical Sliceは実装済み。公開forward契約がない限りruntime searchを前倒しせず、C4／C5の開始条件にも置かない。
+-- 
+2.43.0
+

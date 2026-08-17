@@ -1,0 +1,35 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_fresh_source_v15_public_mix_20260816",
+  "seed_namespace": "self-owned-cg-fresh-source-v15-public-mix-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v9-c06-neighborhood-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v10-broad-support-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v11-heterogeneous-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v12-crossed-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v13-fresh-source-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v14-behavior-spread-20260816/promoted"
+  ],
+  "deck_recipes": [
+    {"id": "search-v15-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v3.json", "seed": 20265000, "ordinal": 0},
+    {"id": "role-v15-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20265001, "ordinal": 1},
+    {"id": "broad-v15-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20265002, "ordinal": 2},
+    {"id": "stability-v15-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20265003, "ordinal": 3},
+    {"id": "c06-v15-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v7_c06_neighborhood.json", "seed": 20265004, "ordinal": 4},
+    {"id": "mixed-alt-v15-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json", "seed": 20265008, "ordinal": 8},
+    {"id": "mixed-v15-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json", "seed": 20265006, "ordinal": 6},
+    {"id": "search-v15-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v3.json", "seed": 20265007, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "core-v15-00", "deck_recipe_id": "search-v15-00", "overrides": {}},
+    {"id": "lethal-v15-01", "deck_recipe_id": "role-v15-01", "overrides": {"lethal_bonus": 15500, "lethal_hp_margin": 2, "attack_damage_weight_milli": 1650, "attack_generic_base": 3500, "attack_982_base": 32500, "attack_983_base": 62500}},
+    {"id": "support-v15-02", "deck_recipe_id": "broad-v15-02", "overrides": {"ability_bonus": 28500, "search_mega_lucario": 35000, "setup_active_riolu": 37500, "setup_bench_riolu": 44500, "evolve_mega_lucario": 53500}},
+    {"id": "defensive-v15-03", "deck_recipe_id": "stability-v15-03", "overrides": {"lethal_bonus": 10800, "attack_damage_weight_milli": 1300, "attack_generic_base": 2200, "attach_mega_lucario": 32500, "attach_overenergy_penalty": -28000, "retreat_good_score": 13500}},
+    {"id": "tempo-v15-04", "deck_recipe_id": "c06-v15-04", "overrides": {"attach_mega_lucario": 36500, "attach_mega_2energy_bonus": 12500, "attach_overenergy_penalty": -32000, "retreat_good_score": 15000, "search_mega_lucario": 33000}},
+    {"id": "search-alt-v15-05", "deck_recipe_id": "mixed-alt-v15-05", "overrides": {"ability_bonus": 27000, "search_mega_lucario": 40000, "setup_active_riolu": 43000, "setup_bench_riolu": 39000}},
+    {"id": "overenergy-v15-06", "deck_recipe_id": "mixed-v15-06", "overrides": {"attach_mega_lucario": 37500, "attach_mega_2energy_bonus": 15000, "attach_overenergy_penalty": -42000, "attack_damage_weight_milli": 1550}},
+    {"id": "balanced-v15-07", "deck_recipe_id": "search-v15-07", "overrides": {"ability_bonus": 26000, "attach_mega_lucario": 35500, "attack_damage_weight_milli": 1500, "lethal_bonus": 13000, "setup_active_riolu": 40500, "search_mega_lucario": 34500}}
+  ]
+}

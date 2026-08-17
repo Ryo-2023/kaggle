@@ -1,0 +1,58 @@
+{
+  "schema_version": "meta-specialist-cg-legalized-public-meta-v1",
+  "source_epoch": "kaggle-public-20260816-fresh-epoch10-diverse-deck-repair",
+  "seed_namespace": "kaggle-public-cg-seed-20260816-fresh-epoch10-diverse-deck-repair",
+  "current_pool_manifest": "opponents/pool_manifest.json",
+  "output_root": "runs/cg-legalized-public-meta-epoch10-diverse-v2-20260816",
+  "scan_roots": [
+    "opponents",
+    "docs/evidence",
+    "runs/cg-kaggle-kernel-meta-intake-public-more-epoch6d-20260816/evidence",
+    "runs/cg-kaggle-kernel-meta-intake-public-more-epoch6g-20260816/evidence",
+    "runs/cg-kaggle-kernel-meta-intake-public-reexport-wrapperfix-epoch9-20260816/evidence",
+    "runs/cg-legalized-public-meta-v1-20260815/evidence",
+    "runs/cg-legalized-public-meta-more-epoch6g-20260816/evidence",
+    "runs/cg-legalized-public-meta-more-epoch6g-retry1-20260816/evidence"
+  ],
+  "sources": [
+    {
+      "candidate_id": "kaggle_sushanth_dragapult_v2_legalized_epoch10b_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch10-staging-20260816/dragapult_v2",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/dragapult-ex-spread-damage-agent-v2",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/dragapult-ex-spread-damage-agent-v2",
+      "source_commit": "5ad28f124350c9a435b5232cd400b8f74b5cabf7e02b5f52ecdbd326eee7ce5d",
+      "replacements": [
+        {"index": 10, "old": 13, "new": 1184},
+        {"index": 11, "old": 13, "new": 1184},
+        {"index": 12, "old": 13, "new": 1184}
+      ]
+    },
+    {
+      "candidate_id": "kaggle_naoto_bronzong_jammer_legalized_epoch10b_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch10-staging-20260816/bronzong_jammer",
+      "source_ref": "public_kaggle_kernel/naoto714/en-bronzong-evolution-jammer-vs-alakazam",
+      "source_url": "https://www.kaggle.com/code/naoto714/en-bronzong-evolution-jammer-vs-alakazam",
+      "source_commit": "67bb51f0ee001974c8656f476477a98de308b585cbac27ac4f200d7c4b80aae5",
+      "replacements": [
+        {"index": 48, "old": 1227, "new": 1247}
+      ]
+    },
+    {
+      "candidate_id": "kaggle_naoto_empoleon_metang_legalized_epoch10b_20260816",
+      "source_root": "runs/cg-public-deck-repair-epoch10-staging-20260816/empoleon_metang",
+      "source_ref": "public_kaggle_kernel/naoto714/en-empoleon-ex-metang-steel-acceleration",
+      "source_url": "https://www.kaggle.com/code/naoto714/en-empoleon-ex-metang-steel-acceleration",
+      "source_commit": "5042f18c47865dd3b8a6460ed91f8baf497ec9340279433426f6a5725056a2c4",
+      "replacements": [
+        {"index": 48, "old": 8, "new": 1247}
+      ]
+    }
+  ],
+  "authority": {
+    "training_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false,
+    "longrun_allowed": false
+  },
+  "research_only": true
+}

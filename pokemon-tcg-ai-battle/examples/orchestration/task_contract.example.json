@@ -1,0 +1,48 @@
+{
+  "task_id": "bootstrap-kernel-fake-pycompile-example",
+  "role": "implementation",
+  "base_snapshot_id": null,
+  "read_paths": [],
+  "allowed_paths": [
+    "examples/orchestration/generated_hello.py"
+  ],
+  "forbidden_paths": [
+    ".orchestrator/**",
+    "scripts/orchestration/**",
+    "tests/orchestration/**"
+  ],
+  "protected_paths": [
+    "scripts/orchestration/**",
+    "tests/orchestration/**"
+  ],
+  "expected_outputs": {
+    "created_file": "examples/orchestration/generated_hello.py",
+    "verification": "python -m py_compile examples/orchestration/generated_hello.py"
+  },
+  "verification_commands": [
+    [
+      "python",
+      "-m",
+      "py_compile",
+      "examples/orchestration/generated_hello.py"
+    ]
+  ],
+  "acceptance_digest": "sha256:example-generated-python-file-compiles",
+  "command_policy": {
+    "network": "disabled",
+    "commit_push_tag": "forbidden"
+  },
+  "environment_allowlist": [],
+  "resource_budget": {
+    "provider_timeout_seconds": 1,
+    "verification_timeout_seconds": 10
+  },
+  "provider": {
+    "type": "fake",
+    "scenario": "valid",
+    "writes": {
+      "examples/orchestration/generated_hello.py": "\"\"\"Fake Provider が生成する最小の Python モジュール。\"\"\"\n\n\ndef main() -> None:\n    print(\"bootstrap kernel example\")\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    }
+  },
+  "external_model": {}
+}

@@ -1,0 +1,94 @@
+{
+  "actual_cabt_match_evidence": false,
+  "items": [
+    {
+      "case_id": "prior_tie_break",
+      "classification": "contract_fixture_disagreement_not_cabt_match_result",
+      "fixture_expected_selection": [
+        2
+      ],
+      "guided_selection": [
+        2
+      ],
+      "rule_v0_selection": [
+        2
+      ],
+      "selection_type": 0,
+      "unguided_selection": [
+        0
+      ]
+    },
+    {
+      "case_id": "forward_value_overrides_prior",
+      "classification": "contract_fixture_disagreement_not_cabt_match_result",
+      "fixture_expected_selection": [
+        1
+      ],
+      "guided_selection": [
+        1
+      ],
+      "rule_v0_selection": [
+        0
+      ],
+      "selection_type": 0,
+      "unguided_selection": [
+        1
+      ]
+    },
+    {
+      "case_id": "target_selection",
+      "classification": "contract_fixture_disagreement_not_cabt_match_result",
+      "fixture_expected_selection": [
+        0
+      ],
+      "guided_selection": [
+        0
+      ],
+      "rule_v0_selection": [
+        1
+      ],
+      "selection_type": 1,
+      "unguided_selection": [
+        0
+      ]
+    },
+    {
+      "case_id": "optional_selection",
+      "classification": "contract_fixture_disagreement_not_cabt_match_result",
+      "fixture_expected_selection": [
+        1
+      ],
+      "guided_selection": [
+        1
+      ],
+      "rule_v0_selection": [],
+      "selection_type": 4,
+      "unguided_selection": [
+        1
+      ]
+    },
+    {
+      "case_id": "primitive_complete_multi_selection",
+      "classification": "contract_fixture_disagreement_not_cabt_match_result",
+      "fixture_expected_selection": [
+        0,
+        1
+      ],
+      "guided_selection": [
+        0,
+        1
+      ],
+      "rule_v0_selection": [
+        2,
+        1
+      ],
+      "selection_type": 8,
+      "unguided_selection": [
+        0,
+        1
+      ]
+    }
+  ],
+  "schema_version": "bounded-search-counterexamples-v0",
+  "scope": "deterministic_fake_adapter_contract_fixture"
+}

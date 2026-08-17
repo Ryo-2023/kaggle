@@ -1,0 +1,156 @@
+{
+  "schema_version": "self-owned-cg-deck-conditioned-adversarial-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_portfolio_lucario_core_family_v4_20260816",
+  "seed_namespace": "self-owned-cg-portfolio-lucario-core-fresh-v4-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-portfolio-hard-negative-source-v2-20260816",
+    "runs/cg-portfolio-lucario-core-source-v3-retry1-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v21-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v20-20260816",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-margin-gated-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06"
+  ],
+  "deck_recipes": [
+    {
+      "id": "balanced-v24-00",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_balanced.json",
+      "seed": 20269600,
+      "ordinal": 600
+    },
+    {
+      "id": "search-v24-01",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_search.json",
+      "seed": 20269601,
+      "ordinal": 601
+    },
+    {
+      "id": "tempo-v24-02",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_tempo.json",
+      "seed": 20269602,
+      "ordinal": 602
+    },
+    {
+      "id": "switch-v24-03",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v23_portfolio_switch.json",
+      "seed": 20269603,
+      "ordinal": 603
+    },
+    {
+      "id": "recovery-v24-04",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v24_portfolio_recovery.json",
+      "seed": 20269604,
+      "ordinal": 604
+    }
+  ],
+  "policy_variants": [
+    {
+      "id": "balanced-pressure-v24-00",
+      "deck_recipe_id": "balanced-v24-00",
+      "overrides": {
+        "lethal_bonus": 15100,
+        "lethal_hp_margin": 0,
+        "attack_damage_weight_milli": 1160,
+        "attack_generic_base": 11600,
+        "attack_982_base": 38800,
+        "attack_983_base": 54000,
+        "ability_bonus": 28200,
+        "setup_active_riolu": 43500,
+        "setup_bench_riolu": 38200,
+        "evolve_mega_lucario": 54500,
+        "attach_mega_lucario": 48000,
+        "attach_mega_2energy_bonus": 11200,
+        "attach_overenergy_penalty": -32000,
+        "search_mega_lucario": 52200,
+        "retreat_good_score": 13800
+      }
+    },
+    {
+      "id": "search-pressure-v24-01",
+      "deck_recipe_id": "search-v24-01",
+      "overrides": {
+        "lethal_bonus": 17300,
+        "lethal_hp_margin": 1,
+        "attack_damage_weight_milli": 1290,
+        "attack_generic_base": 12900,
+        "attack_982_base": 40700,
+        "attack_983_base": 56800,
+        "ability_bonus": 26400,
+        "setup_active_riolu": 46200,
+        "setup_bench_riolu": 40200,
+        "evolve_mega_lucario": 56600,
+        "attach_mega_lucario": 50200,
+        "attach_mega_2energy_bonus": 12600,
+        "attach_overenergy_penalty": -28500,
+        "search_mega_lucario": 57800,
+        "retreat_good_score": 11800
+      }
+    },
+    {
+      "id": "tempo-reserve-v24-02",
+      "deck_recipe_id": "tempo-v24-02",
+      "overrides": {
+        "lethal_bonus": 10800,
+        "lethal_hp_margin": -1,
+        "attack_damage_weight_milli": 965,
+        "attack_generic_base": 9600,
+        "attack_982_base": 34600,
+        "attack_983_base": 47900,
+        "ability_bonus": 32800,
+        "setup_active_riolu": 47400,
+        "setup_bench_riolu": 42600,
+        "evolve_mega_lucario": 51500,
+        "attach_mega_lucario": 42800,
+        "attach_mega_2energy_bonus": 9000,
+        "attach_overenergy_penalty": -40200,
+        "search_mega_lucario": 47200,
+        "retreat_good_score": 19400
+      }
+    },
+    {
+      "id": "switch-counter-v24-03",
+      "deck_recipe_id": "switch-v24-03",
+      "overrides": {
+        "lethal_bonus": 13600,
+        "lethal_hp_margin": 0,
+        "attack_damage_weight_milli": 1090,
+        "attack_generic_base": 10900,
+        "attack_982_base": 37100,
+        "attack_983_base": 51200,
+        "ability_bonus": 29600,
+        "setup_active_riolu": 41800,
+        "setup_bench_riolu": 35800,
+        "evolve_mega_lucario": 52900,
+        "attach_mega_lucario": 46800,
+        "attach_mega_2energy_bonus": 10300,
+        "attach_overenergy_penalty": -33800,
+        "search_mega_lucario": 50600,
+        "retreat_good_score": 16200
+      }
+    },
+    {
+      "id": "recovery-control-v24-04",
+      "deck_recipe_id": "recovery-v24-04",
+      "overrides": {
+        "lethal_bonus": 11900,
+        "lethal_hp_margin": -1,
+        "attack_damage_weight_milli": 1035,
+        "attack_generic_base": 10400,
+        "attack_982_base": 35800,
+        "attack_983_base": 49700,
+        "ability_bonus": 30500,
+        "setup_active_riolu": 44800,
+        "setup_bench_riolu": 39700,
+        "evolve_mega_lucario": 51800,
+        "attach_mega_lucario": 44600,
+        "attach_mega_2energy_bonus": 9800,
+        "attach_overenergy_penalty": -36500,
+        "search_mega_lucario": 48900,
+        "retreat_good_score": 17800
+      }
+    }
+  ]
+}

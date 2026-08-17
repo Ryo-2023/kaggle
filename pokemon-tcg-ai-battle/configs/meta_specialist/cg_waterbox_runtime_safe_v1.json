@@ -1,0 +1,45 @@
+{
+  "schema_version": "cg-waterbox-runtime-safe-meta-v1-config",
+  "source_epoch": "waterbox-runtime-safe-20260815-g",
+  "seed_namespace": "cg-waterbox-runtime-safe-meta-20260815-g",
+  "base_root": "opponents/waterbox_search_v3",
+  "variants": [
+    "RULE_ONLY_V2",
+    "MICRO_005",
+    "MICRO_015",
+    "MICRO_030",
+    "MICRO_070",
+    "MICRO_015_EVERY_2",
+    "MICRO_030_EVERY_2",
+    "MICRO_070_EVERY_2",
+    "MICRO_015_EVERY_3",
+    "EVERY_2_TURNS_V2",
+    "EVERY_3_TURNS_V2",
+    "EVERY_4_TURNS_V2"
+  ],
+  "split_by_variant": {
+    "RULE_ONLY_V2": "META_TRAIN",
+    "MICRO_005": "META_TRAIN",
+    "MICRO_015": "META_TRAIN",
+    "MICRO_030": "META_TRAIN",
+    "MICRO_070": "META_TRAIN",
+    "MICRO_015_EVERY_2": "META_TRAIN",
+    "MICRO_030_EVERY_2": "META_TRAIN",
+    "MICRO_070_EVERY_2": "META_TRAIN",
+    "MICRO_015_EVERY_3": "META_DEV",
+    "EVERY_2_TURNS_V2": "META_DEV",
+    "EVERY_3_TURNS_V2": "META_FINAL",
+    "EVERY_4_TURNS_V2": "META_FINAL"
+  },
+  "contract": {
+    "research_only": true,
+    "usage_boundary": "local_eval_only",
+    "training_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false,
+    "longrun_allowed": false,
+    "source_observation_boundary": "visible_state_only",
+    "deck_mutation": false,
+    "policy_change_scope": "search_budget_or_turn_gate_only"
+  }
+}

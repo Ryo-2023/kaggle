@@ -1,0 +1,6 @@
+VISIBLE_EVALUATION: >-
+  .venv/bin/python scripts/continuous_league.py task-worker
+  --config configs/continuous_league/task_worker.example.yaml
+SEALED_EVALUATION: >-
+  .venv/bin/python scripts/continuous_league.py task-worker
+  --config configs/continuous_league/task_worker.example.yaml

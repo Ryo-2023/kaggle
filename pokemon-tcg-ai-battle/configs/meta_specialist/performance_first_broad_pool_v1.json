@@ -1,0 +1,40 @@
+{
+  "schema_version": "meta-specialist-performance-first-broad-pool-v1",
+  "selection_policy": "public_smoke_ok_one_policy_instance_per_policy_hash",
+  "promotion_authority": false,
+  "local_eval_only": true,
+  "opponent_ids": [
+    "aman_crustleaware_fighting",
+    "aristophanivan_multiply",
+    "aristophanivan_probabilistic",
+    "biohack44_crustlecounter2",
+    "dashimaki360_crustlecounter",
+    "ferozahmedds_solution",
+    "harukiharada_crustle",
+    "itsuki9180_lucario_jp",
+    "kiyotah_abomasnow",
+    "kiyotah_dragapult",
+    "kiyotah_iono",
+    "kojimar_lucario",
+    "kokinnwakashuu_lucario_search",
+    "lucifer19_battlecore",
+    "masamikobayashi_garchomp",
+    "medal_0001_77a53ffc",
+    "naoto714_kangaskhan",
+    "naoto714_slowking",
+    "naoto714_ursaluna",
+    "official_random",
+    "pilkwang_lucario_alakazam",
+    "plamen06_steel",
+    "prvsiyan_grimmsnarl",
+    "rauffauzanrambe_advanced"
+  ],
+  "pool_manifest_path": "opponents/pool_manifest.json",
+  "pool_manifest_sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca",
+  "notes": [
+    "24 policy hashes are unique.",
+    "Deck hashes are not all unique; repeated deck identity with distinct policy is retained and must be reported.",
+    "public_archaludon_cinderace_r7 is excluded because its declared canonical deck identity is inconsistent and smoke_ok is false.",
+    "This is a research evaluation pool, not permission to include opponent assets in a submission archive."
+  ]
+}

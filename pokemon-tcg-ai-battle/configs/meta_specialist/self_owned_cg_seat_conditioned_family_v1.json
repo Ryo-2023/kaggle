@@ -1,0 +1,29 @@
+{
+  "schema_version": "self-owned-cg-seat-conditioned-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_seat_conditioned_family_v1_20260816",
+  "seed_namespace": "self-owned-cg-seat-conditioned-fresh-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-adaptive-v2-20260816/promoted",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-action-conditioned-v2-lucario-20260816/promoted"
+  ],
+  "deck_recipes": [
+    {"id": "fighting-seat-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_fighting.json", "seed": 20269401, "ordinal": 401},
+    {"id": "water-seat-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 20269402, "ordinal": 402},
+    {"id": "psychic-seat-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_psychic.json", "seed": 20269403, "ordinal": 403},
+    {"id": "fire-seat-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269404, "ordinal": 404},
+    {"id": "dark-seat-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269405, "ordinal": 405},
+    {"id": "lightning-seat-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269406, "ordinal": 406}
+  ],
+  "policy_variants": [
+    {"id": "fighting-seat-00", "deck_recipe_id": "fighting-seat-00", "overrides": {"seat0_attack_bonus": 6000, "seat1_attack_bonus": -6000}},
+    {"id": "water-seat-01", "deck_recipe_id": "water-seat-01", "overrides": {"seat0_retreat_bonus": 6000, "seat1_retreat_bonus": -6000}},
+    {"id": "psychic-seat-02", "deck_recipe_id": "psychic-seat-02", "overrides": {"seat0_attach_bonus": 6000, "seat1_attach_bonus": -6000}},
+    {"id": "fire-seat-03", "deck_recipe_id": "fire-seat-03", "overrides": {"seat0_evolve_bonus": 6000, "seat1_evolve_bonus": -6000}},
+    {"id": "dark-seat-04", "deck_recipe_id": "dark-seat-04", "overrides": {"seat0_attack_bonus": 4000, "seat1_retreat_bonus": -4000}},
+    {"id": "lightning-seat-05", "deck_recipe_id": "lightning-seat-05", "overrides": {"seat0_attach_bonus": -3000, "seat1_attack_bonus": 3000}}
+  ]
+}

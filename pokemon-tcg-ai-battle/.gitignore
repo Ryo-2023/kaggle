@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Kaggle / secrets
+kaggle.json
+.env
+configs/competition/o4_live_identity.local.json
+
+# Data
+data/*
+!data/.gitkeep
+
+# Submissions
+submissions/*
+!submissions/.gitkeep
+
+# OS / editor
+.DS_Store
+.ipynb_checkpoints/
+.vscode/
+
+# Kaggle outputs / models
+outputs/
+models/
+
+# Large files & artifacts
+artifacts/matches/
+artifacts/evaluations/
+artifacts/competition/
+artifacts/submission/
+# O6 opponent-platform working state (durable artifact store, fetch caches,
+# league scratch dirs): reproducible from source; the actual League evidence
+# lives under docs/evidence/o6-opponent-intelligence-v3 (git-tracked).
+artifacts/o6-opponents/
+artifacts/o6-opponent-store/
+artifacts/o6-league-*-cache/
+*.zip
+*.csv
+*.parquet
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.ckpt
+
+# Local orchestrator runtime state
+.orchestrator/
+
+# C4 data-ops private artifacts (rule-bc-v1 rows, private candidate bindings)
+.local_artifacts/
+!artifacts/team-knowledge-mining/branch_inventory.csv
+!artifacts/team-knowledge-mining/commit_inventory.csv
+!artifacts/team-knowledge-mining/file_inventory.csv
+# Offline Training v1 run directories and packages (checkpoints, private
+# bindings, exported models, submission archives) are never committed.
+runs/
+# Local safety archives created while consolidating Git worktrees; never commit.
+worktree-archives/
+# Local CABT engine build copied from the workspace environment.
+cg/
+dist/
+
+# O6-AUD-002: invalidated raw league evidence (PRIVACY-001/002, INTEGRITY-001).
+# Contains logs/search_begin_input/hand/prize contents that must never be
+# shared or re-added to git. Kept on local disk as restricted quarantine only;
+# see docs/evidence/o6-opponent-intelligence-v3-TOMBSTONE.json.
+docs/evidence/o6-opponent-intelligence-v3/
+
+# tool-generated caches and third-party skill state (not project sources)
+.agents/
+skills-lock.json
+
+# graphify は最新状態だけ追跡する。日付バックアップと AST cache は
+# 再生成できるうえ、commit のたびに増えてリポジトリが単調に膨らむ。
+graphify-out/2*/
+graphify-out/cache/
+
+# seed qualification artifacts (regenerate with scripts/qualify_meta_specialist_seeds.py)
+runs/
+
+# テスト実行時の一時フィクスチャ
+.tmp-test/
+
+# 統合した外部成果物（対戦相手キャッシュ・引き継ぎ・別置き runs）
+local-artifacts/
+
+# 最終研究基準 P1 のデッキはアーカイブ対象として追跡する
+!archive/final-baseline-p1/package/deck.csv

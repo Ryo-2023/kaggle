@@ -1,0 +1,10 @@
+{
+  "schema_version": "meta-specialist-card-vocabulary-registry-v1",
+  "content_sha256": "a5556e6dd24c1e5739440b6d845e91f1ce0c88c69c4b274469b0049ddde222f3",
+  "card_database_sha256": "a0ea63cf7adcb65d35436ce0eb390de6e2e35654a7c67c065a45f4abaa00f373",
+  "card_vocabulary_sha256": "1ed4232a08f985dfc4b27eb7f6fba1871522a9f469cc9771727aca670eb2dbb9",
+  "card_id_count": 1267,
+  "environment_version": "meta-specialist-en-card-database-v1",
+  "usage_decision": "bundle_allowed",
+  "permission_decision": "bundle_allowed"
+}

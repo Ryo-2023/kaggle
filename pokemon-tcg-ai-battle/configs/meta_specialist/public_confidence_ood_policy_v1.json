@@ -1,0 +1,47 @@
+{
+  "schema_version": "meta-specialist-public-confidence-ood-policy-v1",
+  "promotion_authority": false,
+  "source": {
+    "reference_artifact": "runs/meta-specialist-public-confidence-ood/reference-wave6-seed0-seed1-train-bundle-v1.json",
+    "reference_artifact_sha256": "7dcf1cef7639a6a8b14ffcf6591bf3808fb7bed8edd85d82da369b3b6f511cda",
+    "reference_source_list_sha256": "b21c329a2ab599ba80e02294052a19ed4d770ac0a7335fc6197f33e3567206cb",
+    "reference_source_sha256s": [
+      "2d9892855350ac99a085eb616489e65e995415e987ce7c2470e20cc27e08b0ce",
+      "2e5438aec5e451d70c37593971b45965cd33950822423b1540fdaf56b3f27e26"
+    ],
+    "reference_source_count": 2,
+    "partition": "train",
+    "bucket_schema": "meta-specialist-public-confidence-ood-v1"
+  },
+  "bucket_policy": {
+    "rare_count_threshold": 2,
+    "focus_on_ood": true
+  },
+  "confidence_policy": {
+    "min_normalized_surprisal": 0.5,
+    "max_top1_top2_margin": null
+  },
+  "loss_mask_semantics": {
+    "forced_domain": "context_only",
+    "ineligible": "context_only",
+    "eligible": "loss_bearing",
+    "context_rows_in_loss_denominator": false,
+    "context_rows_advance_recurrent_state": true
+  },
+  "privacy": {
+    "runtime_uses_opponent_id": false,
+    "runtime_uses_seat": false,
+    "runtime_uses_policy_identity": false,
+    "runtime_uses_hidden_fields": false,
+    "training_component_selection_may_stratify_by_opponent": true
+  },
+  "gate": {
+    "fixed_six_games_per_seed": 24,
+    "required_faults": 0,
+    "required_seedwise_non_degradation": true,
+    "required_seatwise_non_degradation": true,
+    "shadow_b_only_after_fixed_six_pass": true,
+    "longrun_allowed": false
+  },
+  "status": "pre_registered_diagnostic_policy_not_yet_connected_to_training"
+}

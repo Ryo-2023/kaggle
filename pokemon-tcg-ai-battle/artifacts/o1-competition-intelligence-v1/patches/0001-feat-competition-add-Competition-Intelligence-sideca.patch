@@ -1,0 +1,3933 @@
+From 1b0a3204c3f542ffcb1d766b5927ff2c22caa2c2 Mon Sep 17 00:00:00 2001
+From: bfe-lab-ono <ono.ryosuke.36t@st.kyoto-u.ac.jp>
+Date: Sat, 18 Jul 2026 04:04:11 +0900
+Subject: [PATCH 1/5] feat(competition): add Competition Intelligence sidecar
+ foundation (O1 Slice 0-2)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- 新規パッケージ mage_ptcg.competition_intelligence を追加し、O1-0
+  (Guardrails: protected-file checker, runtime isolation test) と O1-1
+  (Foundation: SourceEnvelope/EpisodeRecord/DecisionRecord/DeckObservation/
+  KnowledgeClaim/IntelligenceSnapshot contracts, permissions, content-
+  addressed raw archive, quarantine, run manifest/lock, rebuildable SQLite
+  catalog, config) を実装する。
+- 既存 mage_ptcg.competition (C2b Capability Probe/redaction) を再利用し、
+  重複package化しない。main.py からは到達不能であることを clean subprocess
+  でテストする (tests/test_competition_intelligence_runtime_isolation.py)。
+- O1-2 (Replay正規化) 以降 O1-6 まではこのコミットに含まない。
+- focused test 127 passed、repository full suite 1145 passed / 1 failed
+  (既存の環境依存flaky testで無関係)。
+
+Experiment: docs/evidence/o1-competition-intelligence-sidecar-slice0-1.md
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+---
+ scripts/check_o1_protected_files.py           | 161 ++++
+ scripts/run_competition_intelligence.py       |  30 +
+ .../competition_intelligence/__init__.py      |  16 +
+ .../competition_intelligence/archive.py       | 114 +++
+ .../competition_intelligence/atomic_io.py     |  69 ++
+ .../competition_intelligence/canonical.py     |  75 ++
+ .../competition_intelligence/catalog.py       | 121 +++
+ src/mage_ptcg/competition_intelligence/cli.py | 187 +++++
+ .../competition_intelligence/config.py        | 237 ++++++
+ .../competition_intelligence/contracts.py     | 766 ++++++++++++++++++
+ .../competition_intelligence/local_ingest.py  | 148 ++++
+ .../competition_intelligence/permissions.py   |  95 +++
+ .../competition_intelligence/provenance.py    | 142 ++++
+ .../competition_intelligence/runstate.py      | 296 +++++++
+ .../test_archive_and_provenance.py            | 143 ++++
+ .../competition_intelligence/test_catalog.py  |  69 ++
+ tests/competition_intelligence/test_cli.py    |  87 ++
+ tests/competition_intelligence/test_config.py |  82 ++
+ .../test_contracts.py                         | 373 +++++++++
+ .../test_permissions.py                       | 104 +++
+ .../competition_intelligence/test_privacy.py  |  40 +
+ .../competition_intelligence/test_runstate.py | 131 +++
+ tests/test_check_o1_protected_files.py        | 131 +++
+ ...petition_intelligence_runtime_isolation.py |  93 +++
+ 24 files changed, 3710 insertions(+)
+ create mode 100644 scripts/check_o1_protected_files.py
+ create mode 100644 scripts/run_competition_intelligence.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/__init__.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/archive.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/atomic_io.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/canonical.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/catalog.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/cli.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/config.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/contracts.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/local_ingest.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/permissions.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/provenance.py
+ create mode 100644 src/mage_ptcg/competition_intelligence/runstate.py
+ create mode 100644 tests/competition_intelligence/test_archive_and_provenance.py
+ create mode 100644 tests/competition_intelligence/test_catalog.py
+ create mode 100644 tests/competition_intelligence/test_cli.py
+ create mode 100644 tests/competition_intelligence/test_config.py
+ create mode 100644 tests/competition_intelligence/test_contracts.py
+ create mode 100644 tests/competition_intelligence/test_permissions.py
+ create mode 100644 tests/competition_intelligence/test_privacy.py
+ create mode 100644 tests/competition_intelligence/test_runstate.py
+ create mode 100644 tests/test_check_o1_protected_files.py
+ create mode 100644 tests/test_competition_intelligence_runtime_isolation.py
+
+diff --git a/scripts/check_o1_protected_files.py b/scripts/check_o1_protected_files.py
+new file mode 100644
+index 0000000..4a2cdc7
+--- /dev/null
++++ b/scripts/check_o1_protected_files.py
+@@ -0,0 +1,161 @@
++#!/usr/bin/env python3
++"""Protected-file baseline/verify checker for the O1 Competition Intelligence work.
++
++Hashes a fixed list of paths the O1 mandate marks as protected (submission
++entrypoint, deck, Champion/default agent code, Promotion Gate math, Kaggle
++packaging/verification scripts, and the production/acceptance configs that
++parameterize the currently-tracked long-run Promotion evidence) using git's
++own blob SHA (``git hash-object``) — the same hash git already uses to detect
++any content change to a tracked file, so no separate hashing scheme is
++needed.
++
++Some protected *artifacts* named in the O1 mandate (the fixed Long-run model
++file and its run-scoped package under ``runs/``) are git-ignored data that
++lives only in the canonical workspace, not necessarily in an isolated
++worktree/clone; for those this checker records
++``status: "absent_in_this_worktree"`` rather than fabricating a hash, since
++there is nothing on disk here that could be modified.
++
++Usage::
++
++    python scripts/check_o1_protected_files.py baseline --output <path>
++    python scripts/check_o1_protected_files.py verify --baseline <path>
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import subprocess
++from pathlib import Path
++from typing import Any
++
++# Git-tracked files whose content must not change as a side effect of this work.
++PROTECTED_PATHS: tuple[str, ...] = (
++    "main.py",
++    "deck.csv",
++    "agents/__init__.py",
++    "agents/rule_agent.py",
++    "agents/rule_agent_v1.py",
++    "src/mage_ptcg/evaluation/promotion.py",
++    "src/mage_ptcg/offline_training_v1_support/promotion.py",
++    "src/mage_ptcg/offline_training_v1_support/statistics.py",
++    "scripts/build_submission.py",
++    "scripts/build_student_submission.py",
++    "scripts/build_kaggle_submission.py",
++    "scripts/kaggle_student_runtime.py",
++    "scripts/kaggle_student_entrypoint.py",
++    "scripts/verify_kaggle_submission.py",
++    "scripts/submit_kaggle_submission.py",
++    "configs/offline_training_v1/production.json",
++    "configs/offline_training_v1/final_acceptance_plan.json",
++)
++
++# Git-ignored data roots that may hold protected artifacts (Long-run model
++# file, its run-scoped package, Promotion Gate result directories); these are
++# only presence-checked, never hashed, since their content is out-of-repo data.
++PROTECTED_DATA_ROOTS: tuple[str, ...] = ("runs/", "submissions/", "data/")
++
++BASELINE_SCHEMA_VERSION = "o1-protected-files-baseline-v1"
++
++
++class ProtectedFilesError(RuntimeError):
++    """Raised when the repository root or a baseline file cannot be read."""
++
++
++def repo_root() -> Path:
++    result = subprocess.run(
++        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=10, check=False
++    )
++    if result.returncode != 0:
++        raise ProtectedFilesError(f"not a git repository: {result.stderr.strip()}")
++    return Path(result.stdout.strip())
++
++
++def git_blob_hash(root: Path, relative_path: str) -> str | None:
++    """Git's own blob SHA for a tracked file at HEAD-or-worktree, or ``None``."""
++    result = subprocess.run(
++        ["git", "-C", str(root), "hash-object", "--", relative_path],
++        capture_output=True,
++        text=True,
++        timeout=10,
++        check=False,
++    )
++    if result.returncode != 0:
++        return None
++    return result.stdout.strip()
++
++
++def collect(root: Path) -> dict[str, dict[str, Any]]:
++    entries: dict[str, dict[str, Any]] = {}
++    for relative_path in PROTECTED_PATHS:
++        absolute = root / relative_path
++        if not absolute.exists():
++            entries[relative_path] = {"status": "absent_in_this_worktree", "git_blob_sha": None}
++            continue
++        entries[relative_path] = {"status": "present", "git_blob_sha": git_blob_hash(root, relative_path)}
++    for data_root in PROTECTED_DATA_ROOTS:
++        absolute = root / data_root
++        key = f"{data_root} (git-ignored data root, presence-only)"
++        entries[key] = {
++            "status": "present_not_hashed" if absolute.exists() else "absent_in_this_worktree",
++            "git_blob_sha": None,
++        }
++    return entries
++
++
++def cmd_baseline(args: argparse.Namespace) -> int:
++    root = repo_root()
++    entries = collect(root)
++    payload = {"schema_version": BASELINE_SCHEMA_VERSION, "repo_root": str(root), "entries": entries}
++    output = Path(args.output)
++    output.parent.mkdir(parents=True, exist_ok=True)
++    output.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
++    print(json.dumps({"baseline_written": str(output), "entry_count": len(entries)}, sort_keys=True))
++    return 0
++
++
++def cmd_verify(args: argparse.Namespace) -> int:
++    root = repo_root()
++    baseline_path = Path(args.baseline)
++    try:
++        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
++    except OSError as exc:
++        raise ProtectedFilesError(f"cannot read baseline {baseline_path}: {exc}") from exc
++    if baseline.get("schema_version") != BASELINE_SCHEMA_VERSION:
++        raise ProtectedFilesError(f"baseline schema_version mismatch: {baseline.get('schema_version')!r}")
++    current = collect(root)
++    diffs: list[dict[str, Any]] = []
++    for relative_path, before in baseline["entries"].items():
++        after = current.get(relative_path)
++        if after is None or before != after:
++            diffs.append({"path": relative_path, "before": before, "after": after})
++    result = {"protected_files_unchanged": len(diffs) == 0, "diff_count": len(diffs), "diffs": diffs}
++    print(json.dumps(result, sort_keys=True, indent=2))
++    return 0 if not diffs else 1
++
++
++def build_parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(description=__doc__)
++    sub = parser.add_subparsers(dest="command", required=True)
++    baseline_p = sub.add_parser("baseline", help="record the current hashes as a baseline JSON file")
++    baseline_p.add_argument("--output", required=True)
++    baseline_p.set_defaults(func=cmd_baseline)
++    verify_p = sub.add_parser("verify", help="compare current hashes against a previously recorded baseline")
++    verify_p.add_argument("--baseline", required=True)
++    verify_p.set_defaults(func=cmd_verify)
++    return parser
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = build_parser()
++    args = parser.parse_args(argv)
++    try:
++        return int(args.func(args))
++    except ProtectedFilesError as exc:
++        print(json.dumps({"error": str(exc)}))
++        return 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/scripts/run_competition_intelligence.py b/scripts/run_competition_intelligence.py
+new file mode 100644
+index 0000000..c578a18
+--- /dev/null
++++ b/scripts/run_competition_intelligence.py
+@@ -0,0 +1,30 @@
++#!/usr/bin/env python3
++"""Unified entrypoint for the Competition Intelligence sidecar CLI.
++
++Usage examples::
++
++    python scripts/run_competition_intelligence.py doctor
++    python scripts/run_competition_intelligence.py ingest-local \\
++        --run-dir runs/competition-intelligence/<run-id> --input <path>
++    python scripts/run_competition_intelligence.py rebuild-catalog \\
++        --run-dir runs/competition-intelligence/<run-id>
++
++Only the commands implemented so far are available; see
++``mage_ptcg.competition_intelligence.cli`` for the current scope and the
++tracked continuation plan for the rest of the O1 design.
++"""
++
++from __future__ import annotations
++
++import sys
++from pathlib import Path
++
++_REPO_ROOT = Path(__file__).resolve().parents[1]
++for _entry in (str(_REPO_ROOT), str(_REPO_ROOT / "src")):
++    if _entry not in sys.path:
++        sys.path.insert(0, _entry)
++
++from mage_ptcg.competition_intelligence.cli import main
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/src/mage_ptcg/competition_intelligence/__init__.py b/src/mage_ptcg/competition_intelligence/__init__.py
+new file mode 100644
+index 0000000..048effd
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/__init__.py
+@@ -0,0 +1,16 @@
++"""Competition Intelligence sidecar (O1): provenance, permissions, immutable
++snapshots, and analytics for external match/deck/knowledge data.
++
++This package is intentionally **never imported by the submission runtime**
++(``main.py`` and everything it reaches, directly or via a lazy/guarded
++import). It is a sidecar that produces Immutable Intelligence Snapshots which
++``offline_training`` may *optionally* read (a lazy, one-directional
++dependency); nothing here feeds a running Champion/Challenger agent
++directly, and nothing here is exempt from that boundary. See
++``tests/test_competition_intelligence_runtime_isolation.py`` for the
++enforcing test and
++``docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md``
++for the full design.
++"""
++
++from __future__ import annotations
+diff --git a/src/mage_ptcg/competition_intelligence/archive.py b/src/mage_ptcg/competition_intelligence/archive.py
+new file mode 100644
+index 0000000..8da7715
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/archive.py
+@@ -0,0 +1,114 @@
++"""Content-addressed immutable raw archive with fail-closed quarantine.
++
++Reuses ``mage_ptcg.competition.redaction.secret_scan`` (already tested as
++part of the C2b Competition Probe) for the scan that decides whether incoming
++bytes are safe to keep as plaintext raw content or must be quarantined.
++"""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any, Mapping
++
++from mage_ptcg.competition.redaction import secret_scan
++
++from .atomic_io import atomic_write_bytes, atomic_write_json
++from .canonical import sha256_hex
++
++
++class ArchiveError(RuntimeError):
++    """Raised on an archive-safety violation (corrupt store, hash mismatch)."""
++
++
++def _shard_path(root: Path, digest_hex: str) -> Path:
++    if len(digest_hex) != 64 or any(char not in "0123456789abcdef" for char in digest_hex):
++        raise ArchiveError(f"not a sha256 hex digest: {digest_hex!r}")
++    return root / digest_hex[:2] / digest_hex
++
++
++def raw_root(run_root: Path) -> Path:
++    return run_root / "raw" / "sha256"
++
++
++def quarantine_root(run_root: Path) -> Path:
++    return run_root / "quarantine"
++
++
++def raw_path(run_root: Path, digest_hex: str) -> Path:
++    return _shard_path(raw_root(run_root), digest_hex)
++
++
++def store_raw(run_root: Path, data: bytes) -> str:
++    """Idempotently archive ``data`` by content hash; returns the sha256 hex.
++
++    A second call with identical bytes is a no-op (content-addressed
++    deduplication), not a second physical copy or an error. This is what
++    makes repeated ingestion of the same source idempotent at the archive
++    layer.
++    """
++    digest_hex = sha256_hex(data)
++    destination = raw_path(run_root, digest_hex)
++    if destination.exists():
++        existing = destination.read_bytes()
++        if sha256_hex(existing) != digest_hex:
++            raise ArchiveError(f"raw archive corruption: {destination} does not match its own path hash")
++        return digest_hex
++    atomic_write_bytes(destination, data)
++    return digest_hex
++
++
++def read_raw(run_root: Path, digest_hex: str) -> bytes:
++    destination = raw_path(run_root, digest_hex)
++    try:
++        data = destination.read_bytes()
++    except FileNotFoundError as exc:
++        raise ArchiveError(f"raw blob {digest_hex} not found in archive") from exc
++    if sha256_hex(data) != digest_hex:
++        raise ArchiveError(f"raw blob {digest_hex} is corrupt (hash mismatch on read)")
++    return data
++
++
++def quarantine_bytes(run_root: Path, data: bytes, *, reason: str, detail: Mapping[str, Any] | None = None) -> str:
++    """Move unsafe/malformed content to quarantine instead of the raw archive.
++
++    Keyed by content hash, same as the raw archive, so quarantining the same
++    bad input twice updates the same entry rather than accumulating copies.
++    """
++    digest_hex = sha256_hex(data)
++    directory = quarantine_root(run_root) / digest_hex[:2] / digest_hex
++    atomic_write_bytes(directory / "content.bin", data)
++    atomic_write_json(
++        directory / "reason.json",
++        {"sha256": digest_hex, "reason": reason, "detail": dict(detail) if detail else {}},
++    )
++    return digest_hex
++
++
++def scan_before_archive(data: bytes) -> tuple[bool, tuple[str, ...]]:
++    """Return ``(is_safe, labels)`` using the shared C2b secret scanner.
++
++    ``data`` is decoded as UTF-8 JSON when possible (the scanner operates on
++    parsed structures); undecodable/non-JSON bytes are treated as opaque and
++    always considered safe to archive as raw bytes (there is no structured
++    field to leak a secret through), matching how the C2b probe already
++    handles non-JSON payloads.
++    """
++    try:
++        value = json.loads(data.decode("utf-8"))
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return True, ()
++    labels = secret_scan(value)
++    return (len(labels) == 0), tuple(labels)
++
++
++__all__ = [
++    "ArchiveError",
++    "quarantine_bytes",
++    "quarantine_root",
++    "raw_path",
++    "raw_root",
++    "read_raw",
++    "scan_before_archive",
++    "store_raw",
++]
+diff --git a/src/mage_ptcg/competition_intelligence/atomic_io.py b/src/mage_ptcg/competition_intelligence/atomic_io.py
+new file mode 100644
+index 0000000..24b5bb0
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/atomic_io.py
+@@ -0,0 +1,69 @@
++"""Atomic, durable writes for Competition Intelligence canonical artifacts.
++
++Mirrors ``mage_ptcg.offline_training.runstate.atomic_write_json``'s
++fsync-backed sequence (temp sibling -> flush -> fsync -> replace -> parent-dir
++fsync). Kept as a local copy in this sidecar rather than an import from
++``offline_training`` so that package never needs to depend on this one.
++"""
++
++from __future__ import annotations
++
++import os
++from pathlib import Path
++from typing import Any
++
++from .canonical import canonical_json_bytes
++
++
++def fsync_dir(directory: Path) -> None:
++    try:
++        fd = os.open(directory, os.O_RDONLY)
++    except OSError:
++        return
++    try:
++        os.fsync(fd)
++    except OSError:
++        pass
++    finally:
++        os.close(fd)
++
++
++def atomic_write_bytes(path: str | Path, data: bytes, *, mode: int = 0o644) -> None:
++    """Write ``data`` to ``path`` so a crash never leaves a partial file there."""
++    destination = Path(path)
++    destination.parent.mkdir(parents=True, exist_ok=True)
++    temporary = destination.parent / f".{destination.name}.{os.getpid()}.tmp"
++    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
++    try:
++        os.write(fd, data)
++        os.fsync(fd)
++    finally:
++        os.close(fd)
++    os.replace(temporary, destination)
++    fsync_dir(destination.parent)
++
++
++def atomic_write_json(path: str | Path, value: Any) -> None:
++    atomic_write_bytes(path, canonical_json_bytes(value) + b"\n")
++
++
++def append_jsonl_line(path: str | Path, value: Any) -> None:
++    """Append one canonical-JSON line, fsync'd.
++
++    This is append-only and not itself a crash-atomic replace of the whole
++    file; callers must hold the run's single-writer lock
++    (``runstate.run_lock``) before calling this so concurrent writers never
++    interleave partial lines.
++    """
++    destination = Path(path)
++    destination.parent.mkdir(parents=True, exist_ok=True)
++    line = canonical_json_bytes(value) + b"\n"
++    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
++    try:
++        os.write(fd, line)
++        os.fsync(fd)
++    finally:
++        os.close(fd)
++
++
++__all__ = ["append_jsonl_line", "atomic_write_bytes", "atomic_write_json", "fsync_dir"]
+diff --git a/src/mage_ptcg/competition_intelligence/canonical.py b/src/mage_ptcg/competition_intelligence/canonical.py
+new file mode 100644
+index 0000000..73a1d78
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/canonical.py
+@@ -0,0 +1,75 @@
++"""Deterministic canonical JSON serialization and content hashing.
++
++This repository does not have one shared canonical-JSON/digest utility;
++``mage_ptcg.knowledge.model``, ``mage_ptcg.distillation.contracts``,
++``mage_ptcg.decision_state`` and others each carry their own near-identical
++copy with a module-specific domain prefix. This module is the Competition
++Intelligence sidecar's copy of that established pattern (sorted keys, fixed
++separators, no NaN/Infinity, domain-prefixed sha256) rather than a new,
++incompatible scheme.
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import math
++from typing import Any
++
++DOMAIN_PREFIX = "mage_ptcg:competition_intelligence"
++
++
++class CanonicalizationError(ValueError):
++    """Raised when a value cannot be serialized as canonical, finite JSON."""
++
++
++def _reject_non_finite(value: Any, *, path: str) -> None:
++    if isinstance(value, float) and not math.isfinite(value):
++        raise CanonicalizationError(f"non-finite float at {path}")
++    if isinstance(value, dict):
++        for key, child in value.items():
++            if not isinstance(key, str):
++                raise CanonicalizationError(f"non-string key at {path}")
++            _reject_non_finite(child, path=f"{path}.{key}")
++    elif isinstance(value, (list, tuple)):
++        for index, child in enumerate(value):
++            _reject_non_finite(child, path=f"{path}[{index}]")
++
++
++def canonical_json_bytes(value: Any) -> bytes:
++    """Serialize ``value`` to deterministic UTF-8 JSON bytes.
++
++    Rejects NaN/Infinity and non-string keys so the same logical value always
++    produces the same bytes, and unrepresentable values fail loudly instead of
++    silently rounding through a lossy encoding.
++    """
++    _reject_non_finite(value, path="$")
++    try:
++        text = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
++    except (TypeError, ValueError) as exc:
++        raise CanonicalizationError(f"value is not canonical-JSON serializable: {exc}") from exc
++    return text.encode("utf-8")
++
++
++def digest(value: Any, *, domain: str = "core") -> str:
++    """Content hash of ``value``, namespaced by ``domain`` and schema version.
++
++    The domain prefix guards against cross-record-type hash collisions (e.g. a
++    ``DecisionRecord`` and an ``EpisodeRecord`` that happen to canonicalize to
++    the same bytes must not share a digest).
++    """
++    prefix = f"{DOMAIN_PREFIX}:{domain}:v1\0".encode("utf-8")
++    return hashlib.sha256(prefix + canonical_json_bytes(value)).hexdigest()
++
++
++def sha256_hex(data: bytes) -> str:
++    return hashlib.sha256(data).hexdigest()
++
++
++__all__ = [
++    "DOMAIN_PREFIX",
++    "CanonicalizationError",
++    "canonical_json_bytes",
++    "digest",
++    "sha256_hex",
++]
+diff --git a/src/mage_ptcg/competition_intelligence/catalog.py b/src/mage_ptcg/competition_intelligence/catalog.py
+new file mode 100644
+index 0000000..570b05b
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/catalog.py
+@@ -0,0 +1,121 @@
++"""Rebuildable SQLite catalog: a non-canonical index over canonical artifacts.
++
++Deleting ``state/catalog.sqlite3`` and calling :func:`rebuild_catalog` again
++must always reproduce an equivalent catalog, because the catalog stores
++nothing that isn't already derivable from ``source_manifests/*.json`` (and,
++once O1-2 normalization exists, ``normalized/*.jsonl``). This module only
++implements the sources index today; an episodes/decisions index is expected
++to be added once ``normalize`` is implemented, without changing this
++function's contract of "safe to delete, always rebuildable".
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import sqlite3
++import time
++from pathlib import Path
++
++from .contracts import ContractError
++from .provenance import envelope_from_manifest_payload
++from .runstate import RunPaths
++
++CATALOG_SCHEMA_VERSION = "competition-intelligence-catalog-v1"
++
++_SCHEMA_STATEMENTS = (
++    "CREATE TABLE catalog_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
++    "CREATE TABLE sources ("
++    "source_id TEXT PRIMARY KEY, "
++    "source_kind TEXT NOT NULL, "
++    "acquisition_mode TEXT NOT NULL, "
++    "acquired_at TEXT NOT NULL, "
++    "allowed_uses TEXT NOT NULL, "
++    "raw_sha256 TEXT NOT NULL, "
++    "content_hash TEXT NOT NULL, "
++    "manifest_file TEXT NOT NULL"
++    ")",
++)
++
++
++class CatalogError(RuntimeError):
++    """Raised when the catalog cannot be rebuilt from canonical artifacts."""
++
++
++def rebuild_catalog(run_root: str | Path) -> dict[str, int]:
++    """Rebuild ``state/catalog.sqlite3`` from ``source_manifests/*.json``.
++
++    Builds into a temporary file and atomically replaces the previous
++    catalog, so a crash mid-rebuild never leaves a half-written database in
++    the canonical catalog path.
++    """
++    paths = RunPaths(Path(run_root))
++    paths.state.mkdir(parents=True, exist_ok=True)
++    tmp_path = paths.state / f".catalog.{os.getpid()}.tmp.sqlite3"
++    if tmp_path.exists():
++        tmp_path.unlink()
++    quarantined = 0
++    connection = sqlite3.connect(tmp_path)
++    try:
++        for statement in _SCHEMA_STATEMENTS:
++            connection.execute(statement)
++        source_count = 0
++        if paths.source_manifests.exists():
++            for manifest_path in sorted(paths.source_manifests.glob("*.json")):
++                try:
++                    payload = _load_json(manifest_path)
++                    envelope = envelope_from_manifest_payload(payload)
++                except (ContractError, ValueError) as exc:
++                    quarantined += 1
++                    connection.execute(
++                        "INSERT OR IGNORE INTO catalog_meta VALUES (?, ?)",
++                        (f"skipped:{manifest_path.name}", str(exc)),
++                    )
++                    continue
++                connection.execute(
++                    "INSERT OR REPLACE INTO sources VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
++                    (
++                        envelope.source_id,
++                        envelope.source_kind.value,
++                        envelope.acquisition_mode.value,
++                        envelope.acquired_at,
++                        ",".join(sorted(use.value for use in envelope.allowed_uses)),
++                        envelope.raw_sha256,
++                        envelope.content_hash(),
++                        manifest_path.name,
++                    ),
++                )
++                source_count += 1
++        connection.execute(
++            "INSERT INTO catalog_meta VALUES (?, ?)", ("schema_version", CATALOG_SCHEMA_VERSION)
++        )
++        connection.execute(
++            "INSERT INTO catalog_meta VALUES (?, ?)",
++            ("rebuilt_at", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
++        )
++        connection.execute("INSERT INTO catalog_meta VALUES (?, ?)", ("source_count", str(source_count)))
++        connection.commit()
++    finally:
++        connection.close()
++    os.replace(tmp_path, paths.catalog_db)
++    return {"source_count": source_count, "quarantined_manifest_count": quarantined}
++
++
++def _load_json(path: Path) -> dict:
++    return json.loads(path.read_text(encoding="utf-8"))
++
++
++def catalog_summary(run_root: str | Path) -> dict[str, str]:
++    """Read back ``catalog_meta`` for a doctor/report check, without rebuilding."""
++    paths = RunPaths(Path(run_root))
++    if not paths.catalog_db.exists():
++        raise CatalogError(f"no catalog at {paths.catalog_db}; run rebuild-catalog first")
++    connection = sqlite3.connect(paths.catalog_db)
++    try:
++        rows = connection.execute("SELECT key, value FROM catalog_meta").fetchall()
++    finally:
++        connection.close()
++    return dict(rows)
++
++
++__all__ = ["CATALOG_SCHEMA_VERSION", "CatalogError", "catalog_summary", "rebuild_catalog"]
+diff --git a/src/mage_ptcg/competition_intelligence/cli.py b/src/mage_ptcg/competition_intelligence/cli.py
+new file mode 100644
+index 0000000..49b798a
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/cli.py
+@@ -0,0 +1,187 @@
++"""CLI for the Competition Intelligence sidecar.
++
++Follows ``mage_ptcg.offline_training.cli``'s conventions: argparse
++subparsers, a ``doctor`` command, JSON summaries on stdout via ``_emit``, and
++non-zero exit codes with a JSON error on stderr for expected failures.
++
++Only the commands that are actually implemented in this slice are wired up
++here (``doctor``, ``ingest-local``, ``rebuild-catalog``); the remaining
++commands in the full O1 design (``normalize``, ``analyze``,
++``import-knowledge``, ``build-*-snapshot``, ``export-offline-dataset``,
++``report``) are intentionally not added as stubs — see
++``docs/plan/implementation/04_kaggle_competition_intelligence_and_joint_optimization_implementation_plan.md``
++for the tracked continuation plan.
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import os
++import sys
++from pathlib import Path
++from typing import Any
++
++from . import catalog as catalog_module
++from .config import CONFIG_SCHEMA_VERSION, ConfigError, load_config
++from .contracts import (
++    DECISION_RECORD_SCHEMA_VERSION,
++    DECK_OBSERVATION_SCHEMA_VERSION,
++    EPISODE_RECORD_SCHEMA_VERSION,
++    INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION,
++    KNOWLEDGE_CLAIM_SCHEMA_VERSION,
++    SOURCE_ENVELOPE_SCHEMA_VERSION,
++)
++from .local_ingest import IngestError, ingest_local_file
++from .runstate import DEFAULT_RUN_ROOT, MANIFEST_SCHEMA_VERSION, RunPaths, RunStateError
++
++
++class CliError(RuntimeError):
++    """Raised for a CLI-level failure that should print a clean JSON error."""
++
++
++def _emit(summary: dict[str, Any]) -> None:
++    print(json.dumps(summary, ensure_ascii=False, sort_keys=True, indent=2))
++
++
++def _repo_root() -> Path:
++    return Path(__file__).resolve().parents[3]
++
++
++def _main_py_source() -> str | None:
++    main_path = _repo_root() / "main.py"
++    try:
++        return main_path.read_text(encoding="utf-8")
++    except OSError:
++        return None
++
++
++def _cmd_doctor(args: argparse.Namespace) -> int:
++    report: dict[str, Any] = {"schema_versions": {
++        "config": CONFIG_SCHEMA_VERSION,
++        "run_manifest": MANIFEST_SCHEMA_VERSION,
++        "catalog": catalog_module.CATALOG_SCHEMA_VERSION,
++        "source_envelope": SOURCE_ENVELOPE_SCHEMA_VERSION,
++        "episode_record": EPISODE_RECORD_SCHEMA_VERSION,
++        "decision_record": DECISION_RECORD_SCHEMA_VERSION,
++        "deck_observation": DECK_OBSERVATION_SCHEMA_VERSION,
++        "knowledge_claim": KNOWLEDGE_CLAIM_SCHEMA_VERSION,
++        "intelligence_snapshot": INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION,
++    }}
++
++    config_ok = True
++    config_error: str | None = None
++    if args.config:
++        try:
++            load_config(args.config)
++        except (ConfigError, OSError, json.JSONDecodeError) as exc:
++            config_ok = False
++            config_error = str(exc)
++    report["config"] = {"checked": bool(args.config), "valid": config_ok, "error": config_error}
++
++    run_root = Path(args.run_root) if args.run_root else DEFAULT_RUN_ROOT
++    writable = False
++    write_error: str | None = None
++    try:
++        run_root.mkdir(parents=True, exist_ok=True)
++        probe = run_root / f".doctor-write-probe-{os.getpid()}.tmp"
++        probe.write_text("ok", encoding="utf-8")
++        probe.unlink()
++        writable = True
++    except OSError as exc:
++        write_error = str(exc)
++    report["run_root"] = {"path": str(run_root), "writable": writable, "error": write_error}
++
++    try:
++        import mage_ptcg.competition  # noqa: F401  (existing C2b package this sidecar extends)
++        competition_probe_importable = True
++    except ImportError:
++        competition_probe_importable = False
++    report["existing_competition_probe_importable"] = competition_probe_importable
++
++    main_source = _main_py_source()
++    report["runtime_isolation"] = {
++        "main_py_found": main_source is not None,
++        "main_py_references_competition_intelligence": (
++            "competition_intelligence" in main_source if main_source is not None else None
++        ),
++        "note": "static substring check only; see tests/test_competition_intelligence_runtime_isolation.py for the dynamic import-graph check",
++    }
++
++    protected_baseline_path = Path(args.protected_baseline) if args.protected_baseline else None
++    report["protected_files_baseline"] = {
++        "path": str(protected_baseline_path) if protected_baseline_path else None,
++        "present": protected_baseline_path.exists() if protected_baseline_path else False,
++    }
++
++    ok = config_ok and writable and not report["runtime_isolation"]["main_py_references_competition_intelligence"]
++    report["ok"] = bool(ok)
++    _emit(report)
++    return 0 if ok else 1
++
++
++def _cmd_ingest_local(args: argparse.Namespace) -> int:
++    allowed_uses = args.allowed_uses.split(",") if args.allowed_uses else None
++    try:
++        result = ingest_local_file(
++            args.run_dir,
++            args.input,
++            source_id=args.source_id,
++            source_kind=args.source_kind,
++            allowed_uses=allowed_uses,
++            owner_scope=args.owner_scope,
++            visibility=args.visibility,
++        )
++    except IngestError as exc:
++        raise CliError(str(exc)) from exc
++    _emit(result)
++    return 0 if result["status"] in ("ARCHIVED", "QUARANTINED") else 1
++
++
++def _cmd_rebuild_catalog(args: argparse.Namespace) -> int:
++    try:
++        result = catalog_module.rebuild_catalog(args.run_dir)
++    except catalog_module.CatalogError as exc:
++        raise CliError(str(exc)) from exc
++    _emit({"run_dir": args.run_dir, **result})
++    return 0
++
++
++def build_parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(prog="run_competition_intelligence", description=__doc__)
++    sub = parser.add_subparsers(dest="command", required=True)
++
++    doctor_p = sub.add_parser("doctor", help="check repo/runtime/config health without touching a run")
++    doctor_p.add_argument("--config", type=str, default=None)
++    doctor_p.add_argument("--run-root", type=str, default=None)
++    doctor_p.add_argument("--protected-baseline", type=str, default=None)
++    doctor_p.set_defaults(func=_cmd_doctor)
++
++    ingest_p = sub.add_parser("ingest-local", help="archive one local file as a provenance-tracked raw source")
++    ingest_p.add_argument("--run-dir", type=str, required=True)
++    ingest_p.add_argument("--input", type=str, required=True)
++    ingest_p.add_argument("--source-id", type=str, default=None)
++    ingest_p.add_argument("--source-kind", type=str, default="LOCAL_SELFPLAY")
++    ingest_p.add_argument("--allowed-uses", type=str, default=None, help="comma-separated AllowedUse names")
++    ingest_p.add_argument("--owner-scope", type=str, default="self")
++    ingest_p.add_argument("--visibility", type=str, default="private")
++    ingest_p.set_defaults(func=_cmd_ingest_local)
++
++    rebuild_p = sub.add_parser("rebuild-catalog", help="rebuild the non-canonical SQLite catalog from canonical artifacts")
++    rebuild_p.add_argument("--run-dir", type=str, required=True)
++    rebuild_p.set_defaults(func=_cmd_rebuild_catalog)
++
++    return parser
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = build_parser()
++    args = parser.parse_args(argv)
++    try:
++        return int(args.func(args))
++    except (CliError, RunStateError, ConfigError) as exc:
++        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
++        return 2
++
++
++__all__ = ["CliError", "build_parser", "main"]
+diff --git a/src/mage_ptcg/competition_intelligence/config.py b/src/mage_ptcg/competition_intelligence/config.py
+new file mode 100644
+index 0000000..fa11661
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/config.py
+@@ -0,0 +1,237 @@
++"""Configuration schema for the Competition Intelligence sidecar.
++
++Mirrors ``mage_ptcg.offline_training.config``'s conventions: a frozen
++dataclass tree, ``load_config()`` accepting either a JSON path or an
++in-memory mapping, and fail-closed rejection of unknown keys.
++``CompetitionIntelligenceConfig.__post_init__`` additionally rejects the
++specific dangerous settings the design marks as forbidden in v1
++(auto-promotion, auto-submission, training on default-deny PUBLIC_OTHER
++sources) — a config file cannot silently re-enable them.
++"""
++
++from __future__ import annotations
++
++from dataclasses import asdict, dataclass, field
++import json
++from pathlib import Path
++from typing import Any, Mapping
++
++from .canonical import digest
++
++CONFIG_SCHEMA_VERSION = "competition-intelligence-config-v1"
++
++
++class ConfigError(ValueError):
++    """Raised on an unknown key, wrong type, or a v1-forbidden dangerous setting."""
++
++
++def _reject_unknown_keys(data: Mapping[str, Any], allowed: set[str], *, section: str) -> None:
++    unknown = set(data) - allowed
++    if unknown:
++        raise ConfigError(f"unknown key(s) in {section}: {sorted(unknown)}")
++
++
++@dataclass(frozen=True, slots=True)
++class PermissionsConfig:
++    default_allowed_uses: tuple[str, ...] = ("ARCHIVE",)
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "PermissionsConfig":
++        _reject_unknown_keys(data, {"default_allowed_uses"}, section="permissions")
++        raw = data.get("default_allowed_uses", ["ARCHIVE"])
++        if not isinstance(raw, (list, tuple)) or not all(isinstance(item, str) for item in raw):
++            raise ConfigError("permissions.default_allowed_uses must be a list of strings")
++        return cls(default_allowed_uses=tuple(raw))
++
++
++@dataclass(frozen=True, slots=True)
++class ArchiveConfig:
++    content_addressed: bool = True
++    verify_hash_on_read: bool = True
++    atomic_write: bool = True
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "ArchiveConfig":
++        allowed = {"content_addressed", "verify_hash_on_read", "atomic_write"}
++        _reject_unknown_keys(data, allowed, section="archive")
++        return cls(**{key: bool(value) for key, value in data.items()})
++
++
++@dataclass(frozen=True, slots=True)
++class NormalizationConfig:
++    unknown_fields: str = "preserve"
++    strict_required_fields: bool = True
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "NormalizationConfig":
++        allowed = {"unknown_fields", "strict_required_fields"}
++        _reject_unknown_keys(data, allowed, section="normalization")
++        unknown_fields = data.get("unknown_fields", "preserve")
++        if unknown_fields not in ("preserve", "reject"):
++            raise ConfigError("normalization.unknown_fields must be 'preserve' or 'reject'")
++        strict = bool(data.get("strict_required_fields", True))
++        return cls(unknown_fields=unknown_fields, strict_required_fields=strict)
++
++
++@dataclass(frozen=True, slots=True)
++class AnalyticsConfig:
++    temporal_decay: float = 0.95
++    duplicate_discount: bool = True
++    minimum_cluster_support: int = 5
++    failure_hypothesis_threshold: float = 0.5
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "AnalyticsConfig":
++        allowed = {"temporal_decay", "duplicate_discount", "minimum_cluster_support", "failure_hypothesis_threshold"}
++        _reject_unknown_keys(data, allowed, section="analytics")
++        decay = float(data.get("temporal_decay", 0.95))
++        if not (0.0 < decay <= 1.0):
++            raise ConfigError("analytics.temporal_decay must be in (0, 1]")
++        support = int(data.get("minimum_cluster_support", 5))
++        if support < 1:
++            raise ConfigError("analytics.minimum_cluster_support must be >= 1")
++        threshold = float(data.get("failure_hypothesis_threshold", 0.5))
++        if not (0.0 <= threshold <= 1.0):
++            raise ConfigError("analytics.failure_hypothesis_threshold must be in [0, 1]")
++        return cls(
++            temporal_decay=decay,
++            duplicate_discount=bool(data.get("duplicate_discount", True)),
++            minimum_cluster_support=support,
++            failure_hypothesis_threshold=threshold,
++        )
++
++
++@dataclass(frozen=True, slots=True)
++class SnapshotsConfig:
++    require_cutoff: bool = True
++    enforce_allowed_use: bool = True
++    split_by_episode: bool = True
++    split_by_opponent: bool = True
++    temporal_holdout: bool = True
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "SnapshotsConfig":
++        allowed = {
++            "require_cutoff", "enforce_allowed_use", "split_by_episode", "split_by_opponent", "temporal_holdout",
++        }
++        _reject_unknown_keys(data, allowed, section="snapshots")
++        return cls(**{key: bool(value) for key, value in data.items()})
++
++
++@dataclass(frozen=True, slots=True)
++class ExternalConfig:
++    kaggle_live_enabled: bool = False
++    team_bundle_enabled: bool = True
++    public_other_training_enabled: bool = False
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "ExternalConfig":
++        allowed = {"kaggle_live_enabled", "team_bundle_enabled", "public_other_training_enabled"}
++        _reject_unknown_keys(data, allowed, section="external")
++        return cls(**{key: bool(value) for key, value in data.items()})
++
++
++@dataclass(frozen=True, slots=True)
++class AutomationConfig:
++    auto_promote: bool = False
++    auto_submit: bool = False
++
++    @classmethod
++    def from_mapping(cls, data: Mapping[str, Any]) -> "AutomationConfig":
++        allowed = {"auto_promote", "auto_submit"}
++        _reject_unknown_keys(data, allowed, section="automation")
++        return cls(**{key: bool(value) for key, value in data.items()})
++
++
++_TOP_LEVEL_KEYS = {
++    "schema_version", "run_root", "deterministic", "permissions", "archive",
++    "normalization", "analytics", "snapshots", "external", "automation",
++}
++
++
++@dataclass(frozen=True, slots=True)
++class CompetitionIntelligenceConfig:
++    schema_version: str = CONFIG_SCHEMA_VERSION
++    run_root: str = "runs/competition-intelligence"
++    deterministic: bool = True
++    permissions: PermissionsConfig = field(default_factory=PermissionsConfig)
++    archive: ArchiveConfig = field(default_factory=ArchiveConfig)
++    normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
++    analytics: AnalyticsConfig = field(default_factory=AnalyticsConfig)
++    snapshots: SnapshotsConfig = field(default_factory=SnapshotsConfig)
++    external: ExternalConfig = field(default_factory=ExternalConfig)
++    automation: AutomationConfig = field(default_factory=AutomationConfig)
++
++    def __post_init__(self) -> None:
++        if self.schema_version != CONFIG_SCHEMA_VERSION:
++            raise ConfigError(f"unsupported config schema_version {self.schema_version!r}")
++        if not self.run_root:
++            raise ConfigError("run_root must be a non-empty path")
++        if self.automation.auto_promote:
++            raise ConfigError(
++                "automation.auto_promote=true is forbidden in v1: Champion/default promotion must stay a human decision"
++            )
++        if self.automation.auto_submit:
++            raise ConfigError("automation.auto_submit=true is forbidden in v1: Kaggle submission must stay a human decision")
++        if self.external.public_other_training_enabled:
++            raise ConfigError(
++                "external.public_other_training_enabled=true is forbidden in v1: "
++                "PUBLIC_OTHER sources default-deny TRAINING regardless of this flag"
++            )
++
++    def content_hash(self) -> str:
++        return digest(asdict(self), domain="config")
++
++
++_SECTION_BUILDERS = {
++    "permissions": PermissionsConfig.from_mapping,
++    "archive": ArchiveConfig.from_mapping,
++    "normalization": NormalizationConfig.from_mapping,
++    "analytics": AnalyticsConfig.from_mapping,
++    "snapshots": SnapshotsConfig.from_mapping,
++    "external": ExternalConfig.from_mapping,
++    "automation": AutomationConfig.from_mapping,
++}
++
++
++def load_config(source: str | Path | Mapping[str, Any]) -> CompetitionIntelligenceConfig:
++    """Load a ``CompetitionIntelligenceConfig`` from a JSON path or a mapping.
++
++    Accepts either the bare config body, or a mapping with a top-level
++    ``competition_intelligence`` key wrapping it (matching the nested YAML
++    shape shown in the design doc); unknown keys at any level are rejected.
++    """
++    if isinstance(source, (str, Path)):
++        raw = json.loads(Path(source).read_text(encoding="utf-8"))
++    else:
++        raw = source
++    if not isinstance(raw, Mapping):
++        raise ConfigError("config source must be a JSON object or a mapping")
++    body = raw["competition_intelligence"] if "competition_intelligence" in raw and len(raw) == 1 else raw
++    if not isinstance(body, Mapping):
++        raise ConfigError("competition_intelligence config body must be a mapping")
++    _reject_unknown_keys(body, _TOP_LEVEL_KEYS, section="competition_intelligence")
++    sections = {
++        name: builder(body.get(name, {})) for name, builder in _SECTION_BUILDERS.items()
++    }
++    return CompetitionIntelligenceConfig(
++        schema_version=body.get("schema_version", CONFIG_SCHEMA_VERSION),
++        run_root=body.get("run_root", "runs/competition-intelligence"),
++        deterministic=bool(body.get("deterministic", True)),
++        **sections,
++    )
++
++
++__all__ = [
++    "CONFIG_SCHEMA_VERSION",
++    "AnalyticsConfig",
++    "ArchiveConfig",
++    "AutomationConfig",
++    "CompetitionIntelligenceConfig",
++    "ConfigError",
++    "ExternalConfig",
++    "NormalizationConfig",
++    "PermissionsConfig",
++    "SnapshotsConfig",
++    "load_config",
++]
+diff --git a/src/mage_ptcg/competition_intelligence/contracts.py b/src/mage_ptcg/competition_intelligence/contracts.py
+new file mode 100644
+index 0000000..a50b458
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/contracts.py
+@@ -0,0 +1,766 @@
++"""Frozen, schema-versioned data contracts for the Competition Intelligence sidecar.
++
++These are the canonical records described in the O1 Competition Intelligence
++design (``docs/plan/design/04_kaggle_competition_intelligence_and_joint_optimization_plan.md``):
++``SourceEnvelope``, ``EpisodeRecord``, ``DecisionRecord``, ``DeckObservation``,
++``KnowledgeClaim`` and ``IntelligenceSnapshot``. Every record type is a frozen
++dataclass that validates itself in ``__post_init__`` (matching the existing
++``mage_ptcg.knowledge.model.KnowledgePack`` style: fail fast on construction,
++no lazy/implicit coercion).
++
++Observed vs. inferred data is kept in separate fields/types throughout
++(``DeckObservation.observed_card_counts`` vs. ``inferred_card_distribution``);
++nothing here promotes an inference to ground truth.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from datetime import datetime
++from enum import Enum
++import math
++from typing import Mapping, Sequence
++
++from .canonical import CanonicalizationError, canonical_json_bytes, digest
++
++
++class ContractError(ValueError):
++    """Raised when a Competition Intelligence record violates its schema contract."""
++
++
++# --------------------------------------------------------------------------- #
++# Enumerations
++# --------------------------------------------------------------------------- #
++
++
++class SourceKind(str, Enum):
++    LOCAL_SELFPLAY = "LOCAL_SELFPLAY"
++    OWN_KAGGLE = "OWN_KAGGLE"
++    TEAM_SHARED = "TEAM_SHARED"
++    PUBLIC_OTHER = "PUBLIC_OTHER"
++    HUMAN_TEXT = "HUMAN_TEXT"
++
++
++class AcquisitionMode(str, Enum):
++    FULL_REPLAY = "FULL_REPLAY"
++    REPLAY_WITHOUT_LEGAL_OPTIONS = "REPLAY_WITHOUT_LEGAL_OPTIONS"
++    PUBLIC_ARTIFACTS_ONLY = "PUBLIC_ARTIFACTS_ONLY"
++    LOCAL_ONLY = "LOCAL_ONLY"
++
++
++class AllowedUse(str, Enum):
++    ARCHIVE = "ARCHIVE"
++    ANALYSIS = "ANALYSIS"
++    TRAINING = "TRAINING"
++    REPORTING = "REPORTING"
++    REDISTRIBUTION = "REDISTRIBUTION"
++
++
++class ClaimStatus(str, Enum):
++    RAW = "RAW"
++    PARSED = "PARSED"
++    HYPOTHESIS = "HYPOTHESIS"
++    SUPPORTED = "SUPPORTED"
++    REJECTED = "REJECTED"
++    INCONCLUSIVE = "INCONCLUSIVE"
++    DEPRECATED = "DEPRECATED"
++
++
++class EvidenceGrade(str, Enum):
++    E0_UNVALIDATED = "E0_UNVALIDATED"
++    E1_ANECDOTAL = "E1_ANECDOTAL"
++    E2_REPEATED_OBSERVATION = "E2_REPEATED_OBSERVATION"
++    E3_CONTROLLED_LOCAL_EVIDENCE = "E3_CONTROLLED_LOCAL_EVIDENCE"
++    E4_STRONG_EMPIRICAL_EVIDENCE = "E4_STRONG_EMPIRICAL_EVIDENCE"
++
++
++_EVIDENCE_ORDER: dict[EvidenceGrade, int] = {
++    EvidenceGrade.E0_UNVALIDATED: 0,
++    EvidenceGrade.E1_ANECDOTAL: 1,
++    EvidenceGrade.E2_REPEATED_OBSERVATION: 2,
++    EvidenceGrade.E3_CONTROLLED_LOCAL_EVIDENCE: 3,
++    EvidenceGrade.E4_STRONG_EMPIRICAL_EVIDENCE: 4,
++}
++
++MINIMUM_EVIDENCE_FOR_SUPPORTED = EvidenceGrade.E3_CONTROLLED_LOCAL_EVIDENCE
++
++# Terminal states (REJECTED, DEPRECATED) are never reopened in place; a
++# superseding claim references the old one via ``contradicting_claims``
++# instead, so lineage is preserved through claim identity, not by mutating a
++# closed claim back open.
++_ALLOWED_TRANSITIONS: dict[ClaimStatus, frozenset[ClaimStatus]] = {
++    ClaimStatus.RAW: frozenset({ClaimStatus.PARSED, ClaimStatus.REJECTED}),
++    ClaimStatus.PARSED: frozenset({ClaimStatus.HYPOTHESIS, ClaimStatus.REJECTED}),
++    ClaimStatus.HYPOTHESIS: frozenset(
++        {ClaimStatus.SUPPORTED, ClaimStatus.INCONCLUSIVE, ClaimStatus.REJECTED, ClaimStatus.DEPRECATED}
++    ),
++    ClaimStatus.SUPPORTED: frozenset({ClaimStatus.DEPRECATED, ClaimStatus.REJECTED}),
++    ClaimStatus.INCONCLUSIVE: frozenset(
++        {ClaimStatus.HYPOTHESIS, ClaimStatus.SUPPORTED, ClaimStatus.REJECTED, ClaimStatus.DEPRECATED}
++    ),
++    ClaimStatus.REJECTED: frozenset(),
++    ClaimStatus.DEPRECATED: frozenset(),
++}
++
++
++def validate_claim_transition(old: ClaimStatus, new: ClaimStatus, *, evidence_grade: EvidenceGrade) -> None:
++    """Raise ``ContractError`` unless ``old -> new`` is a legal lifecycle move.
++
++    Enforces the two hard rules from the design: no status may skip straight
++    to ``SUPPORTED`` without at least ``E3_CONTROLLED_LOCAL_EVIDENCE``, and
++    ``E0``/``E1`` evidence can never authorize a rule-output-eligible status.
++    """
++    if old == new:
++        return
++    allowed = _ALLOWED_TRANSITIONS.get(old, frozenset())
++    if new not in allowed:
++        raise ContractError(f"illegal Knowledge Claim transition {old.value} -> {new.value}")
++    if new == ClaimStatus.SUPPORTED and _EVIDENCE_ORDER[evidence_grade] < _EVIDENCE_ORDER[MINIMUM_EVIDENCE_FOR_SUPPORTED]:
++        raise ContractError(
++            f"cannot transition to SUPPORTED with evidence_grade={evidence_grade.value}; "
++            f"minimum is {MINIMUM_EVIDENCE_FOR_SUPPORTED.value}"
++        )
++
++
++# --------------------------------------------------------------------------- #
++# Shared validation helpers
++# --------------------------------------------------------------------------- #
++
++
++def _require_nonempty_str(value: object, field_name: str) -> str:
++    if not isinstance(value, str) or not value:
++        raise ContractError(f"{field_name} must be a non-empty string")
++    return value
++
++
++def _require_iso8601_tz(value: object, field_name: str) -> str:
++    text = _require_nonempty_str(value, field_name)
++    try:
++        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
++    except ValueError as exc:
++        raise ContractError(f"{field_name} is not a valid ISO-8601 timestamp: {text!r}") from exc
++    if parsed.tzinfo is None:
++        raise ContractError(f"{field_name} must include a timezone offset: {text!r}")
++    return text
++
++
++def _require_probability(value: object, field_name: str) -> float:
++    if not isinstance(value, (int, float)) or isinstance(value, bool):
++        raise ContractError(f"{field_name} must be numeric")
++    number = float(value)
++    if not math.isfinite(number):
++        raise ContractError(f"{field_name} must be finite")
++    if not (0.0 <= number <= 1.0):
++        raise ContractError(f"{field_name} must be within [0, 1], got {number}")
++    return number
++
++
++def _require_nonnegative_int(value: object, field_name: str) -> int:
++    if isinstance(value, bool) or not isinstance(value, int):
++        raise ContractError(f"{field_name} must be an int")
++    if value < 0:
++        raise ContractError(f"{field_name} must be >= 0")
++    return value
++
++
++def _require_sha256_hex(value: object, field_name: str) -> str:
++    text = _require_nonempty_str(value, field_name)
++    if len(text) != 64 or any(char not in "0123456789abcdef" for char in text.lower()):
++        raise ContractError(f"{field_name} must be a 64-hex-char sha256 digest")
++    return text.lower()
++
++
++def _require_posterior_mapping(
++    value: object, field_name: str, *, allow_partial_mass: bool = True, key_type: type = str
++) -> Mapping[object, float]:
++    if not isinstance(value, Mapping):
++        raise ContractError(f"{field_name} must be a mapping")
++    total = 0.0
++    for key, raw in value.items():
++        if not isinstance(key, key_type) or (key_type is int and isinstance(key, bool)):
++            raise ContractError(f"{field_name} keys must be {key_type.__name__}")
++        if not isinstance(raw, (int, float)) or isinstance(raw, bool):
++            raise ContractError(f"{field_name}[{key!r}] must be numeric")
++        number = float(raw)
++        if not math.isfinite(number):
++            raise ContractError(f"{field_name}[{key!r}] must be finite")
++        if number < 0.0:
++            raise ContractError(f"{field_name}[{key!r}] must be non-negative")
++        total += number
++    if allow_partial_mass:
++        if total > 1.0 + 1e-6:
++            raise ContractError(f"{field_name} probabilities sum to {total} > 1.0")
++    else:
++        if abs(total - 1.0) > 1e-6 and value:
++            raise ContractError(f"{field_name} probabilities must sum to 1.0, got {total}")
++    return dict(value)
++
++
++# --------------------------------------------------------------------------- #
++# SourceEnvelope
++# --------------------------------------------------------------------------- #
++
++SOURCE_ENVELOPE_SCHEMA_VERSION = "source-envelope-v1"
++
++
++@dataclass(frozen=True, slots=True)
++class SourceEnvelope:
++    schema_version: str
++    source_id: str
++    source_kind: SourceKind
++    acquisition_mode: AcquisitionMode
++    acquired_at: str
++    observed_at: str | None
++    origin_reference: str
++    owner_scope: str
++    visibility: str
++    allowed_uses: frozenset[AllowedUse]
++    terms_snapshot_hash: str | None
++    raw_sha256: str
++    parser_version: str
++    redaction_version: str
++    metadata: Mapping[str, object] = field(default_factory=dict)
++
++    def __post_init__(self) -> None:
++        if self.schema_version != SOURCE_ENVELOPE_SCHEMA_VERSION:
++            raise ContractError(f"unsupported SourceEnvelope schema_version {self.schema_version!r}")
++        _require_nonempty_str(self.source_id, "source_id")
++        if not isinstance(self.source_kind, SourceKind):
++            raise ContractError("source_kind must be a SourceKind")
++        if not isinstance(self.acquisition_mode, AcquisitionMode):
++            raise ContractError("acquisition_mode must be an AcquisitionMode")
++        _require_iso8601_tz(self.acquired_at, "acquired_at")
++        if self.observed_at is not None:
++            _require_iso8601_tz(self.observed_at, "observed_at")
++        _require_nonempty_str(self.origin_reference, "origin_reference")
++        _require_nonempty_str(self.owner_scope, "owner_scope")
++        _require_nonempty_str(self.visibility, "visibility")
++        if not isinstance(self.allowed_uses, frozenset):
++            raise ContractError("allowed_uses must be a frozenset[AllowedUse]")
++        for use in self.allowed_uses:
++            if not isinstance(use, AllowedUse):
++                raise ContractError("allowed_uses must only contain AllowedUse members")
++        if self.terms_snapshot_hash is not None:
++            _require_sha256_hex(self.terms_snapshot_hash, "terms_snapshot_hash")
++        _require_sha256_hex(self.raw_sha256, "raw_sha256")
++        _require_nonempty_str(self.parser_version, "parser_version")
++        _require_nonempty_str(self.redaction_version, "redaction_version")
++        if not isinstance(self.metadata, Mapping):
++            raise ContractError("metadata must be a mapping")
++        if self.source_kind == SourceKind.PUBLIC_OTHER:
++            # Hard, unconditional denial (not just a default): TRAINING and
++            # REDISTRIBUTION are never permitted for PUBLIC_OTHER, regardless
++            # of what any manifest or CLI flag claims. ARCHIVE/ANALYSIS/
++            # REPORTING may still be granted when a manifest says so.
++            forbidden = {AllowedUse.TRAINING, AllowedUse.REDISTRIBUTION} & self.allowed_uses
++            if forbidden:
++                raise ContractError(
++                    f"PUBLIC_OTHER sources can never grant {sorted(use.value for use in forbidden)}; "
++                    "this is an unconditional denial, not a default that can be overridden"
++                )
++
++    def content_payload(self) -> dict[str, object]:
++        return {
++            "schema_version": self.schema_version,
++            "source_id": self.source_id,
++            "source_kind": self.source_kind.value,
++            "acquisition_mode": self.acquisition_mode.value,
++            "acquired_at": self.acquired_at,
++            "observed_at": self.observed_at,
++            "origin_reference": self.origin_reference,
++            "owner_scope": self.owner_scope,
++            "visibility": self.visibility,
++            "allowed_uses": sorted(use.value for use in self.allowed_uses),
++            "terms_snapshot_hash": self.terms_snapshot_hash,
++            "raw_sha256": self.raw_sha256,
++            "parser_version": self.parser_version,
++            "redaction_version": self.redaction_version,
++            "metadata": dict(self.metadata),
++        }
++
++    def content_hash(self) -> str:
++        return digest(self.content_payload(), domain="source-envelope")
++
++
++# --------------------------------------------------------------------------- #
++# EpisodeRecord
++# --------------------------------------------------------------------------- #
++
++EPISODE_RECORD_SCHEMA_VERSION = "episode-record-v1"
++
++
++@dataclass(frozen=True, slots=True)
++class EpisodeRecord:
++    schema_version: str
++    episode_id: str
++    source_id: str
++    competition_id: str | None
++    played_at: str | None
++    engine_version: str | None
++    agent_a: str | None
++    agent_b: str | None
++    deck_a_reference: str | None
++    deck_b_reference: str | None
++    first_player: int | None
++    winner: int | None
++    termination_reason: str | None
++    turn_count: int
++    decision_count: int
++    public_trace_hash: str | None
++    quality_flags: frozenset[str] = field(default_factory=frozenset)
++
++    def __post_init__(self) -> None:
++        if self.schema_version != EPISODE_RECORD_SCHEMA_VERSION:
++            raise ContractError(f"unsupported EpisodeRecord schema_version {self.schema_version!r}")
++        _require_nonempty_str(self.episode_id, "episode_id")
++        _require_nonempty_str(self.source_id, "source_id")
++        if self.played_at is not None:
++            _require_iso8601_tz(self.played_at, "played_at")
++        if self.first_player is not None and self.first_player not in (0, 1):
++            raise ContractError("first_player must be 0, 1, or None")
++        if self.winner is not None and self.winner not in (0, 1):
++            raise ContractError("winner must be 0, 1, or None")
++        _require_nonnegative_int(self.turn_count, "turn_count")
++        _require_nonnegative_int(self.decision_count, "decision_count")
++        if not isinstance(self.quality_flags, frozenset):
++            raise ContractError("quality_flags must be a frozenset[str]")
++
++    def content_payload(self) -> dict[str, object]:
++        return {
++            "schema_version": self.schema_version,
++            "episode_id": self.episode_id,
++            "source_id": self.source_id,
++            "competition_id": self.competition_id,
++            "played_at": self.played_at,
++            "engine_version": self.engine_version,
++            "agent_a": self.agent_a,
++            "agent_b": self.agent_b,
++            "deck_a_reference": self.deck_a_reference,
++            "deck_b_reference": self.deck_b_reference,
++            "first_player": self.first_player,
++            "winner": self.winner,
++            "termination_reason": self.termination_reason,
++            "turn_count": self.turn_count,
++            "decision_count": self.decision_count,
++            "public_trace_hash": self.public_trace_hash,
++            "quality_flags": sorted(self.quality_flags),
++        }
++
++    def content_hash(self) -> str:
++        return digest(self.content_payload(), domain="episode-record")
++
++
++# --------------------------------------------------------------------------- #
++# DecisionRecord
++# --------------------------------------------------------------------------- #
++
++DECISION_RECORD_SCHEMA_VERSION = "decision-record-v1"
++
++_MISSING = object()
++
++
++@dataclass(frozen=True, slots=True)
++class DecisionRecord:
++    schema_version: str
++    episode_id: str
++    decision_index: int
++    actor_seat: int
++    turn_index: int
++    phase: str
++    actor_information_view: Mapping[str, object] | None
++    legal_action_keys: tuple[str, ...] | None
++    chosen_action_key: str | None
++    chosen_action_raw: Mapping[str, object] | None
++    public_cards_seen: tuple[int, ...]
++    board_summary: Mapping[str, object] | None
++    latency_us: int | None
++    fallback_used: bool
++    result_to_go: float | None
++    source_quality: str
++
++    def __post_init__(self) -> None:
++        if self.schema_version != DECISION_RECORD_SCHEMA_VERSION:
++            raise ContractError(f"unsupported DecisionRecord schema_version {self.schema_version!r}")
++        _require_nonempty_str(self.episode_id, "episode_id")
++        _require_nonnegative_int(self.decision_index, "decision_index")
++        if self.actor_seat not in (0, 1):
++            raise ContractError("actor_seat must be 0 or 1")
++        _require_nonnegative_int(self.turn_index, "turn_index")
++        _require_nonempty_str(self.phase, "phase")
++        if self.legal_action_keys is not None and not isinstance(self.legal_action_keys, tuple):
++            raise ContractError("legal_action_keys must be a tuple[str, ...] or None (null != [])")
++        if self.latency_us is not None:
++            _require_nonnegative_int(self.latency_us, "latency_us")
++        if self.result_to_go is not None:
++            if not isinstance(self.result_to_go, (int, float)) or isinstance(self.result_to_go, bool):
++                raise ContractError("result_to_go must be numeric or None")
++            if not math.isfinite(float(self.result_to_go)):
++                raise ContractError("result_to_go must be finite")
++        if not isinstance(self.fallback_used, bool):
++            raise ContractError("fallback_used must be a bool")
++        _require_nonempty_str(self.source_quality, "source_quality")
++        if not isinstance(self.public_cards_seen, tuple):
++            raise ContractError("public_cards_seen must be a tuple[int, ...]")
++
++    def content_payload(self) -> dict[str, object]:
++        return {
++            "schema_version": self.schema_version,
++            "episode_id": self.episode_id,
++            "decision_index": self.decision_index,
++            "actor_seat": self.actor_seat,
++            "turn_index": self.turn_index,
++            "phase": self.phase,
++            "actor_information_view": dict(self.actor_information_view) if self.actor_information_view else None,
++            "legal_action_keys": list(self.legal_action_keys) if self.legal_action_keys is not None else None,
++            "chosen_action_key": self.chosen_action_key,
++            "chosen_action_raw": dict(self.chosen_action_raw) if self.chosen_action_raw else None,
++            "public_cards_seen": list(self.public_cards_seen),
++            "board_summary": dict(self.board_summary) if self.board_summary else None,
++            "latency_us": self.latency_us,
++            "fallback_used": self.fallback_used,
++            "result_to_go": self.result_to_go,
++            "source_quality": self.source_quality,
++        }
++
++    def content_hash(self) -> str:
++        return digest(self.content_payload(), domain="decision-record")
++
++
++# --------------------------------------------------------------------------- #
++# DeckObservation
++# --------------------------------------------------------------------------- #
++
++DECK_OBSERVATION_SCHEMA_VERSION = "deck-observation-v1"
++_DECK_SIZE_LIMIT = 60
++
++
++@dataclass(frozen=True, slots=True)
++class DeckObservation:
++    schema_version: str
++    episode_id: str
++    seat: int
++    exact_decklist: Mapping[int, int] | None
++    exact_decklist_source: str | None
++    observed_card_counts: Mapping[int, int]
++    inferred_archetypes: Mapping[str, float]
++    inferred_card_distribution: Mapping[int, float]
++    inference_model_version: str | None
++    confidence: float
++
++    def __post_init__(self) -> None:
++        if self.schema_version != DECK_OBSERVATION_SCHEMA_VERSION:
++            raise ContractError(f"unsupported DeckObservation schema_version {self.schema_version!r}")
++        _require_nonempty_str(self.episode_id, "episode_id")
++        if self.seat not in (0, 1):
++            raise ContractError("seat must be 0 or 1")
++        if not isinstance(self.observed_card_counts, Mapping):
++            raise ContractError("observed_card_counts must be a mapping")
++        observed_total = 0
++        for card_id, count in self.observed_card_counts.items():
++            if not isinstance(card_id, int) or isinstance(card_id, bool):
++                raise ContractError("observed_card_counts keys must be int card ids")
++            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
++                raise ContractError(f"observed_card_counts[{card_id}] must be a non-negative int")
++            observed_total += count
++        if observed_total > _DECK_SIZE_LIMIT:
++            raise ContractError(f"observed_card_counts total {observed_total} exceeds deck size limit {_DECK_SIZE_LIMIT}")
++        if self.exact_decklist is not None:
++            if not isinstance(self.exact_decklist, Mapping):
++                raise ContractError("exact_decklist must be a mapping or None")
++            exact_total = 0
++            for card_id, count in self.exact_decklist.items():
++                if not isinstance(card_id, int) or isinstance(card_id, bool):
++                    raise ContractError("exact_decklist keys must be int card ids")
++                if not isinstance(count, int) or isinstance(count, bool) or count < 0:
++                    raise ContractError(f"exact_decklist[{card_id}] must be a non-negative int")
++                exact_total += count
++            if exact_total != _DECK_SIZE_LIMIT:
++                raise ContractError(f"exact_decklist must total exactly {_DECK_SIZE_LIMIT} cards, got {exact_total}")
++            for card_id, observed_count in self.observed_card_counts.items():
++                known_count = self.exact_decklist.get(card_id, 0)
++                if observed_count > known_count:
++                    raise ContractError(
++                        f"observed_card_counts[{card_id}]={observed_count} exceeds exact_decklist count {known_count}"
++                    )
++        _require_posterior_mapping(self.inferred_archetypes, "inferred_archetypes", allow_partial_mass=True, key_type=str)
++        _require_posterior_mapping(
++            self.inferred_card_distribution, "inferred_card_distribution", allow_partial_mass=True, key_type=int
++        )
++        _require_probability(self.confidence, "confidence")
++
++    def content_payload(self) -> dict[str, object]:
++        return {
++            "schema_version": self.schema_version,
++            "episode_id": self.episode_id,
++            "seat": self.seat,
++            "exact_decklist": (
++                {str(k): v for k, v in sorted(self.exact_decklist.items())} if self.exact_decklist is not None else None
++            ),
++            "exact_decklist_source": self.exact_decklist_source,
++            "observed_card_counts": {str(k): v for k, v in sorted(self.observed_card_counts.items())},
++            "inferred_archetypes": dict(sorted(self.inferred_archetypes.items())),
++            "inferred_card_distribution": {str(k): v for k, v in sorted(self.inferred_card_distribution.items())},
++            "inference_model_version": self.inference_model_version,
++            "confidence": self.confidence,
++        }
++
++    def content_hash(self) -> str:
++        return digest(self.content_payload(), domain="deck-observation")
++
++
++# --------------------------------------------------------------------------- #
++# KnowledgeClaim
++# --------------------------------------------------------------------------- #
++
++KNOWLEDGE_CLAIM_SCHEMA_VERSION = "knowledge-claim-v1"
++
++
++@dataclass(frozen=True, slots=True)
++class KnowledgeClaim:
++    schema_version: str
++    claim_id: str
++    raw_source_id: str
++    claim_type: str
++    scope: Mapping[str, object]
++    preconditions: tuple[str, ...]
++    recommendation: str
++    expected_effect: str | None
++    evidence_grade: EvidenceGrade
++    status: ClaimStatus
++    validity: float
++    support: float
++    freshness: float
++    supporting_artifacts: tuple[str, ...]
++    contradicting_claims: tuple[str, ...]
++    created_at: str
++    updated_at: str
++
++    def __post_init__(self) -> None:
++        if self.schema_version != KNOWLEDGE_CLAIM_SCHEMA_VERSION:
++            raise ContractError(f"unsupported KnowledgeClaim schema_version {self.schema_version!r}")
++        _require_nonempty_str(self.claim_id, "claim_id")
++        _require_nonempty_str(self.raw_source_id, "raw_source_id")
++        _require_nonempty_str(self.claim_type, "claim_type")
++        if not isinstance(self.scope, Mapping):
++            raise ContractError("scope must be a mapping")
++        if not isinstance(self.preconditions, tuple):
++            raise ContractError("preconditions must be a tuple[str, ...]")
++        _require_nonempty_str(self.recommendation, "recommendation")
++        if not isinstance(self.evidence_grade, EvidenceGrade):
++            raise ContractError("evidence_grade must be an EvidenceGrade")
++        if not isinstance(self.status, ClaimStatus):
++            raise ContractError("status must be a ClaimStatus")
++        if self.status == ClaimStatus.SUPPORTED and _EVIDENCE_ORDER[self.evidence_grade] < _EVIDENCE_ORDER[MINIMUM_EVIDENCE_FOR_SUPPORTED]:
++            raise ContractError(
++                f"status=SUPPORTED requires evidence_grade >= {MINIMUM_EVIDENCE_FOR_SUPPORTED.value}, "
++                f"got {self.evidence_grade.value}"
++            )
++        _require_probability(self.validity, "validity")
++        _require_probability(self.support, "support")
++        _require_probability(self.freshness, "freshness")
++        if not isinstance(self.supporting_artifacts, tuple):
++            raise ContractError("supporting_artifacts must be a tuple[str, ...]")
++        if not isinstance(self.contradicting_claims, tuple):
++            raise ContractError("contradicting_claims must be a tuple[str, ...]")
++        _require_iso8601_tz(self.created_at, "created_at")
++        _require_iso8601_tz(self.updated_at, "updated_at")
++
++    def content_payload(self) -> dict[str, object]:
++        return {
++            "schema_version": self.schema_version,
++            "claim_id": self.claim_id,
++            "raw_source_id": self.raw_source_id,
++            "claim_type": self.claim_type,
++            "scope": dict(self.scope),
++            "preconditions": list(self.preconditions),
++            "recommendation": self.recommendation,
++            "expected_effect": self.expected_effect,
++            "evidence_grade": self.evidence_grade.value,
++            "status": self.status.value,
++            "validity": self.validity,
++            "support": self.support,
++            "freshness": self.freshness,
++            "supporting_artifacts": list(self.supporting_artifacts),
++            "contradicting_claims": list(self.contradicting_claims),
++            "created_at": self.created_at,
++            "updated_at": self.updated_at,
++        }
++
++    def content_hash(self) -> str:
++        return digest(self.content_payload(), domain="knowledge-claim")
++
++    def with_transition(self, new_status: ClaimStatus, *, updated_at: str) -> "KnowledgeClaim":
++        """Return a new claim with ``status`` advanced, after validating the move.
++
++        Claims are immutable; a lifecycle transition produces a new object
++        rather than mutating this one in place.
++        """
++        validate_claim_transition(self.status, new_status, evidence_grade=self.evidence_grade)
++        return KnowledgeClaim(
++            schema_version=self.schema_version,
++            claim_id=self.claim_id,
++            raw_source_id=self.raw_source_id,
++            claim_type=self.claim_type,
++            scope=self.scope,
++            preconditions=self.preconditions,
++            recommendation=self.recommendation,
++            expected_effect=self.expected_effect,
++            evidence_grade=self.evidence_grade,
++            status=new_status,
++            validity=self.validity,
++            support=self.support,
++            freshness=self.freshness,
++            supporting_artifacts=self.supporting_artifacts,
++            contradicting_claims=self.contradicting_claims,
++            created_at=self.created_at,
++            updated_at=updated_at,
++        )
++
++
++# --------------------------------------------------------------------------- #
++# IntelligenceSnapshot
++# --------------------------------------------------------------------------- #
++
++INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION = "intelligence-snapshot-v1"
++_SNAPSHOT_ID_HASH_LENGTH = 20
++
++
++@dataclass(frozen=True, slots=True)
++class IntelligenceSnapshot:
++    """Self-verifying immutable snapshot: ``snapshot_sha256`` must match the
++    content hash of every other field, and ``snapshot_id`` is derived from
++    that hash — this mirrors ``mage_ptcg.knowledge.model.KnowledgePack``'s
++    content-derived identity, so two snapshots built from identical inputs,
++    config, and code always get the same id and hash, and any post-hoc edit
++    is detectable by recomputing the hash.
++    """
++
++    schema_version: str
++    snapshot_id: str
++    created_at: str
++    cutoff_time: str
++    base_commit: str
++    input_source_ids: tuple[str, ...]
++    input_hashes: tuple[str, ...]
++    normalizer_versions: Mapping[str, str]
++    analysis_versions: Mapping[str, str]
++    knowledge_snapshot_hash: str | None
++    meta_snapshot_hash: str | None
++    selection_policy: str
++    source_weights: Mapping[str, float]
++    split_policy: str
++    excluded_records: tuple[str, ...]
++    episode_count: int
++    decision_count: int
++    snapshot_sha256: str
++
++    def __post_init__(self) -> None:
++        if self.schema_version != INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION:
++            raise ContractError(f"unsupported IntelligenceSnapshot schema_version {self.schema_version!r}")
++        _require_iso8601_tz(self.created_at, "created_at")
++        _require_iso8601_tz(self.cutoff_time, "cutoff_time")
++        _require_nonempty_str(self.base_commit, "base_commit")
++        if not isinstance(self.input_source_ids, tuple):
++            raise ContractError("input_source_ids must be a tuple[str, ...]")
++        if not isinstance(self.input_hashes, tuple):
++            raise ContractError("input_hashes must be a tuple[str, ...]")
++        if len(self.input_source_ids) != len(self.input_hashes):
++            raise ContractError("input_source_ids and input_hashes must be parallel (same length)")
++        _require_nonnegative_int(self.episode_count, "episode_count")
++        _require_nonnegative_int(self.decision_count, "decision_count")
++        expected_hash = digest(self.content_payload(), domain="intelligence-snapshot")
++        if self.snapshot_sha256 != expected_hash:
++            raise ContractError(
++                f"snapshot_sha256 mismatch: recomputed {expected_hash} but got {self.snapshot_sha256}; "
++                "an IntelligenceSnapshot's fields must never be edited after construction"
++            )
++        expected_id = f"intelligence-snapshot-{expected_hash[:_SNAPSHOT_ID_HASH_LENGTH]}"
++        if self.snapshot_id != expected_id:
++            raise ContractError(f"snapshot_id must be content-derived: expected {expected_id!r}, got {self.snapshot_id!r}")
++
++    def content_payload(self) -> dict[str, object]:
++        return {
++            "schema_version": self.schema_version,
++            "created_at": self.created_at,
++            "cutoff_time": self.cutoff_time,
++            "base_commit": self.base_commit,
++            "input_source_ids": list(self.input_source_ids),
++            "input_hashes": list(self.input_hashes),
++            "normalizer_versions": dict(sorted(self.normalizer_versions.items())),
++            "analysis_versions": dict(sorted(self.analysis_versions.items())),
++            "knowledge_snapshot_hash": self.knowledge_snapshot_hash,
++            "meta_snapshot_hash": self.meta_snapshot_hash,
++            "selection_policy": self.selection_policy,
++            "source_weights": dict(sorted(self.source_weights.items())),
++            "split_policy": self.split_policy,
++            "excluded_records": sorted(self.excluded_records),
++            "episode_count": self.episode_count,
++            "decision_count": self.decision_count,
++        }
++
++
++def build_intelligence_snapshot(**fields: object) -> IntelligenceSnapshot:
++    """Construct an ``IntelligenceSnapshot`` by computing its own hash/id.
++
++    Callers pass every field except ``snapshot_id``/``snapshot_sha256``; this
++    computes both from the rest so a snapshot can never be built with a
++    caller-chosen (and therefore possibly stale or tampered) hash.
++    """
++    if "snapshot_id" in fields or "snapshot_sha256" in fields:
++        raise ContractError("snapshot_id and snapshot_sha256 are derived; do not pass them explicitly")
++    # The payload/hash is computed by hand (not via a placeholder instance)
++    # because constructing an IntelligenceSnapshot with a wrong hash/id would
++    # immediately fail its own __post_init__ self-check.
++    payload_fields = dict(fields)
++    payload_fields["schema_version"] = INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION
++    content_payload = {
++        "schema_version": INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION,
++        "created_at": payload_fields["created_at"],
++        "cutoff_time": payload_fields["cutoff_time"],
++        "base_commit": payload_fields["base_commit"],
++        "input_source_ids": list(payload_fields["input_source_ids"]),
++        "input_hashes": list(payload_fields["input_hashes"]),
++        "normalizer_versions": dict(sorted(dict(payload_fields["normalizer_versions"]).items())),
++        "analysis_versions": dict(sorted(dict(payload_fields["analysis_versions"]).items())),
++        "knowledge_snapshot_hash": payload_fields["knowledge_snapshot_hash"],
++        "meta_snapshot_hash": payload_fields["meta_snapshot_hash"],
++        "selection_policy": payload_fields["selection_policy"],
++        "source_weights": dict(sorted(dict(payload_fields["source_weights"]).items())),
++        "split_policy": payload_fields["split_policy"],
++        "excluded_records": sorted(payload_fields["excluded_records"]),
++        "episode_count": payload_fields["episode_count"],
++        "decision_count": payload_fields["decision_count"],
++    }
++    snapshot_hash = digest(content_payload, domain="intelligence-snapshot")
++    snapshot_id = f"intelligence-snapshot-{snapshot_hash[:_SNAPSHOT_ID_HASH_LENGTH]}"
++    return IntelligenceSnapshot(
++        schema_version=INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION,
++        snapshot_id=snapshot_id,
++        snapshot_sha256=snapshot_hash,
++        **fields,  # type: ignore[arg-type]
++    )
++
++
++__all__ = [
++    "AcquisitionMode",
++    "AllowedUse",
++    "ClaimStatus",
++    "ContractError",
++    "DECISION_RECORD_SCHEMA_VERSION",
++    "DECK_OBSERVATION_SCHEMA_VERSION",
++    "DecisionRecord",
++    "DeckObservation",
++    "EPISODE_RECORD_SCHEMA_VERSION",
++    "EpisodeRecord",
++    "EvidenceGrade",
++    "INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION",
++    "IntelligenceSnapshot",
++    "KNOWLEDGE_CLAIM_SCHEMA_VERSION",
++    "KnowledgeClaim",
++    "MINIMUM_EVIDENCE_FOR_SUPPORTED",
++    "SOURCE_ENVELOPE_SCHEMA_VERSION",
++    "SourceEnvelope",
++    "SourceKind",
++    "build_intelligence_snapshot",
++    "validate_claim_transition",
++]
+diff --git a/src/mage_ptcg/competition_intelligence/local_ingest.py b/src/mage_ptcg/competition_intelligence/local_ingest.py
+new file mode 100644
+index 0000000..f72d817
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/local_ingest.py
+@@ -0,0 +1,148 @@
++"""Ingest a single local file into the Competition Intelligence raw archive.
++
++This is the O1-1-scope "local self-play source" ingestion path: it archives
++raw bytes by content hash, secret-scans and quarantines unsafe content
++instead of archiving it, and writes a validated ``SourceEnvelope`` manifest.
++It does not parse/normalize game content (that is O1-2, not implemented yet)
++— the output is provenance + an immutable raw blob, nothing more.
++"""
++
++from __future__ import annotations
++
++import subprocess
++import time
++from pathlib import Path
++from typing import Any, Iterable
++
++from mage_ptcg.competition.redaction import redact_value
++
++from . import archive
++from .canonical import sha256_hex
++from .contracts import ContractError, SourceKind
++from .permissions import DEFAULT_ALLOWED_USES
++from .provenance import build_source_envelope, write_source_manifest
++from .runstate import RunPaths, load_or_create, run_lock
++
++REDACTION_VERSION = "competition-intelligence-redaction-v1"
++PARSER_VERSION = "competition-intelligence-local-ingest-v1"
++
++
++class IngestError(RuntimeError):
++    """Raised when local ingestion cannot safely complete."""
++
++
++def _timestamp() -> str:
++    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
++
++
++def current_git_commit() -> str:
++    """Best-effort current commit hash; ``"unknown"`` if git is unavailable.
++
++    This is provenance metadata only (which run manifest this ingestion
++    belongs to), never used for correctness decisions, so a failure here
++    degrades gracefully instead of aborting ingestion.
++    """
++    try:
++        result = subprocess.run(
++            ["git", "rev-parse", "HEAD"],
++            capture_output=True,
++            text=True,
++            timeout=5,
++            check=False,
++        )
++    except (OSError, subprocess.SubprocessError):
++        return "unknown"
++    if result.returncode != 0:
++        return "unknown"
++    return result.stdout.strip() or "unknown"
++
++
++def ingest_local_file(
++    run_dir: str | Path,
++    input_path: str | Path,
++    *,
++    source_id: str | None = None,
++    source_kind: SourceKind | str = SourceKind.LOCAL_SELFPLAY,
++    allowed_uses: Iterable[str] | None = None,
++    owner_scope: str = "self",
++    visibility: str = "private",
++    config_hash: str = "unset",
++) -> dict[str, Any]:
++    """Archive one local file as a Competition Intelligence raw source.
++
++    Returns a JSON-serializable summary; never raises on a secret-scan hit
++    (that is a normal, expected outcome recorded as ``quarantined``) but does
++    raise ``IngestError``/``ContractError`` for a missing input file or an
++    invalid envelope.
++    """
++    source = input_path if isinstance(input_path, Path) else Path(input_path)
++    try:
++        data = source.read_bytes()
++    except OSError as exc:
++        raise IngestError(f"cannot read input file {source}: {exc}") from exc
++
++    kind = source_kind if isinstance(source_kind, SourceKind) else SourceKind(source_kind)
++    resolved_source_id = source_id or f"local:{sha256_hex(str(source.resolve()).encode('utf-8'))[:16]}:{sha256_hex(data)[:16]}"
++
++    run_root = Path(run_dir)
++    paths = RunPaths(run_root)
++    is_safe, labels = archive.scan_before_archive(data)
++    if not is_safe:
++        quarantine_hash = archive.quarantine_bytes(
++            run_root, data, reason="secret_scan_hit", detail={"labels": list(labels)}
++        )
++        return {
++            "status": "QUARANTINED",
++            "source_id": resolved_source_id,
++            "quarantine_sha256": quarantine_hash,
++            "labels": list(labels),
++        }
++
++    raw_sha256 = archive.store_raw(run_root, data)
++    # allowed_uses=None falls back to this source kind's default grant (still
++    # default-deny for TEAM_SHARED/PUBLIC_OTHER); an explicit empty iterable
++    # is respected as "no permissions", never silently upgraded.
++    uses = list(allowed_uses) if allowed_uses is not None else [use.value for use in DEFAULT_ALLOWED_USES.get(kind, frozenset())]
++    try:
++        envelope = build_source_envelope(
++            source_id=resolved_source_id,
++            source_kind=kind,
++            acquisition_mode="LOCAL_ONLY",
++            acquired_at=_timestamp(),
++            # Home-directory prefixes are redacted (reusing the same
++            # redaction the C2b probe already applies) so a canonical
++            # SourceEnvelope never embeds the ingesting machine's username.
++            origin_reference=redact_value(str(source)),
++            owner_scope=owner_scope,
++            visibility=visibility,
++            allowed_uses=uses,
++            raw_sha256=raw_sha256,
++            parser_version=PARSER_VERSION,
++            redaction_version=REDACTION_VERSION,
++        )
++    except ContractError as exc:
++        raise IngestError(f"invalid source envelope: {exc}") from exc
++
++    manifest_path = write_source_manifest(run_root, envelope)
++
++    run_state = load_or_create(
++        run_root,
++        run_id=run_root.name,
++        git_commit=current_git_commit(),
++        config_hash=config_hash,
++        resume=paths.manifest.exists(),
++    )
++    with run_lock(paths, run_state.manifest["run_id"]):
++        run_state.record_ingested_source(envelope.source_id)
++
++    return {
++        "status": "ARCHIVED",
++        "source_id": envelope.source_id,
++        "raw_sha256": raw_sha256,
++        "content_hash": envelope.content_hash(),
++        "manifest_path": str(manifest_path),
++        "allowed_uses": sorted(use.value for use in envelope.allowed_uses),
++    }
++
++
++__all__ = ["IngestError", "current_git_commit", "ingest_local_file"]
+diff --git a/src/mage_ptcg/competition_intelligence/permissions.py b/src/mage_ptcg/competition_intelligence/permissions.py
+new file mode 100644
+index 0000000..d837cae
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/permissions.py
+@@ -0,0 +1,95 @@
++"""Allowed-use permission checks: default deny for anything not explicitly granted.
++
++A missing or absent permission is always treated as "not granted" (empty
++``frozenset``), never inferred from source visibility or convenience. In
++particular, ``PUBLIC_OTHER`` sources default to ``{ARCHIVE}`` only —
++"the data is public" is never on its own read as "training is allowed".
++"""
++
++from __future__ import annotations
++
++from typing import Iterable
++
++from .contracts import AllowedUse, ContractError, SourceEnvelope, SourceKind
++
++# Defaults applied only when a caller explicitly asks for "what would this
++# source kind get if nothing else is specified" (e.g. building a fixture or a
++# capability report). Ingestion itself must always take allowed_uses from the
++# actual permission statement/manifest, never fall back to this table.
++DEFAULT_ALLOWED_USES: dict[SourceKind, frozenset[AllowedUse]] = {
++    SourceKind.LOCAL_SELFPLAY: frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS, AllowedUse.TRAINING, AllowedUse.REPORTING}),
++    SourceKind.OWN_KAGGLE: frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS, AllowedUse.TRAINING, AllowedUse.REPORTING}),
++    SourceKind.TEAM_SHARED: frozenset(),  # requires an explicit permission_statement; see provenance.py
++    SourceKind.PUBLIC_OTHER: frozenset({AllowedUse.ARCHIVE}),
++    SourceKind.HUMAN_TEXT: frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS, AllowedUse.REPORTING}),
++}
++
++
++def has_permission(envelope: SourceEnvelope, required: AllowedUse) -> bool:
++    return required in envelope.allowed_uses
++
++
++def has_all_permissions(envelope: SourceEnvelope, required: Iterable[AllowedUse]) -> bool:
++    required_set = frozenset(required)
++    return required_set.issubset(envelope.allowed_uses)
++
++
++def require_permission(envelope: SourceEnvelope, required: AllowedUse, *, purpose: str) -> None:
++    """Raise ``PermissionError`` unless ``envelope`` grants ``required``.
++
++    Call this at every point data crosses from "archived" into "used for X"
++    (an analysis pass, a snapshot's training split, a report) rather than
++    trusting a caller to have checked upstream.
++    """
++    if not has_permission(envelope, required):
++        raise PermissionError(
++            f"source {envelope.source_id!r} ({envelope.source_kind.value}) does not grant "
++            f"{required.value}, required for {purpose}"
++        )
++
++
++def intersect_allowed_uses(envelopes: Iterable[SourceEnvelope]) -> frozenset[AllowedUse]:
++    """The permissions a *set* of sources jointly grant: the intersection.
++
++    Used when a downstream artifact (e.g. a snapshot) mixes multiple sources
++    and must only be used for what *every* contributing source allows.
++    """
++    envelopes = list(envelopes)
++    if not envelopes:
++        return frozenset()
++    result = envelopes[0].allowed_uses
++    for envelope in envelopes[1:]:
++        result = result & envelope.allowed_uses
++    return result
++
++
++def filter_for_use(envelopes: Iterable[SourceEnvelope], required: AllowedUse) -> list[SourceEnvelope]:
++    """Keep only the envelopes that individually grant ``required``."""
++    return [envelope for envelope in envelopes if has_permission(envelope, required)]
++
++
++def validate_allowed_uses_subset(requested: Iterable[str], *, field_name: str = "allowed_uses") -> frozenset[AllowedUse]:
++    """Parse and validate a raw iterable of use-name strings into ``AllowedUse``.
++
++    Raises ``ContractError`` (not a bare ``KeyError``/``ValueError``) on any
++    unknown use name, so callers get a consistent, informative failure when
++    ingesting an untrusted permission manifest (e.g. a team bundle's YAML).
++    """
++    result: set[AllowedUse] = set()
++    for name in requested:
++        try:
++            result.add(AllowedUse(name))
++        except ValueError as exc:
++            raise ContractError(f"{field_name} contains an unknown allowed use: {name!r}") from exc
++    return frozenset(result)
++
++
++__all__ = [
++    "DEFAULT_ALLOWED_USES",
++    "filter_for_use",
++    "has_all_permissions",
++    "has_permission",
++    "intersect_allowed_uses",
++    "require_permission",
++    "validate_allowed_uses_subset",
++]
+diff --git a/src/mage_ptcg/competition_intelligence/provenance.py b/src/mage_ptcg/competition_intelligence/provenance.py
+new file mode 100644
+index 0000000..fd1ad60
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/provenance.py
+@@ -0,0 +1,142 @@
++"""Building, (de)serializing, and archiving ``SourceEnvelope`` provenance.
++
++Source manifest filenames are derived from a hash of ``source_id`` (not the
++raw string) so an attacker- or bug-supplied ``source_id`` containing path
++separators or ``..`` can never escape ``source_manifests/`` — the same
++defensive pattern the content-addressed raw archive already uses for blob
++paths.
++"""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any, Iterable, Mapping
++
++from .atomic_io import atomic_write_json
++from .canonical import sha256_hex
++from .contracts import (
++    SOURCE_ENVELOPE_SCHEMA_VERSION,
++    AcquisitionMode,
++    ContractError,
++    SourceEnvelope,
++    SourceKind,
++)
++from .permissions import validate_allowed_uses_subset
++from .runstate import RunPaths
++
++
++def build_source_envelope(
++    *,
++    source_id: str,
++    source_kind: SourceKind | str,
++    acquisition_mode: AcquisitionMode | str,
++    acquired_at: str,
++    origin_reference: str,
++    owner_scope: str,
++    visibility: str,
++    allowed_uses: Iterable[str],
++    raw_sha256: str,
++    parser_version: str,
++    redaction_version: str,
++    observed_at: str | None = None,
++    terms_snapshot_hash: str | None = None,
++    metadata: Mapping[str, Any] | None = None,
++) -> SourceEnvelope:
++    """Construct a validated ``SourceEnvelope``.
++
++    ``allowed_uses`` must be the *actual* permission grant for this source
++    (e.g. from a team bundle's ``permission_statement``, or the fixed
++    defaults for one's own local/Kaggle data) — never a convenience default
++    applied because the caller didn't check.
++    """
++    kind = source_kind if isinstance(source_kind, SourceKind) else SourceKind(source_kind)
++    mode = acquisition_mode if isinstance(acquisition_mode, AcquisitionMode) else AcquisitionMode(acquisition_mode)
++    if isinstance(allowed_uses, str):
++        raise ContractError("allowed_uses must be an iterable of use names, not a single string")
++    uses = validate_allowed_uses_subset(allowed_uses)
++    return SourceEnvelope(
++        schema_version=SOURCE_ENVELOPE_SCHEMA_VERSION,
++        source_id=source_id,
++        source_kind=kind,
++        acquisition_mode=mode,
++        acquired_at=acquired_at,
++        observed_at=observed_at,
++        origin_reference=origin_reference,
++        owner_scope=owner_scope,
++        visibility=visibility,
++        allowed_uses=uses,
++        terms_snapshot_hash=terms_snapshot_hash,
++        raw_sha256=raw_sha256,
++        parser_version=parser_version,
++        redaction_version=redaction_version,
++        metadata=dict(metadata) if metadata else {},
++    )
++
++
++def envelope_to_manifest_payload(envelope: SourceEnvelope) -> dict[str, Any]:
++    payload = envelope.content_payload()
++    payload["content_hash"] = envelope.content_hash()
++    return payload
++
++
++def envelope_from_manifest_payload(payload: Mapping[str, Any]) -> SourceEnvelope:
++    if not isinstance(payload, Mapping):
++        raise ContractError("source manifest payload must be a mapping")
++    fields = {key: value for key, value in payload.items() if key != "content_hash"}
++    try:
++        envelope = SourceEnvelope(
++            schema_version=fields["schema_version"],
++            source_id=fields["source_id"],
++            source_kind=SourceKind(fields["source_kind"]),
++            acquisition_mode=AcquisitionMode(fields["acquisition_mode"]),
++            acquired_at=fields["acquired_at"],
++            observed_at=fields.get("observed_at"),
++            origin_reference=fields["origin_reference"],
++            owner_scope=fields["owner_scope"],
++            visibility=fields["visibility"],
++            allowed_uses=validate_allowed_uses_subset(fields["allowed_uses"]),
++            terms_snapshot_hash=fields.get("terms_snapshot_hash"),
++            raw_sha256=fields["raw_sha256"],
++            parser_version=fields["parser_version"],
++            redaction_version=fields["redaction_version"],
++            metadata=fields.get("metadata") or {},
++        )
++    except KeyError as exc:
++        raise ContractError(f"source manifest payload is missing required field {exc}") from exc
++    expected_hash = payload.get("content_hash")
++    if expected_hash is not None and expected_hash != envelope.content_hash():
++        raise ContractError(
++            f"source manifest content_hash mismatch: stored {expected_hash} but recomputed {envelope.content_hash()}"
++        )
++    return envelope
++
++
++def _manifest_filename(source_id: str) -> str:
++    return sha256_hex(source_id.encode("utf-8")) + ".json"
++
++
++def source_manifest_path(run_root: Path, source_id: str) -> Path:
++    return RunPaths(run_root).source_manifests / _manifest_filename(source_id)
++
++
++def write_source_manifest(run_root: Path, envelope: SourceEnvelope) -> Path:
++    destination = source_manifest_path(run_root, envelope.source_id)
++    atomic_write_json(destination, envelope_to_manifest_payload(envelope))
++    return destination
++
++
++def read_source_manifest(run_root: Path, source_id: str) -> SourceEnvelope:
++    destination = source_manifest_path(run_root, source_id)
++    payload = json.loads(destination.read_text(encoding="utf-8"))
++    return envelope_from_manifest_payload(payload)
++
++
++__all__ = [
++    "build_source_envelope",
++    "envelope_from_manifest_payload",
++    "envelope_to_manifest_payload",
++    "read_source_manifest",
++    "source_manifest_path",
++    "write_source_manifest",
++]
+diff --git a/src/mage_ptcg/competition_intelligence/runstate.py b/src/mage_ptcg/competition_intelligence/runstate.py
+new file mode 100644
+index 0000000..522c021
+--- /dev/null
++++ b/src/mage_ptcg/competition_intelligence/runstate.py
+@@ -0,0 +1,296 @@
++"""Durable run layout, manifest, and single-writer lock for a Competition
++Intelligence run directory.
++
++Mirrors ``mage_ptcg.offline_training.runstate``'s lock/manifest mechanism
++(PID + ``/proc`` start-time marker for stale-lock recovery, fsync-backed
++atomic manifest writes) as its own copy rather than an import, so this
++sidecar has no dependency on ``offline_training`` (the dependency, if any,
++only ever goes the other way: ``offline_training`` may optionally read a
++Competition Intelligence snapshot).
++"""
++
++from __future__ import annotations
++
++from contextlib import contextmanager
++from dataclasses import dataclass
++import json
++import os
++import socket
++import time
++from pathlib import Path
++from typing import Any, Iterator, Mapping
++
++from .atomic_io import append_jsonl_line, atomic_write_json
++
++MANIFEST_SCHEMA_VERSION = "competition-intelligence-run-manifest-v1"
++LOCK_NAME = "run.lock"
++MANIFEST_NAME = "run_manifest.json"
++EVENTS_NAME = "events.jsonl"
++DEFAULT_RUN_ROOT = Path("runs/competition-intelligence")
++
++_LAYOUT_DIRS = (
++    "raw",
++    "source_manifests",
++    "normalized",
++    "derived",
++    "snapshots",
++    "reports",
++    "quarantine",
++    "state",
++)
++
++
++class RunStateError(RuntimeError):
++    """Raised on lock contention or a corrupt/incompatible run directory."""
++
++
++def _timestamp() -> str:
++    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
++
++
++def process_start_marker(pid: int) -> str | None:
++    stat_path = Path(f"/proc/{pid}/stat")
++    try:
++        raw = stat_path.read_text(encoding="utf-8", errors="replace")
++    except OSError:
++        return None
++    close = raw.rfind(")")
++    if close == -1:
++        return None
++    fields = raw[close + 1 :].split()
++    if len(fields) < 20:
++        return None
++    return fields[19]
++
++
++def pid_is_alive(pid: int) -> bool:
++    try:
++        os.kill(pid, 0)
++    except ProcessLookupError:
++        return False
++    except PermissionError:
++        return True
++    except OSError:
++        return False
++    return True
++
++
++@dataclass(frozen=True, slots=True)
++class RunPaths:
++    root: Path
++
++    @property
++    def manifest(self) -> Path:
++        return self.root / MANIFEST_NAME
++
++    @property
++    def lock(self) -> Path:
++        return self.root / LOCK_NAME
++
++    @property
++    def events(self) -> Path:
++        return self.root / EVENTS_NAME
++
++    @property
++    def raw(self) -> Path:
++        return self.root / "raw" / "sha256"
++
++    @property
++    def source_manifests(self) -> Path:
++        return self.root / "source_manifests"
++
++    @property
++    def normalized(self) -> Path:
++        return self.root / "normalized"
++
++    @property
++    def derived(self) -> Path:
++        return self.root / "derived"
++
++    @property
++    def snapshots(self) -> Path:
++        return self.root / "snapshots"
++
++    @property
++    def reports(self) -> Path:
++        return self.root / "reports"
++
++    @property
++    def quarantine(self) -> Path:
++        return self.root / "quarantine"
++
++    @property
++    def state(self) -> Path:
++        return self.root / "state"
++
++    @property
++    def catalog_db(self) -> Path:
++        return self.state / "catalog.sqlite3"
++
++    def ensure_layout(self) -> None:
++        for name in _LAYOUT_DIRS:
++            (self.root / name).mkdir(parents=True, exist_ok=True)
++
++
++def new_manifest(*, run_id: str, git_commit: str, config_hash: str) -> dict[str, Any]:
++    now = _timestamp()
++    return {
++        "schema_version": MANIFEST_SCHEMA_VERSION,
++        "run_id": run_id,
++        "git_commit": git_commit,
++        "config_hash": config_hash,
++        "ingested_source_ids": [],
++        "latest_snapshot_id": None,
++        "resume_count": 0,
++        "created_at": now,
++        "updated_at": now,
++    }
++
++
++class RunState:
++    """A loaded or freshly created Competition Intelligence run, lock held."""
++
++    def __init__(self, paths: RunPaths, manifest: dict[str, Any]):
++        self.paths = paths
++        self.manifest = manifest
++
++    def save(self) -> None:
++        self.manifest["updated_at"] = _timestamp()
++        atomic_write_json(self.paths.manifest, self.manifest)
++
++    def append_event(self, event_type: str, **fields: Any) -> None:
++        append_jsonl_line(self.paths.events, {"ts": _timestamp(), "type": event_type, **fields})
++
++    def record_ingested_source(self, source_id: str) -> None:
++        ids = set(self.manifest.get("ingested_source_ids", []))
++        if source_id in ids:
++            return
++        ids.add(source_id)
++        self.manifest["ingested_source_ids"] = sorted(ids)
++        self.save()
++        self.append_event("source_ingested", source_id=source_id)
++
++
++def _lock_payload(run_id: str) -> dict[str, Any]:
++    pid = os.getpid()
++    return {
++        "pid": pid,
++        "hostname": socket.gethostname(),
++        "process_start_marker": process_start_marker(pid),
++        "created_at": _timestamp(),
++        "run_id": run_id,
++    }
++
++
++def _read_lock(path: Path) -> dict[str, Any] | None:
++    try:
++        return json.loads(path.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError):
++        return None
++
++
++def _lock_is_stale(existing: Mapping[str, Any]) -> bool:
++    pid = existing.get("pid")
++    if not isinstance(pid, int):
++        return True
++    if not pid_is_alive(pid):
++        return True
++    recorded = existing.get("process_start_marker")
++    current = process_start_marker(pid)
++    if recorded is not None and current is not None and recorded != current:
++        return True  # PID reused by a different process
++    if existing.get("hostname") not in (None, socket.gethostname()):
++        return False  # a live PID on a different host cannot be reasoned about
++    return False
++
++
++def acquire_lock(paths: RunPaths, run_id: str) -> None:
++    paths.root.mkdir(parents=True, exist_ok=True)
++    payload = _lock_payload(run_id)
++    encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
++    while True:
++        try:
++            fd = os.open(paths.lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
++        except FileExistsError:
++            existing = _read_lock(paths.lock)
++            if existing is not None and existing.get("pid") == os.getpid():
++                return  # re-entrant within the same process
++            if existing is None or _lock_is_stale(existing):
++                try:
++                    os.unlink(paths.lock)
++                except FileNotFoundError:
++                    pass
++                continue
++            raise RunStateError(f"run {run_id} is locked by an active process (pid={existing.get('pid')})")
++        try:
++            os.write(fd, encoded)
++            os.fsync(fd)
++        finally:
++            os.close(fd)
++        return
++
++
++def release_lock(paths: RunPaths) -> None:
++    existing = _read_lock(paths.lock)
++    if existing is not None and existing.get("pid") != os.getpid():
++        return  # never release another process's lock
++    try:
++        os.unlink(paths.lock)
++    except FileNotFoundError:
++        pass
++
++
++@contextmanager
++def run_lock(paths: RunPaths, run_id: str) -> Iterator[None]:
++    acquire_lock(paths, run_id)
++    try:
++        yield
++    finally:
++        release_lock(paths)
++
++
++def load_or_create(run_dir: str | Path, *, run_id: str, git_commit: str, config_hash: str, resume: bool) -> RunState:
++    paths = RunPaths(Path(run_dir))
++    if paths.manifest.exists():
++        raw = json.loads(paths.manifest.read_text(encoding="utf-8"))
++        if not isinstance(raw, Mapping):
++            raise RunStateError("run manifest is corrupt")
++        manifest = dict(raw)
++        if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
++            raise RunStateError("run manifest schema is incompatible")
++        if not resume:
++            raise RunStateError("run directory already exists; pass resume=True to continue it")
++        if manifest.get("config_hash") != config_hash:
++            raise RunStateError("resume rejected: config hash differs from the existing run")
++        manifest["resume_count"] = int(manifest.get("resume_count", 0)) + 1
++        paths.ensure_layout()
++        state = RunState(paths, manifest)
++        state.save()
++        state.append_event("resume", resume_count=manifest["resume_count"])
++        return state
++    if resume:
++        raise RunStateError("resume requested but no existing run manifest was found")
++    paths.ensure_layout()
++    manifest = new_manifest(run_id=run_id, git_commit=git_commit, config_hash=config_hash)
++    state = RunState(paths, manifest)
++    state.save()
++    state.append_event("run_created", run_id=run_id)
++    return state
++
++
++__all__ = [
++    "DEFAULT_RUN_ROOT",
++    "EVENTS_NAME",
++    "LOCK_NAME",
++    "MANIFEST_NAME",
++    "MANIFEST_SCHEMA_VERSION",
++    "RunPaths",
++    "RunState",
++    "RunStateError",
++    "acquire_lock",
++    "load_or_create",
++    "pid_is_alive",
++    "process_start_marker",
++    "release_lock",
++    "run_lock",
++]
+diff --git a/tests/competition_intelligence/test_archive_and_provenance.py b/tests/competition_intelligence/test_archive_and_provenance.py
+new file mode 100644
+index 0000000..19cfdcd
+--- /dev/null
++++ b/tests/competition_intelligence/test_archive_and_provenance.py
+@@ -0,0 +1,143 @@
++"""Archive tests: content-addressed dedup, atomic write, quarantine, corruption.
++
++Also covers SourceEnvelope provenance round-tripping through the manifest
++JSON file, since it depends directly on the archive/atomic-write layer.
++"""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import pytest
++
++from mage_ptcg.competition_intelligence import archive
++from mage_ptcg.competition_intelligence.canonical import sha256_hex
++from mage_ptcg.competition_intelligence.contracts import ContractError
++from mage_ptcg.competition_intelligence.provenance import (
++    build_source_envelope,
++    envelope_from_manifest_payload,
++    read_source_manifest,
++    source_manifest_path,
++    write_source_manifest,
++)
++
++
++class TestContentAddressedStore:
++    def test_store_and_read_round_trip(self, tmp_path: Path) -> None:
++        digest = archive.store_raw(tmp_path, b"hello world")
++        assert digest == sha256_hex(b"hello world")
++        assert archive.read_raw(tmp_path, digest) == b"hello world"
++
++    def test_storing_identical_bytes_twice_is_idempotent(self, tmp_path: Path) -> None:
++        first = archive.store_raw(tmp_path, b"same content")
++        second = archive.store_raw(tmp_path, b"same content")
++        assert first == second
++        # exactly one blob on disk for this hash
++        assert archive.raw_path(tmp_path, first).exists()
++
++    def test_read_missing_blob_raises(self, tmp_path: Path) -> None:
++        with pytest.raises(archive.ArchiveError):
++            archive.read_raw(tmp_path, "a" * 64)
++
++    def test_read_detects_on_disk_corruption(self, tmp_path: Path) -> None:
++        digest = archive.store_raw(tmp_path, b"original content")
++        path = archive.raw_path(tmp_path, digest)
++        path.write_bytes(b"corrupted!!")
++        with pytest.raises(archive.ArchiveError):
++            archive.read_raw(tmp_path, digest)
++
++    def test_rejects_non_hex_digest_path(self, tmp_path: Path) -> None:
++        with pytest.raises(archive.ArchiveError):
++            archive.read_raw(tmp_path, "not-a-valid-hash")
++
++    def test_atomic_write_leaves_no_temp_file_behind(self, tmp_path: Path) -> None:
++        archive.store_raw(tmp_path, b"payload")
++        leftovers = list((tmp_path / "raw").rglob(".*.tmp"))
++        assert leftovers == []
++
++
++class TestQuarantine:
++    def test_quarantine_writes_content_and_reason(self, tmp_path: Path) -> None:
++        digest = archive.quarantine_bytes(tmp_path, b'{"token": "abcdefgh12345678"}', reason="secret_scan_hit")
++        content_path = archive.quarantine_root(tmp_path) / digest[:2] / digest / "content.bin"
++        reason_path = archive.quarantine_root(tmp_path) / digest[:2] / digest / "reason.json"
++        assert content_path.exists()
++        reason = json.loads(reason_path.read_text(encoding="utf-8"))
++        assert reason["reason"] == "secret_scan_hit"
++
++    def test_quarantined_content_not_in_raw_archive(self, tmp_path: Path) -> None:
++        data = b'{"password": "hunter2hunter2"}'
++        digest = archive.quarantine_bytes(tmp_path, data, reason="secret_scan_hit")
++        assert not archive.raw_path(tmp_path, digest).exists()
++
++
++class TestScanBeforeArchive:
++    def test_clean_json_is_safe(self) -> None:
++        is_safe, labels = archive.scan_before_archive(json.dumps({"turn": 1, "phase": "OPENING"}).encode("utf-8"))
++        assert is_safe
++        assert labels == ()
++
++    def test_json_with_secret_key_is_unsafe(self) -> None:
++        is_safe, labels = archive.scan_before_archive(json.dumps({"api_key": "sk-abcdefghijklmnop"}).encode("utf-8"))
++        assert not is_safe
++        assert any("sensitive_key" in label for label in labels)
++
++    def test_non_json_bytes_are_treated_as_opaque_and_safe(self) -> None:
++        is_safe, labels = archive.scan_before_archive(b"\xff\xfe\x00\x01binary-not-json")
++        assert is_safe
++        assert labels == ()
++
++
++class TestSourceEnvelopeProvenance:
++    def _build(self, **overrides: object):
++        fields = dict(
++            source_id="local:fixture-1",
++            source_kind="LOCAL_SELFPLAY",
++            acquisition_mode="LOCAL_ONLY",
++            acquired_at="2026-07-18T00:00:00Z",
++            origin_reference="fixture.json",
++            owner_scope="self",
++            visibility="private",
++            allowed_uses=["ARCHIVE", "ANALYSIS"],
++            raw_sha256="b" * 64,
++            parser_version="v1",
++            redaction_version="v1",
++        )
++        fields.update(overrides)
++        return build_source_envelope(**fields)
++
++    def test_build_rejects_single_string_for_allowed_uses(self) -> None:
++        with pytest.raises(ContractError):
++            self._build(allowed_uses="ARCHIVE")  # a string is iterable char-by-char; must be rejected
++
++    def test_write_and_read_round_trip(self, tmp_path: Path) -> None:
++        envelope = self._build()
++        path = write_source_manifest(tmp_path, envelope)
++        assert path == source_manifest_path(tmp_path, envelope.source_id)
++        reloaded = read_source_manifest(tmp_path, envelope.source_id)
++        assert reloaded.content_hash() == envelope.content_hash()
++
++    def test_manifest_filename_is_hash_derived_not_raw_source_id(self, tmp_path: Path) -> None:
++        malicious_id = "../../etc/passwd"
++        envelope = self._build(source_id=malicious_id)
++        path = write_source_manifest(tmp_path, envelope)
++        # must stay inside source_manifests/, never escape via the raw id
++        assert path.parent == tmp_path / "source_manifests"
++        assert path.resolve().is_relative_to((tmp_path / "source_manifests").resolve())
++
++    def test_tampered_content_hash_is_rejected_on_load(self, tmp_path: Path) -> None:
++        envelope = self._build()
++        path = write_source_manifest(tmp_path, envelope)
++        payload = json.loads(path.read_text(encoding="utf-8"))
++        payload["content_hash"] = "0" * 64
++        path.write_text(json.dumps(payload), encoding="utf-8")
++        with pytest.raises(ContractError):
++            read_source_manifest(tmp_path, envelope.source_id)
++
++    def test_envelope_from_manifest_payload_rejects_missing_field(self) -> None:
++        envelope = self._build()
++        payload = envelope.content_payload()
++        del payload["origin_reference"]
++        with pytest.raises(ContractError):
++            envelope_from_manifest_payload(payload)
+diff --git a/tests/competition_intelligence/test_catalog.py b/tests/competition_intelligence/test_catalog.py
+new file mode 100644
+index 0000000..8a184ac
+--- /dev/null
++++ b/tests/competition_intelligence/test_catalog.py
+@@ -0,0 +1,69 @@
++"""Catalog tests: rebuildability from canonical artifacts, corruption tolerance."""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++
++from mage_ptcg.competition_intelligence import catalog
++from mage_ptcg.competition_intelligence.provenance import build_source_envelope, write_source_manifest
++from mage_ptcg.competition_intelligence.runstate import RunPaths
++
++
++def _write_source(run_root: Path, source_id: str) -> None:
++    envelope = build_source_envelope(
++        source_id=source_id,
++        source_kind="LOCAL_SELFPLAY",
++        acquisition_mode="LOCAL_ONLY",
++        acquired_at="2026-07-18T00:00:00Z",
++        origin_reference="fixture.json",
++        owner_scope="self",
++        visibility="private",
++        allowed_uses=["ARCHIVE", "ANALYSIS"],
++        raw_sha256="c" * 64,
++        parser_version="v1",
++        redaction_version="v1",
++    )
++    write_source_manifest(run_root, envelope)
++
++
++class TestRebuildCatalog:
++    def test_rebuild_from_scratch_indexes_all_sources(self, tmp_path: Path) -> None:
++        _write_source(tmp_path, "src-a")
++        _write_source(tmp_path, "src-b")
++        result = catalog.rebuild_catalog(tmp_path)
++        assert result["source_count"] == 2
++        summary = catalog.catalog_summary(tmp_path)
++        assert summary["source_count"] == "2"
++
++    def test_deleting_catalog_and_rebuilding_reproduces_same_counts(self, tmp_path: Path) -> None:
++        _write_source(tmp_path, "src-a")
++        first = catalog.rebuild_catalog(tmp_path)
++        paths = RunPaths(tmp_path)
++        paths.catalog_db.unlink()
++        second = catalog.rebuild_catalog(tmp_path)
++        assert first == second
++
++    def test_rebuild_with_no_sources_yet_is_not_an_error(self, tmp_path: Path) -> None:
++        result = catalog.rebuild_catalog(tmp_path)
++        assert result["source_count"] == 0
++
++    def test_corrupt_manifest_is_quarantined_from_catalog_not_fatal(self, tmp_path: Path) -> None:
++        _write_source(tmp_path, "src-a")
++        paths = RunPaths(tmp_path)
++        (paths.source_manifests / "corrupt.json").write_text("{not valid json", encoding="utf-8")
++        result = catalog.rebuild_catalog(tmp_path)
++        assert result["source_count"] == 1
++        assert result["quarantined_manifest_count"] == 1
++
++    def test_summary_without_prior_rebuild_raises(self, tmp_path: Path) -> None:
++        with pytest.raises(catalog.CatalogError):
++            catalog.catalog_summary(tmp_path)
++
++    def test_no_leftover_temp_sqlite_file(self, tmp_path: Path) -> None:
++        _write_source(tmp_path, "src-a")
++        catalog.rebuild_catalog(tmp_path)
++        paths = RunPaths(tmp_path)
++        leftovers = list(paths.state.glob(".catalog.*.tmp.sqlite3"))
++        assert leftovers == []
+diff --git a/tests/competition_intelligence/test_cli.py b/tests/competition_intelligence/test_cli.py
+new file mode 100644
+index 0000000..a74fb74
+--- /dev/null
++++ b/tests/competition_intelligence/test_cli.py
+@@ -0,0 +1,87 @@
++"""CLI end-to-end tests: doctor, ingest-local, rebuild-catalog."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import pytest
++
++from mage_ptcg.competition_intelligence.cli import build_parser, main
++
++
++def _run(argv: list[str], capsys: pytest.CaptureFixture[str]) -> tuple[int, dict]:
++    parser = build_parser()
++    args = parser.parse_args(argv)
++    exit_code = args.func(args)
++    captured = capsys.readouterr()
++    return exit_code, json.loads(captured.out)
++
++
++class TestDoctor:
++    def test_doctor_reports_schema_versions_and_writable_root(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++        exit_code, summary = _run(["doctor", "--run-root", str(tmp_path / "runs")], capsys)
++        assert exit_code == 0
++        assert summary["ok"] is True
++        assert "source_envelope" in summary["schema_versions"]
++        assert summary["run_root"]["writable"] is True
++        assert summary["runtime_isolation"]["main_py_references_competition_intelligence"] is False
++
++    def test_doctor_flags_invalid_config(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++        bad_config = tmp_path / "bad.json"
++        bad_config.write_text(json.dumps({"schema_version": "wrong"}), encoding="utf-8")
++        exit_code, summary = _run(["doctor", "--config", str(bad_config), "--run-root", str(tmp_path / "runs")], capsys)
++        assert exit_code == 1
++        assert summary["config"]["valid"] is False
++
++
++class TestIngestLocal:
++    def test_ingest_local_archives_clean_fixture(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++        fixture = tmp_path / "fixture.json"
++        fixture.write_text(json.dumps({"turn": 1, "phase": "OPENING"}), encoding="utf-8")
++        run_dir = tmp_path / "run-1"
++        exit_code, summary = _run(
++            ["ingest-local", "--run-dir", str(run_dir), "--input", str(fixture), "--source-id", "fixture-1"], capsys
++        )
++        assert exit_code == 0
++        assert summary["status"] == "ARCHIVED"
++        assert summary["source_id"] == "fixture-1"
++
++    def test_ingest_local_quarantines_secret_bearing_fixture(
++        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
++    ) -> None:
++        fixture = tmp_path / "secret.json"
++        fixture.write_text(json.dumps({"api_key": "sk-abcdefghijklmnop1234"}), encoding="utf-8")
++        run_dir = tmp_path / "run-1"
++        exit_code, summary = _run(["ingest-local", "--run-dir", str(run_dir), "--input", str(fixture)], capsys)
++        assert exit_code == 0
++        assert summary["status"] == "QUARANTINED"
++
++    def test_ingest_local_missing_file_is_a_clean_error(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++        run_dir = tmp_path / "run-1"
++        exit_code = main(["ingest-local", "--run-dir", str(run_dir), "--input", str(tmp_path / "missing.json")])
++        captured = capsys.readouterr()
++        assert exit_code == 2
++        assert "error" in json.loads(captured.err)
++
++
++class TestRebuildCatalog:
++    def test_rebuild_catalog_after_ingest(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++        fixture = tmp_path / "fixture.json"
++        fixture.write_text(json.dumps({"turn": 1}), encoding="utf-8")
++        run_dir = tmp_path / "run-1"
++        _run(["ingest-local", "--run-dir", str(run_dir), "--input", str(fixture), "--source-id", "fixture-1"], capsys)
++        exit_code, summary = _run(["rebuild-catalog", "--run-dir", str(run_dir)], capsys)
++        assert exit_code == 0
++        assert summary["source_count"] == 1
++
++
++class TestMainEntrypoint:
++    def test_main_returns_zero_on_success(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++        exit_code = main(["doctor", "--run-root", str(tmp_path / "runs")])
++        assert exit_code == 0
++
++    def test_help_does_not_crash(self, capsys: pytest.CaptureFixture[str]) -> None:
++        with pytest.raises(SystemExit) as exc_info:
++            main(["--help"])
++        assert exc_info.value.code == 0
+diff --git a/tests/competition_intelligence/test_config.py b/tests/competition_intelligence/test_config.py
+new file mode 100644
+index 0000000..eca6588
+--- /dev/null
++++ b/tests/competition_intelligence/test_config.py
+@@ -0,0 +1,82 @@
++"""Config tests: defaults, unknown-key rejection, dangerous-setting rejection."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import pytest
++
++from mage_ptcg.competition_intelligence.config import (
++    CONFIG_SCHEMA_VERSION,
++    CompetitionIntelligenceConfig,
++    ConfigError,
++    load_config,
++)
++
++
++class TestDefaults:
++    def test_default_construction_is_safe(self) -> None:
++        config = CompetitionIntelligenceConfig()
++        assert config.automation.auto_promote is False
++        assert config.automation.auto_submit is False
++        assert config.external.public_other_training_enabled is False
++
++    def test_content_hash_is_deterministic(self) -> None:
++        a = CompetitionIntelligenceConfig()
++        b = CompetitionIntelligenceConfig()
++        assert a.content_hash() == b.content_hash()
++
++
++class TestLoadConfig:
++    def test_load_from_mapping_with_wrapper_key(self) -> None:
++        config = load_config({"competition_intelligence": {"schema_version": CONFIG_SCHEMA_VERSION, "run_root": "runs/x"}})
++        assert config.run_root == "runs/x"
++
++    def test_load_from_bare_mapping(self) -> None:
++        config = load_config({"schema_version": CONFIG_SCHEMA_VERSION, "run_root": "runs/y"})
++        assert config.run_root == "runs/y"
++
++    def test_load_from_json_file(self, tmp_path: Path) -> None:
++        path = tmp_path / "config.json"
++        path.write_text(json.dumps({"schema_version": CONFIG_SCHEMA_VERSION, "run_root": "runs/z"}), encoding="utf-8")
++        config = load_config(path)
++        assert config.run_root == "runs/z"
++
++    def test_rejects_unknown_top_level_key(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "not_a_real_key": True})
++
++    def test_rejects_unknown_key_in_section(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "automation": {"auto_promote": False, "bogus": 1}})
++
++    def test_nested_config_sections_apply(self) -> None:
++        config = load_config({
++            "schema_version": CONFIG_SCHEMA_VERSION,
++            "analytics": {"temporal_decay": 0.9, "minimum_cluster_support": 10},
++        })
++        assert config.analytics.temporal_decay == 0.9
++        assert config.analytics.minimum_cluster_support == 10
++
++
++class TestDangerousSettingsRejected:
++    def test_auto_promote_true_is_rejected(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "automation": {"auto_promote": True}})
++
++    def test_auto_submit_true_is_rejected(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "automation": {"auto_submit": True}})
++
++    def test_public_other_training_enabled_true_is_rejected(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "external": {"public_other_training_enabled": True}})
++
++    def test_analytics_temporal_decay_out_of_range_rejected(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "analytics": {"temporal_decay": 1.5}})
++
++    def test_normalization_unknown_fields_must_be_known_enum(self) -> None:
++        with pytest.raises(ConfigError):
++            load_config({"schema_version": CONFIG_SCHEMA_VERSION, "normalization": {"unknown_fields": "ignore_silently"}})
+diff --git a/tests/competition_intelligence/test_contracts.py b/tests/competition_intelligence/test_contracts.py
+new file mode 100644
+index 0000000..b3b60d4
+--- /dev/null
++++ b/tests/competition_intelligence/test_contracts.py
+@@ -0,0 +1,373 @@
++"""Contract tests for Competition Intelligence records: schema, invariants, lifecycle."""
++
++from __future__ import annotations
++
++import pytest
++
++from mage_ptcg.competition_intelligence.contracts import (
++    DECISION_RECORD_SCHEMA_VERSION,
++    DECK_OBSERVATION_SCHEMA_VERSION,
++    EPISODE_RECORD_SCHEMA_VERSION,
++    KNOWLEDGE_CLAIM_SCHEMA_VERSION,
++    SOURCE_ENVELOPE_SCHEMA_VERSION,
++    AcquisitionMode,
++    AllowedUse,
++    ClaimStatus,
++    ContractError,
++    DecisionRecord,
++    DeckObservation,
++    EpisodeRecord,
++    EvidenceGrade,
++    KnowledgeClaim,
++    SourceEnvelope,
++    SourceKind,
++    build_intelligence_snapshot,
++    validate_claim_transition,
++)
++
++
++def _envelope(**overrides: object) -> SourceEnvelope:
++    fields = dict(
++        schema_version=SOURCE_ENVELOPE_SCHEMA_VERSION,
++        source_id="local:abc",
++        source_kind=SourceKind.LOCAL_SELFPLAY,
++        acquisition_mode=AcquisitionMode.LOCAL_ONLY,
++        acquired_at="2026-07-18T00:00:00Z",
++        observed_at=None,
++        origin_reference="fixture.json",
++        owner_scope="self",
++        visibility="private",
++        allowed_uses=frozenset({AllowedUse.ARCHIVE}),
++        terms_snapshot_hash=None,
++        raw_sha256="a" * 64,
++        parser_version="v1",
++        redaction_version="v1",
++    )
++    fields.update(overrides)
++    return SourceEnvelope(**fields)
++
++
++class TestSourceEnvelope:
++    def test_valid_envelope_round_trips_content_hash(self) -> None:
++        envelope = _envelope()
++        assert envelope.content_hash() == envelope.content_hash()  # deterministic
++
++    def test_rejects_wrong_schema_version(self) -> None:
++        with pytest.raises(ContractError):
++            _envelope(schema_version="wrong-v0")
++
++    def test_rejects_naive_timestamp(self) -> None:
++        with pytest.raises(ContractError):
++            _envelope(acquired_at="2026-07-18T00:00:00")  # no tz offset
++
++    def test_rejects_bad_sha256(self) -> None:
++        with pytest.raises(ContractError):
++            _envelope(raw_sha256="not-a-hash")
++
++    def test_rejects_non_frozenset_allowed_uses(self) -> None:
++        with pytest.raises(ContractError):
++            _envelope(allowed_uses={AllowedUse.ARCHIVE})  # plain set, not frozenset
++
++    def test_two_envelopes_same_fields_have_same_hash(self) -> None:
++        assert _envelope().content_hash() == _envelope().content_hash()
++
++    def test_different_allowed_uses_change_hash(self) -> None:
++        a = _envelope(allowed_uses=frozenset({AllowedUse.ARCHIVE}))
++        b = _envelope(allowed_uses=frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS}))
++        assert a.content_hash() != b.content_hash()
++
++    def test_public_other_cannot_grant_training_even_if_explicitly_requested(self) -> None:
++        with pytest.raises(ContractError):
++            _envelope(
++                source_kind=SourceKind.PUBLIC_OTHER,
++                allowed_uses=frozenset({AllowedUse.ARCHIVE, AllowedUse.TRAINING}),
++            )
++
++    def test_public_other_cannot_grant_redistribution(self) -> None:
++        with pytest.raises(ContractError):
++            _envelope(
++                source_kind=SourceKind.PUBLIC_OTHER,
++                allowed_uses=frozenset({AllowedUse.ARCHIVE, AllowedUse.REDISTRIBUTION}),
++            )
++
++    def test_public_other_can_still_grant_analysis_when_manifest_says_so(self) -> None:
++        envelope = _envelope(
++            source_kind=SourceKind.PUBLIC_OTHER,
++            allowed_uses=frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS}),
++        )
++        assert AllowedUse.ANALYSIS in envelope.allowed_uses
++
++    def test_non_public_other_kinds_may_grant_training(self) -> None:
++        envelope = _envelope(
++            source_kind=SourceKind.LOCAL_SELFPLAY,
++            allowed_uses=frozenset({AllowedUse.ARCHIVE, AllowedUse.TRAINING}),
++        )
++        assert AllowedUse.TRAINING in envelope.allowed_uses
++
++
++class TestEpisodeRecord:
++    def _episode(self, **overrides: object) -> EpisodeRecord:
++        fields = dict(
++            schema_version=EPISODE_RECORD_SCHEMA_VERSION,
++            episode_id="ep-1",
++            source_id="local:abc",
++            competition_id=None,
++            played_at="2026-07-18T00:00:00Z",
++            engine_version="cabt-1.0",
++            agent_a="rule_v0",
++            agent_b="rule_v0",
++            deck_a_reference=None,
++            deck_b_reference=None,
++            first_player=0,
++            winner=1,
++            termination_reason="normal",
++            turn_count=10,
++            decision_count=42,
++            public_trace_hash=None,
++        )
++        fields.update(overrides)
++        return EpisodeRecord(**fields)
++
++    def test_valid(self) -> None:
++        self._episode()
++
++    def test_rejects_bad_first_player(self) -> None:
++        with pytest.raises(ContractError):
++            self._episode(first_player=2)
++
++    def test_rejects_negative_turn_count(self) -> None:
++        with pytest.raises(ContractError):
++            self._episode(turn_count=-1)
++
++
++class TestDecisionRecord:
++    def _decision(self, **overrides: object) -> DecisionRecord:
++        fields = dict(
++            schema_version=DECISION_RECORD_SCHEMA_VERSION,
++            episode_id="ep-1",
++            decision_index=0,
++            actor_seat=0,
++            turn_index=1,
++            phase="OPENING",
++            actor_information_view=None,
++            legal_action_keys=None,
++            chosen_action_key=None,
++            chosen_action_raw=None,
++            public_cards_seen=(),
++            board_summary=None,
++            latency_us=None,
++            fallback_used=False,
++            result_to_go=None,
++            source_quality="normalized",
++        )
++        fields.update(overrides)
++        return DecisionRecord(**fields)
++
++    def test_null_legal_action_keys_distinct_from_empty_tuple(self) -> None:
++        with_null = self._decision(legal_action_keys=None)
++        with_empty = self._decision(legal_action_keys=())
++        assert with_null.content_payload()["legal_action_keys"] is None
++        assert with_empty.content_payload()["legal_action_keys"] == []
++        assert with_null.content_hash() != with_empty.content_hash()
++
++    def test_rejects_list_for_legal_action_keys(self) -> None:
++        with pytest.raises(ContractError):
++            self._decision(legal_action_keys=["a", "b"])  # must be a tuple
++
++    def test_rejects_bad_actor_seat(self) -> None:
++        with pytest.raises(ContractError):
++            self._decision(actor_seat=5)
++
++    def test_rejects_non_finite_result_to_go(self) -> None:
++        with pytest.raises(ContractError):
++            self._decision(result_to_go=float("nan"))
++
++
++class TestDeckObservation:
++    def _observation(self, **overrides: object) -> DeckObservation:
++        fields = dict(
++            schema_version=DECK_OBSERVATION_SCHEMA_VERSION,
++            episode_id="ep-1",
++            seat=0,
++            exact_decklist=None,
++            exact_decklist_source=None,
++            observed_card_counts={1: 2, 2: 1},
++            inferred_archetypes={"aggro": 0.6, "control": 0.3},
++            inferred_card_distribution={1: 0.9},
++            inference_model_version="v0",
++            confidence=0.5,
++        )
++        fields.update(overrides)
++        return DeckObservation(**fields)
++
++    def test_valid(self) -> None:
++        self._observation()
++
++    def test_rejects_observed_total_over_deck_size(self) -> None:
++        with pytest.raises(ContractError):
++            self._observation(observed_card_counts={1: 61})
++
++    def test_rejects_negative_card_count(self) -> None:
++        with pytest.raises(ContractError):
++            self._observation(observed_card_counts={1: -1})
++
++    def test_rejects_exact_decklist_not_totaling_60(self) -> None:
++        with pytest.raises(ContractError):
++            self._observation(exact_decklist={1: 4, 2: 4})
++
++    def test_rejects_observed_exceeding_exact_decklist(self) -> None:
++        exact = {1: 2}
++        exact[3] = 58
++        with pytest.raises(ContractError):
++            self._observation(exact_decklist=exact, observed_card_counts={1: 3})
++
++    def test_accepts_consistent_exact_and_observed(self) -> None:
++        exact = {1: 4, 2: 56}
++        self._observation(exact_decklist=exact, observed_card_counts={1: 2})
++
++    def test_rejects_posterior_sum_over_one(self) -> None:
++        with pytest.raises(ContractError):
++            self._observation(inferred_archetypes={"a": 0.7, "b": 0.7})
++
++    def test_allows_partial_posterior_mass_as_unknown(self) -> None:
++        obs = self._observation(inferred_archetypes={"aggro": 0.4})
++        assert obs.inferred_archetypes == {"aggro": 0.4}
++
++    def test_rejects_out_of_range_confidence(self) -> None:
++        with pytest.raises(ContractError):
++            self._observation(confidence=1.5)
++
++
++class TestKnowledgeClaimLifecycle:
++    def _claim(self, **overrides: object) -> KnowledgeClaim:
++        fields = dict(
++            schema_version=KNOWLEDGE_CLAIM_SCHEMA_VERSION,
++            claim_id="claim-1",
++            raw_source_id="note-1",
++            claim_type="matchup-tech",
++            scope={"deck": "A"},
++            preconditions=("faces_deck_a",),
++            recommendation="hold card X",
++            expected_effect=None,
++            evidence_grade=EvidenceGrade.E0_UNVALIDATED,
++            status=ClaimStatus.RAW,
++            validity=0.5,
++            support=0.0,
++            freshness=1.0,
++            supporting_artifacts=(),
++            contradicting_claims=(),
++            created_at="2026-07-18T00:00:00Z",
++            updated_at="2026-07-18T00:00:00Z",
++        )
++        fields.update(overrides)
++        return KnowledgeClaim(**fields)
++
++    def test_valid_raw_claim(self) -> None:
++        self._claim()
++
++    def test_rejects_e0_evidence_with_supported_status(self) -> None:
++        with pytest.raises(ContractError):
++            self._claim(status=ClaimStatus.SUPPORTED, evidence_grade=EvidenceGrade.E0_UNVALIDATED)
++
++    def test_allows_e3_evidence_with_supported_status(self) -> None:
++        self._claim(status=ClaimStatus.SUPPORTED, evidence_grade=EvidenceGrade.E3_CONTROLLED_LOCAL_EVIDENCE)
++
++    @pytest.mark.parametrize(
++        "old,new",
++        [
++            (ClaimStatus.RAW, ClaimStatus.PARSED),
++            (ClaimStatus.PARSED, ClaimStatus.HYPOTHESIS),
++            (ClaimStatus.HYPOTHESIS, ClaimStatus.SUPPORTED),
++            (ClaimStatus.HYPOTHESIS, ClaimStatus.INCONCLUSIVE),
++            (ClaimStatus.SUPPORTED, ClaimStatus.DEPRECATED),
++        ],
++    )
++    def test_legal_transitions(self, old: ClaimStatus, new: ClaimStatus) -> None:
++        validate_claim_transition(old, new, evidence_grade=EvidenceGrade.E4_STRONG_EMPIRICAL_EVIDENCE)
++
++    @pytest.mark.parametrize(
++        "old,new",
++        [
++            (ClaimStatus.RAW, ClaimStatus.SUPPORTED),  # cannot skip straight to SUPPORTED
++            (ClaimStatus.REJECTED, ClaimStatus.HYPOTHESIS),  # terminal state reopened
++            (ClaimStatus.DEPRECATED, ClaimStatus.SUPPORTED),  # terminal state reopened
++            (ClaimStatus.RAW, ClaimStatus.HYPOTHESIS),  # skips PARSED
++        ],
++    )
++    def test_illegal_transitions(self, old: ClaimStatus, new: ClaimStatus) -> None:
++        with pytest.raises(ContractError):
++            validate_claim_transition(old, new, evidence_grade=EvidenceGrade.E4_STRONG_EMPIRICAL_EVIDENCE)
++
++    def test_transition_to_supported_requires_minimum_evidence(self) -> None:
++        with pytest.raises(ContractError):
++            validate_claim_transition(
++                ClaimStatus.HYPOTHESIS, ClaimStatus.SUPPORTED, evidence_grade=EvidenceGrade.E1_ANECDOTAL
++            )
++
++    def test_with_transition_produces_new_object_and_preserves_lineage_fields(self) -> None:
++        claim = self._claim(status=ClaimStatus.HYPOTHESIS, evidence_grade=EvidenceGrade.E3_CONTROLLED_LOCAL_EVIDENCE)
++        moved = claim.with_transition(ClaimStatus.SUPPORTED, updated_at="2026-07-19T00:00:00Z")
++        assert moved.status == ClaimStatus.SUPPORTED
++        assert moved.claim_id == claim.claim_id
++        assert claim.status == ClaimStatus.HYPOTHESIS  # original is untouched (immutable)
++
++    def test_contradicting_claims_are_preserved_not_deduplicated_away(self) -> None:
++        claim = self._claim(contradicting_claims=("claim-2", "claim-3"))
++        assert claim.contradicting_claims == ("claim-2", "claim-3")
++
++
++class TestIntelligenceSnapshot:
++    def _base_fields(self) -> dict[str, object]:
++        return dict(
++            created_at="2026-07-18T00:00:00Z",
++            cutoff_time="2026-07-17T00:00:00Z",
++            base_commit="6782e68",
++            input_source_ids=("s1", "s2"),
++            input_hashes=("h1", "h2"),
++            normalizer_versions={"replay": "v1"},
++            analysis_versions={"deck_fingerprint": "v1"},
++            knowledge_snapshot_hash=None,
++            meta_snapshot_hash=None,
++            selection_policy="all",
++            source_weights={"s1": 1.0, "s2": 0.5},
++            split_policy="episode_group",
++            excluded_records=(),
++            episode_count=2,
++            decision_count=10,
++        )
++
++    def test_build_is_self_verifying_and_deterministic(self) -> None:
++        snapshot_a = build_intelligence_snapshot(**self._base_fields())
++        snapshot_b = build_intelligence_snapshot(**self._base_fields())
++        assert snapshot_a.snapshot_sha256 == snapshot_b.snapshot_sha256
++        assert snapshot_a.snapshot_id == snapshot_b.snapshot_id
++        assert snapshot_a.snapshot_id.startswith("intelligence-snapshot-")
++
++    def test_changed_input_changes_hash(self) -> None:
++        fields = self._base_fields()
++        base = build_intelligence_snapshot(**fields)
++        fields["episode_count"] = 3
++        changed = build_intelligence_snapshot(**fields)
++        assert base.snapshot_sha256 != changed.snapshot_sha256
++
++    def test_tampered_hash_is_rejected_on_reconstruction(self) -> None:
++        snapshot = build_intelligence_snapshot(**self._base_fields())
++        payload = snapshot.content_payload()
++        with pytest.raises(ContractError):
++            from mage_ptcg.competition_intelligence.contracts import (
++                INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION,
++                IntelligenceSnapshot,
++            )
++
++            IntelligenceSnapshot(
++                schema_version=INTELLIGENCE_SNAPSHOT_SCHEMA_VERSION,
++                snapshot_id=snapshot.snapshot_id,
++                snapshot_sha256="0" * 64,
++                **{k: v for k, v in payload.items() if k != "schema_version"},
++            )
++
++    def test_rejects_explicit_snapshot_id_or_hash(self) -> None:
++        fields = self._base_fields()
++        fields["snapshot_id"] = "hand-picked"
++        with pytest.raises(ContractError):
++            build_intelligence_snapshot(**fields)
+diff --git a/tests/competition_intelligence/test_permissions.py b/tests/competition_intelligence/test_permissions.py
+new file mode 100644
+index 0000000..346269d
+--- /dev/null
++++ b/tests/competition_intelligence/test_permissions.py
+@@ -0,0 +1,104 @@
++"""Permission tests: default deny, intersection, and fail-closed parsing."""
++
++from __future__ import annotations
++
++import pytest
++
++from mage_ptcg.competition_intelligence.contracts import (
++    SOURCE_ENVELOPE_SCHEMA_VERSION,
++    AcquisitionMode,
++    AllowedUse,
++    ContractError,
++    SourceEnvelope,
++    SourceKind,
++)
++from mage_ptcg.competition_intelligence.permissions import (
++    DEFAULT_ALLOWED_USES,
++    filter_for_use,
++    has_all_permissions,
++    has_permission,
++    intersect_allowed_uses,
++    require_permission,
++    validate_allowed_uses_subset,
++)
++
++
++def _envelope(source_kind: SourceKind, allowed_uses: frozenset[AllowedUse]) -> SourceEnvelope:
++    return SourceEnvelope(
++        schema_version=SOURCE_ENVELOPE_SCHEMA_VERSION,
++        source_id=f"src:{source_kind.value}",
++        source_kind=source_kind,
++        acquisition_mode=AcquisitionMode.LOCAL_ONLY,
++        acquired_at="2026-07-18T00:00:00Z",
++        observed_at=None,
++        origin_reference="x",
++        owner_scope="self",
++        visibility="private",
++        allowed_uses=allowed_uses,
++        terms_snapshot_hash=None,
++        raw_sha256="a" * 64,
++        parser_version="v1",
++        redaction_version="v1",
++    )
++
++
++class TestDefaultDeny:
++    def test_public_other_default_is_archive_only(self) -> None:
++        assert DEFAULT_ALLOWED_USES[SourceKind.PUBLIC_OTHER] == frozenset({AllowedUse.ARCHIVE})
++
++    def test_team_shared_default_is_empty_requires_explicit_manifest(self) -> None:
++        assert DEFAULT_ALLOWED_USES[SourceKind.TEAM_SHARED] == frozenset()
++
++    def test_missing_permission_only_grants_archive_for_public_other(self) -> None:
++        envelope = _envelope(SourceKind.PUBLIC_OTHER, frozenset({AllowedUse.ARCHIVE}))
++        assert has_permission(envelope, AllowedUse.ARCHIVE)
++        assert not has_permission(envelope, AllowedUse.ANALYSIS)
++        assert not has_permission(envelope, AllowedUse.TRAINING)
++
++
++class TestPermissionChecks:
++    def test_require_permission_raises_when_missing(self) -> None:
++        envelope = _envelope(SourceKind.PUBLIC_OTHER, frozenset({AllowedUse.ARCHIVE}))
++        with pytest.raises(PermissionError):
++            require_permission(envelope, AllowedUse.TRAINING, purpose="dataset export")
++
++    def test_require_permission_passes_when_granted(self) -> None:
++        envelope = _envelope(SourceKind.LOCAL_SELFPLAY, frozenset({AllowedUse.ARCHIVE, AllowedUse.TRAINING}))
++        require_permission(envelope, AllowedUse.TRAINING, purpose="dataset export")
++
++    def test_has_all_permissions(self) -> None:
++        envelope = _envelope(SourceKind.LOCAL_SELFPLAY, frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS}))
++        assert has_all_permissions(envelope, [AllowedUse.ARCHIVE, AllowedUse.ANALYSIS])
++        assert not has_all_permissions(envelope, [AllowedUse.ARCHIVE, AllowedUse.TRAINING])
++
++
++class TestIntersection:
++    def test_intersect_of_two_sources_is_the_narrower_one(self) -> None:
++        a = _envelope(SourceKind.LOCAL_SELFPLAY, frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS, AllowedUse.TRAINING}))
++        b = _envelope(SourceKind.PUBLIC_OTHER, frozenset({AllowedUse.ARCHIVE}))
++        assert intersect_allowed_uses([a, b]) == frozenset({AllowedUse.ARCHIVE})
++
++    def test_intersect_of_empty_iterable_is_empty(self) -> None:
++        assert intersect_allowed_uses([]) == frozenset()
++
++    def test_public_other_never_leaks_training_into_a_mixed_snapshot(self) -> None:
++        local = _envelope(SourceKind.LOCAL_SELFPLAY, frozenset({AllowedUse.ARCHIVE, AllowedUse.TRAINING}))
++        public = _envelope(SourceKind.PUBLIC_OTHER, frozenset({AllowedUse.ARCHIVE}))
++        joint = intersect_allowed_uses([local, public])
++        assert AllowedUse.TRAINING not in joint
++
++    def test_filter_for_use(self) -> None:
++        granted = _envelope(SourceKind.LOCAL_SELFPLAY, frozenset({AllowedUse.ARCHIVE, AllowedUse.TRAINING}))
++        denied = _envelope(SourceKind.PUBLIC_OTHER, frozenset({AllowedUse.ARCHIVE}))
++        result = filter_for_use([granted, denied], AllowedUse.TRAINING)
++        assert result == [granted]
++
++
++class TestValidateAllowedUsesSubset:
++    def test_parses_known_names(self) -> None:
++        result = validate_allowed_uses_subset(["ARCHIVE", "ANALYSIS"])
++        assert result == frozenset({AllowedUse.ARCHIVE, AllowedUse.ANALYSIS})
++
++    def test_rejects_unknown_name_as_contract_error_not_value_error(self) -> None:
++        with pytest.raises(ContractError):
++            validate_allowed_uses_subset(["ARCHIVE", "NOT_A_REAL_USE"])
+diff --git a/tests/competition_intelligence/test_privacy.py b/tests/competition_intelligence/test_privacy.py
+new file mode 100644
+index 0000000..dd86669
+--- /dev/null
++++ b/tests/competition_intelligence/test_privacy.py
+@@ -0,0 +1,40 @@
++"""Privacy tests: canonical artifacts must never embed an absolute home path.
++
++``mage_ptcg.competition.redaction.redact_value`` already has its own test
++coverage for the ``/home/<user>`` regex itself (C2b probe tests); what this
++file verifies is the *wiring*: that local ingestion actually applies it to
++``origin_reference`` before persisting the SourceEnvelope manifest, rather
++than storing the raw ``str(path)`` verbatim. The assertion compares against
++``redact_value()`` computed independently in the test (deterministic, pure
++function) so it does not depend on whether the OS temp directory happens to
++be under ``/home/`` or not.
++"""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++from mage_ptcg.competition.redaction import redact_value
++from mage_ptcg.competition_intelligence.local_ingest import ingest_local_file
++
++
++class TestOriginReferenceRedaction:
++    def test_manifest_origin_reference_is_the_redacted_form_not_the_raw_path(self, tmp_path: Path) -> None:
++        fixture = tmp_path / "fixture.json"
++        fixture.write_text(json.dumps({"turn": 1}), encoding="utf-8")
++        run_root = tmp_path / "run-1"
++
++        result = ingest_local_file(run_root, fixture, source_id="fixture-1")
++
++        manifest_path = Path(result["manifest_path"])
++        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
++        assert payload["origin_reference"] == redact_value(str(fixture))
++
++    def test_redact_value_strips_a_home_directory_prefix(self) -> None:
++        # Documents the exact behavior local_ingest relies on: this is a
++        # regression guard on the *integration point*, not a re-test of the
++        # regex's own correctness (which the C2b redaction tests already own).
++        redacted = redact_value("/home/some-fake-user/project/fixture.json")
++        assert "some-fake-user" not in redacted
++        assert redacted.startswith("<HOME>")
+diff --git a/tests/competition_intelligence/test_runstate.py b/tests/competition_intelligence/test_runstate.py
+new file mode 100644
+index 0000000..fd84c65
+--- /dev/null
++++ b/tests/competition_intelligence/test_runstate.py
+@@ -0,0 +1,131 @@
++"""Run manifest / lock tests: creation, resume, stale-lock recovery, contention."""
++
++from __future__ import annotations
++
++import json
++import os
++import socket
++import subprocess
++import time
++from pathlib import Path
++
++import pytest
++
++from mage_ptcg.competition_intelligence import runstate
++
++
++class TestLoadOrCreate:
++    def test_creates_new_run_with_expected_layout(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        state = runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc123", config_hash="h1", resume=False)
++        assert state.manifest["run_id"] == "run-1"
++        assert state.manifest["schema_version"] == runstate.MANIFEST_SCHEMA_VERSION
++        for name in ("raw", "source_manifests", "normalized", "derived", "snapshots", "reports", "quarantine", "state"):
++            assert (run_dir / name).exists()
++
++    def test_creating_twice_without_resume_fails(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++        with pytest.raises(runstate.RunStateError):
++            runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++
++    def test_resume_requires_existing_manifest(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "does-not-exist"
++        with pytest.raises(runstate.RunStateError):
++            runstate.load_or_create(run_dir, run_id="x", git_commit="abc", config_hash="h1", resume=True)
++
++    def test_resume_rejects_config_hash_mismatch(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++        with pytest.raises(runstate.RunStateError):
++            runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="DIFFERENT", resume=True)
++
++    def test_resume_increments_resume_count(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++        state = runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=True)
++        assert state.manifest["resume_count"] == 1
++
++    def test_corrupt_manifest_schema_is_rejected(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        state = runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++        manifest = json.loads(state.paths.manifest.read_text(encoding="utf-8"))
++        manifest["schema_version"] = "wrong"
++        state.paths.manifest.write_text(json.dumps(manifest), encoding="utf-8")
++        with pytest.raises(runstate.RunStateError):
++            runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=True)
++
++
++class TestRecordIngestedSource:
++    def test_records_are_deduplicated_and_sorted(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        state = runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++        state.record_ingested_source("b")
++        state.record_ingested_source("a")
++        state.record_ingested_source("a")  # duplicate, no-op
++        assert state.manifest["ingested_source_ids"] == ["a", "b"]
++
++
++class TestLock:
++    def test_reentrant_within_same_process(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        paths = runstate.RunPaths(run_dir)
++        paths.root.mkdir(parents=True)
++        runstate.acquire_lock(paths, "run-1")
++        runstate.acquire_lock(paths, "run-1")  # must not deadlock or raise
++        runstate.release_lock(paths)
++
++    def test_stale_lock_from_dead_pid_is_recovered(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        paths = runstate.RunPaths(run_dir)
++        paths.root.mkdir(parents=True)
++        # a PID astronomically unlikely to be alive
++        dead_payload = {"pid": 2**30, "hostname": "nowhere", "process_start_marker": None, "created_at": "x", "run_id": "run-1"}
++        paths.lock.write_text(json.dumps(dead_payload), encoding="utf-8")
++        runstate.acquire_lock(paths, "run-1")  # should recover, not raise
++        assert json.loads(paths.lock.read_text(encoding="utf-8"))["pid"] == os.getpid()
++        runstate.release_lock(paths)
++
++    def test_active_lock_from_another_pid_blocks(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        paths = runstate.RunPaths(run_dir)
++        paths.root.mkdir(parents=True)
++        # A real, genuinely-alive process that is not us, with a real
++        # process_start_marker and matching hostname, so the staleness check
++        # correctly identifies it as an active lock rather than recovering it.
++        process = subprocess.Popen(["sleep", "30"])
++        try:
++            time.sleep(0.05)  # let /proc/<pid>/stat populate
++            live_payload = {
++                "pid": process.pid,
++                "hostname": socket.gethostname(),
++                "process_start_marker": runstate.process_start_marker(process.pid),
++                "created_at": "x",
++                "run_id": "run-1",
++            }
++            paths.lock.write_text(json.dumps(live_payload), encoding="utf-8")
++            with pytest.raises(runstate.RunStateError):
++                runstate.acquire_lock(paths, "run-1")
++        finally:
++            process.terminate()
++            process.wait(timeout=5)
++            if paths.lock.exists():
++                paths.lock.unlink()
++
++    def test_run_lock_context_manager_releases_on_exception(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        paths = runstate.RunPaths(run_dir)
++        paths.root.mkdir(parents=True)
++        with pytest.raises(ValueError):
++            with runstate.run_lock(paths, "run-1"):
++                raise ValueError("boom")
++        assert not paths.lock.exists()
++
++
++class TestEventsAppend:
++    def test_append_event_is_durable_jsonl(self, tmp_path: Path) -> None:
++        run_dir = tmp_path / "run-1"
++        state = runstate.load_or_create(run_dir, run_id="run-1", git_commit="abc", config_hash="h1", resume=False)
++        state.append_event("custom_event", detail="x")
++        lines = state.paths.events.read_text(encoding="utf-8").strip().splitlines()
++        assert any(json.loads(line)["type"] == "custom_event" for line in lines)
+diff --git a/tests/test_check_o1_protected_files.py b/tests/test_check_o1_protected_files.py
+new file mode 100644
+index 0000000..18290a5
+--- /dev/null
++++ b/tests/test_check_o1_protected_files.py
+@@ -0,0 +1,131 @@
++"""Tests for scripts/check_o1_protected_files.py: baseline/verify/tamper detection.
++
++Runs against an isolated temporary git repository (not the real project repo)
++so tamper-detection tests can freely modify files without touching any real
++protected file.
++"""
++
++from __future__ import annotations
++
++import json
++import subprocess
++from pathlib import Path
++
++import pytest
++
++from scripts.check_o1_protected_files import (
++    BASELINE_SCHEMA_VERSION,
++    ProtectedFilesError,
++    cmd_baseline,
++    cmd_verify,
++    collect,
++    repo_root,
++)
++
++
++def _init_repo(tmp_path: Path) -> Path:
++    repo = tmp_path / "repo"
++    repo.mkdir()
++    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
++    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
++    subprocess.run(["git", "config", "user.name", "test"], cwd=repo, check=True)
++    return repo
++
++
++class _Args:
++    def __init__(self, **kwargs: object) -> None:
++        self.__dict__.update(kwargs)
++
++
++class TestCollectAgainstRealRepo:
++    def test_repo_root_resolves(self) -> None:
++        root = repo_root()
++        assert (root / "main.py").exists()
++
++    def test_collect_reports_all_configured_paths_as_present_in_real_repo(self) -> None:
++        root = repo_root()
++        entries = collect(root)
++        assert entries["main.py"]["status"] == "present"
++        assert entries["deck.csv"]["status"] == "present"
++        assert entries["main.py"]["git_blob_sha"] is not None
++
++    def test_runs_data_root_is_absent_in_this_isolated_worktree(self) -> None:
++        # matches the documented finding: this worktree has no runs/ directory
++        # (it is git-ignored data that lives only in the canonical workspace)
++        root = repo_root()
++        entries = collect(root)
++        key = "runs/ (git-ignored data root, presence-only)"
++        assert entries[key]["status"] == "absent_in_this_worktree"
++
++
++class TestBaselineAndVerifyRoundTrip:
++    def test_baseline_then_verify_with_no_changes_reports_unchanged(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
++        repo = _init_repo(tmp_path)
++        (repo / "main.py").write_text("print('v1')\n", encoding="utf-8")
++        (repo / "deck.csv").write_text("1,2,3\n", encoding="utf-8")
++        monkeypatch.chdir(repo)
++
++        baseline_path = tmp_path / "baseline.json"
++        assert cmd_baseline(_Args(output=str(baseline_path))) == 0
++        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
++        assert baseline["schema_version"] == BASELINE_SCHEMA_VERSION
++        assert baseline["entries"]["main.py"]["status"] == "present"
++
++        assert cmd_verify(_Args(baseline=str(baseline_path))) == 0
++
++    def test_verify_detects_a_tampered_protected_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
++        repo = _init_repo(tmp_path)
++        (repo / "main.py").write_text("print('original')\n", encoding="utf-8")
++        monkeypatch.chdir(repo)
++
++        baseline_path = tmp_path / "baseline.json"
++        cmd_baseline(_Args(output=str(baseline_path)))
++        capsys.readouterr()
++
++        (repo / "main.py").write_text("print('TAMPERED')\n", encoding="utf-8")
++
++        exit_code = cmd_verify(_Args(baseline=str(baseline_path)))
++        captured = capsys.readouterr()
++        result = json.loads(captured.out)
++        assert exit_code == 1
++        assert result["protected_files_unchanged"] is False
++        assert any(diff["path"] == "main.py" for diff in result["diffs"])
++
++    def test_verify_detects_a_deleted_protected_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
++        repo = _init_repo(tmp_path)
++        (repo / "deck.csv").write_text("1,2,3\n", encoding="utf-8")
++        monkeypatch.chdir(repo)
++
++        baseline_path = tmp_path / "baseline.json"
++        cmd_baseline(_Args(output=str(baseline_path)))
++        capsys.readouterr()
++
++        (repo / "deck.csv").unlink()
++
++        exit_code = cmd_verify(_Args(baseline=str(baseline_path)))
++        captured = capsys.readouterr()
++        result = json.loads(captured.out)
++        assert exit_code == 1
++        assert any(diff["path"] == "deck.csv" for diff in result["diffs"])
++
++    def test_verify_rejects_wrong_schema_version_baseline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
++        repo = _init_repo(tmp_path)
++        monkeypatch.chdir(repo)
++        baseline_path = tmp_path / "baseline.json"
++        baseline_path.write_text(json.dumps({"schema_version": "wrong-v0", "entries": {}}), encoding="utf-8")
++        with pytest.raises(ProtectedFilesError):
++            cmd_verify(_Args(baseline=str(baseline_path)))
++
++    def test_unmodified_file_produces_no_diff_but_untouched_new_file_does_not_appear(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
++    ) -> None:
++        repo = _init_repo(tmp_path)
++        (repo / "main.py").write_text("print('v1')\n", encoding="utf-8")
++        monkeypatch.chdir(repo)
++        baseline_path = tmp_path / "baseline.json"
++        cmd_baseline(_Args(output=str(baseline_path)))
++        capsys.readouterr()
++        # Adding a brand-new, non-protected file must not trigger a false positive.
++        (repo / "unrelated.txt").write_text("new file", encoding="utf-8")
++        exit_code = cmd_verify(_Args(baseline=str(baseline_path)))
++        assert exit_code == 0
+diff --git a/tests/test_competition_intelligence_runtime_isolation.py b/tests/test_competition_intelligence_runtime_isolation.py
+new file mode 100644
+index 0000000..a28af51
+--- /dev/null
++++ b/tests/test_competition_intelligence_runtime_isolation.py
+@@ -0,0 +1,93 @@
++"""Runtime isolation: the submission surface must never reach the sidecar.
++
++Mirrors the existing clean-subprocess pattern in
++``tests/test_public_belief_decision_loop.py``
++(``test_clean_subprocess_imports_main_and_constructs_both_rule_agents``): run
++a small script in a fresh interpreter with ``PYTHONPATH`` cleared, then
++inspect ``sys.modules``. Per the O1 mandate (AGENTS.md / project instructions
++for this session), ``main.py`` must never import
++``mage_ptcg.competition_intelligence`` (this sidecar), ``mage_ptcg.dataops``,
++``sqlite3``, ``pandas``, or ``sklearn`` — not at module load time, and not
++through the default Rule Agent v0 path that ``agent(obs_dict)`` actually
++uses.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import subprocess
++import sys
++from pathlib import Path
++
++REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
++
++_FORBIDDEN_SUBSTRINGS = (
++    "mage_ptcg.competition_intelligence",
++    "mage_ptcg.dataops",
++    "sqlite3",
++    "pandas",
++    "sklearn",
++)
++
++
++def _clean_env() -> dict[str, str]:
++    environment = os.environ.copy()
++    environment.pop("PYTHONPATH", None)
++    return environment
++
++
++def _sys_modules_after(script: str) -> list[str]:
++    wrapped = script + "\nimport json as _json, sys as _sys\nprint(_json.dumps(sorted(_sys.modules.keys())))\n"
++    result = subprocess.run(
++        [sys.executable, "-c", wrapped],
++        cwd=REPOSITORY_ROOT,
++        env=_clean_env(),
++        capture_output=True,
++        text=True,
++        check=False,
++    )
++    assert result.returncode == 0, result.stderr
++    return json.loads(result.stdout.strip().splitlines()[-1])
++
++
++def _assert_none_leaked(modules: list[str], *, via: str) -> None:
++    for forbidden in _FORBIDDEN_SUBSTRINGS:
++        leaked = [name for name in modules if forbidden in name]
++        assert not leaked, f"{forbidden!r} leaked into sys.modules via {via}: {leaked}"
++
++
++class TestPlainImportMain:
++    def test_import_main_alone_does_not_pull_in_forbidden_modules(self) -> None:
++        modules = _sys_modules_after("import main\n")
++        _assert_none_leaked(modules, via="bare `import main`")
++
++    def test_main_py_source_never_references_the_sidecar(self) -> None:
++        source = (REPOSITORY_ROOT / "main.py").read_text(encoding="utf-8")
++        assert "competition_intelligence" not in source
++        assert "mage_ptcg.dataops" not in source
++
++
++class TestDefaultRuleAgentPathIsolation:
++    def test_constructing_and_running_default_rule_agent_v0_stays_isolated(self) -> None:
++        script = (
++            "import main\n"
++            "deck = [1] * 60\n"
++            "agent = main.make_rule_agent(deck=deck)\n"
++            "assert agent({'select': None}) == deck\n"
++        )
++        modules = _sys_modules_after(script)
++        _assert_none_leaked(modules, via="main.make_rule_agent default path")
++
++    def test_student_agent_fallback_path_stays_isolated(self) -> None:
++        # make_student_agent falls back to Rule v0 when no model artifact is
++        # configured, which is exactly the submission's default runtime
++        # posture; it must not reach the sidecar either.
++        script = (
++            "import main\n"
++            "deck = [1] * 60\n"
++            "agent = main.make_student_agent(deck=deck)\n"
++            "assert agent({'select': None}) == deck\n"
++        )
++        modules = _sys_modules_after(script)
++        _assert_none_leaked(modules, via="main.make_student_agent fallback path")
+-- 
+2.43.0
+

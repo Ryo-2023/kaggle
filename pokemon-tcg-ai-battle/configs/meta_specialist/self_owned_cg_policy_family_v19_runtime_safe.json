@@ -1,0 +1,22 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_policy_family_v19_runtime_safe_20260816",
+  "seed_namespace": "self-owned-cg-runtime-safe-basket-v19-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cross-lineage-v18-20260816/promoted"
+  ],
+  "deck_recipes": [
+    {"id": "fire-v19-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269100, "ordinal": 100},
+    {"id": "dark-v19-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269101, "ordinal": 101},
+    {"id": "lightning-v19-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269102, "ordinal": 102}
+  ],
+  "policy_variants": [
+    {"id": "fire-lethal-v19-00", "deck_recipe_id": "fire-v19-00", "overrides": {"lethal_bonus": 23500, "lethal_hp_margin": 1, "attack_damage_weight_milli": 2050, "attack_generic_base": 12500, "attack_983_base": 60000}},
+    {"id": "dark-retreat-v19-01", "deck_recipe_id": "dark-v19-01", "overrides": {"retreat_good_score": 20500, "attach_mega_lucario": 40500, "attach_mega_2energy_bonus": 14500, "attach_overenergy_penalty": -50000}},
+    {"id": "lightning-search-v19-02", "deck_recipe_id": "lightning-v19-02", "overrides": {"search_mega_lucario": 62500, "ability_bonus": 31000, "setup_active_riolu": 44500, "setup_bench_riolu": 49500}}
+  ]
+}

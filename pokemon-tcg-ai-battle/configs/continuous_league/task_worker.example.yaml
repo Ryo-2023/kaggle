@@ -1,0 +1,7 @@
+catalog: artifacts/continuous-league/catalog/catalog_snapshot.json
+benchmark: artifacts/continuous-league/benchmark/manifest.json
+exposure: artifacts/continuous-league/exposure/snapshot.json
+runtime_policy_root: artifacts/continuous-league/learner/stream/runtime_policies
+evaluation_output_root: artifacts/continuous-league/evaluations
+checkpoint_evaluation_history_root: artifacts/continuous-league/checkpoint_history
+max_steps: 10000

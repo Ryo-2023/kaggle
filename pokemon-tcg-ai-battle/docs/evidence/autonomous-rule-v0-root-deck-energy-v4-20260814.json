@@ -1,0 +1,77 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-energy-v4-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root-deck novel Basic Fighting Energy ratio weighted48 then common24 screen",
+  "weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-energy-v4-weighted48-20260814",
+  "common24_root": "runs/final-sprint-autonomous/rule-v0-root-deck-energy-v4-common24-20260814",
+  "weighted_manifest_sha256": "34a7df4bce554bcee770e497edefe4f07d79fb098394e99f6a69e985bbec79e2",
+  "weighted_summary_sha256": "cd3f143a416e364e0788ed811c8e51f0229e648a7c43f4b76bb408c165b0a6c0",
+  "weighted_summary_md_sha256": "f98dab29a75ed0a6c863c3b1697fecc9f0e02d69e7b8c557ae5ab59d4bf46911",
+  "common24_manifest_sha256": "6a3e2dc6f0a56ee6bffac1b864c51143d33897846eb427e49da6ba3bd26e52f2",
+  "common24_summary_sha256": "2566080c2309565c9226891c5940133fa2dbdafd6fbe9c33947d89d79e2df5ec",
+  "common24_summary_md_sha256": "cacb61e151c0b59013036c558bd39415aef953e7fa3d6d25f6ff4984f8471963",
+  "common24_final_sha256": "c726941c4d4349a43f7068b65c406f16435d16954cf44f1eb6de126a9f05d33f",
+  "protocol": {
+    "weighted_base_seed": 23490000,
+    "common24_base_seed": 23500000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "weighted_games_per_arm": 48,
+    "common24_games_per_arm": 96,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "faults_total": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "root-basic-f-to-rock-fighting-energy",
+      "mutation": "6 Basic Fighting Energy -> 20 Rock Fighting Energy",
+      "deck_file_sha256": "e0e10e89e800d7a5a7f7f93f074abccffe58e6aeab3c01ec42b11092f1e85e4b",
+      "deck_multiset_sha256": "9b1936eb2fc288d9da71753e3f5bf9117f2d9d4c9a95a4405a4b26d6a2c54c39",
+      "weighted_delta_points": 2.6836777197895887,
+      "common24_wdlf": "8-0-88-0",
+      "common24_delta_points": -3.125,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "21b885b9ed3390413a2674b3de9261e345fdcbe87249d0264995fbff5424c251",
+      "weighted_arm_manifest_sha256": "fbd35d000588e0aae618886f5242ec476d3f9673d7c84496f263074d14c87468",
+      "common24_arm_summary_sha256": "1fd22a6c4fcc65c46809da365bf0cdb96b7f84fb8209b7ae1e1ab0afad6ebcee",
+      "common24_arm_manifest_sha256": "58f9a4e3f6ea88e119fc99a8f6930ff6e93cde9fa8c1d9fc7228cb3aa21c643a"
+    },
+    {
+      "candidate_id": "root-basic-f-to-mist-energy",
+      "mutation": "6 Basic Fighting Energy -> 11 Mist Energy",
+      "deck_file_sha256": "4c825846c35550f4ca7ecf188bd0ae2fef6052a3ace4165eed25056d234638a7",
+      "deck_multiset_sha256": "702cf30a29ce40a4a30290c9b00adb9546719a053dd284c97a7987f51ff8a76d",
+      "weighted_delta_points": 2.018638423545242,
+      "common24_wdlf": "7-0-89-0",
+      "common24_delta_points": -4.166666666666666,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "a1d6b187430efa9bcd3b6ad799db8a1ed65851dd80f728539075fde23198f27b",
+      "weighted_arm_manifest_sha256": "276d710b7031cb8e5ed9e4ba13d86fea0108cbff31b6594ef2109a88f4635cae",
+      "common24_arm_summary_sha256": "b88fc99595ec99b5991da1bb472c6164fdc27c91cb4cc679a5bacd3997a293df",
+      "common24_arm_manifest_sha256": "21215a58f65777d365b979bc9f3721f40ae87588b9b92d3f297d95c8a4e406fe"
+    }
+  ],
+  "parent_common24": {
+    "wdlf": "11-0-85-0",
+    "score_rate": 0.11458333333333333,
+    "summary_sha256": "bf9410bbda5385eb31b6ec281a6b43171dcaf8b1642a23a702511dc1d29ba2f5",
+    "manifest_sha256": "87ef791253698ad080fc173ea85b4e42329e63e8e4cbb22321ce0c5abb6b8ec9"
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": true,
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "promotion": "none",
+    "reason": "Both weighted-positive energy replacements reversed against the root parent on common24; stop the energy surface without 384 or longrun."
+  }
+}

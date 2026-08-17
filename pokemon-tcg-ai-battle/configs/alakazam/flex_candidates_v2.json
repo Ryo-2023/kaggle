@@ -1,0 +1,26 @@
+{
+  "schema": "alakazam-flex-candidates-v2",
+  "baseline_deck_id": "alakazam-baseline-v1",
+  "stage1_gate": {"games_per_candidate":32,"opponents":["random","deterministic","rule_v1","setup-heavy"],"minimum_completed":32,"maximum_faults":0,"minimum_overall_win_rate":0.375,"minimum_worst_opponent_win_rate":0.125,"advance_limit":6},
+  "stage2_gate": {"games_per_candidate":128,"opponents":["random","deterministic","rule_v1","setup-heavy"],"minimum_completed":128,"maximum_faults":0,"minimum_overall_win_rate":0.45,"minimum_worst_opponent_win_rate":0.25,"advance_limit":2},
+  "final_gate": {"games_per_candidate":256,"opponents":["random","deterministic","rule_v1","setup-heavy"],"minimum_completed":256,"maximum_faults":0,"minimum_overall_win_rate":0.5,"minimum_worst_opponent_win_rate":0.25,"advance_limit":2},
+  "candidates": [
+    {"candidate_id":"hammer_to_sacred_ash","remove":1081,"add":1129,"reason":"回収を1枚増やす","target_failure":"後続の進化札不足","risk":"特殊エネルギー対策低下","source":"pinned baseline recovery comparison"},
+    {"candidate_id":"hammer_to_lanas_aid","remove":1081,"add":1184,"reason":"回収を1枚増やす","target_failure":"後続の進化札不足","risk":"特殊エネルギー対策低下","source":"pinned baseline recovery comparison"},
+    {"candidate_id":"hammer_to_jumbo_ice_cream","remove":1081,"add":1147,"reason":"回復札を試す","target_failure":"長期戦のActive損失","risk":"手札に残る非展開札","source":"2026-07-12 control v2"},
+    {"candidate_id":"hammer_to_lillies_determination","remove":1081,"add":1227,"reason":"手札更新を1枚増やす","target_failure":"手札停滞","risk":"特殊エネルギー対策低下","source":"2026-07-11 draw-engine"},
+    {"candidate_id":"hammer_to_basic_psychic","remove":1081,"add":5,"reason":"基本エネルギーを1枚増やす","target_failure":"エネルギー不足","risk":"対策密度低下","source":"energy ablation"},
+    {"candidate_id":"hammer_to_rare_candy","remove":1081,"add":1079,"reason":"進化加速札を1枚増やす","target_failure":"初進化の遅れ","risk":"特殊エネルギー対策低下","source":"pinned baseline evolution package"},
+    {"candidate_id":"hammer_to_legacy_dunsparce","remove":1081,"add":65,"reason":"追加のBasic展開札を試す","target_failure":"初動Bench不足","risk":"別進化系統でないBasicの混入","source":"2026-07-12 historical list"},
+    {"candidate_id":"hammer_to_fezandipiti","remove":1081,"add":140,"reason":"補助draw/attackを増やす","target_failure":"手札停滞","risk":"Bench枠圧迫","source":"pinned baseline"},
+    {"candidate_id":"hammer_to_shaymin","remove":1081,"add":343,"reason":"補助展開札を増やす","target_failure":"初動Bench不足","risk":"Bench枠圧迫","source":"pinned baseline"},
+    {"candidate_id":"hammer_to_nighttime_mine","remove":1081,"add":1266,"reason":"スタジアム対策を増やす","target_failure":"相手スタジアムの継続","risk":"手札に残る重複札","source":"pinned baseline"},
+    {"candidate_id":"poke_pad_to_sacred_ash","remove":1152,"add":1129,"reason":"手札安定性と回収の交換","target_failure":"後続の進化札不足","risk":"手札安定性低下","source":"pinned baseline"},
+    {"candidate_id":"poke_pad_to_lanas_aid","remove":1152,"add":1184,"reason":"手札安定性と回収の交換","target_failure":"後続の進化札不足","risk":"手札安定性低下","source":"pinned baseline"},
+    {"candidate_id":"poke_pad_to_jumbo_ice_cream","remove":1152,"add":1147,"reason":"手札安定性と回復の交換","target_failure":"長期戦のActive損失","risk":"手札停滞","source":"2026-07-12 control v2"},
+    {"candidate_id":"xerosic_to_lillies_determination","remove":1197,"add":1227,"reason":"妨害を手札更新へ置換","target_failure":"手札停滞","risk":"妨害性能低下","source":"2026-07-11 draw-engine"},
+    {"candidate_id":"boss_to_lillies_determination","remove":1182,"add":1227,"reason":"gustを手札更新へ置換","target_failure":"手札停滞","risk":"即時KO機会低下","source":"2026-07-11 draw-engine"},
+    {"candidate_id":"dawn_to_lillies_determination","remove":1231,"add":1227,"reason":"安定性Supporterの1枚交換","target_failure":"手札停滞","risk":"Dawn探索性能低下","source":"2026-07-11 draw-engine"}
+  ],
+  "retired_static_invalid": [{"candidate_id":"hammer_to_enriching_energy","remove":1081,"add":13,"reason":"Enriching Energy is ACE SPEC and cannot be a second copy","observed_stage1_status":"AGENT_INVALID_32_OF_32","artifact":"deck_stage1/hammer_to_enriching_energy"}]
+}

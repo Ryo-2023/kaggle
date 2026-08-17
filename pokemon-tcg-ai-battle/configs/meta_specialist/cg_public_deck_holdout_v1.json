@@ -1,0 +1,43 @@
+{
+  "schema_version": "cg-public-deck-holdout-v1",
+  "research_only": true,
+  "local_eval_only": true,
+  "decklist_only_public_proxy": true,
+  "source_pool_path": "data/opponent_deck_pool_20260730/opponent_deck_pool.json",
+  "source_pool_sha256": "90d24ea18e80f65ec10c9d71d1db6b5241ea581aca48161150972f3752163e96",
+  "source_pool_hash": "53845668ada8fa9be78631061d44ae92945e7e7b1706b5dd023e697046780eef",
+  "current_pool_manifest_sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca",
+  "entry_ids": [
+    "rule-v0-deck-704270a2922dabe9",
+    "rule-v0-deck-ca42a47ab1c33580",
+    "rule-v0-deck-7c6399e18e86ec1f",
+    "rule-v0-deck-c960f71296a4ca79",
+    "rule-v0-deck-b7e42041a0618476",
+    "rule-v0-deck-dbc315744a48d35b",
+    "rule-v0-deck-849255b36a7691d2"
+  ],
+  "entry_deck_hashes": [
+    "704270a2922dabe9e04a8a7da824317b637d727107f6e70afcd90c1bb1264447",
+    "ca42a47ab1c33580631b45be66fd99a9a0d5b38c3c68ec012b1841299604f96c",
+    "7c6399e18e86ec1f19aab25b362d662a27716a660178e3d8ea48d61c2827a1b3",
+    "c960f71296a4ca797d8b8421f8c3d059752296ba34721108e6b625e02ca0410a",
+    "b7e42041a0618476c9601ae9fbe5c166530e0d3fcf916792b0968cb811a02cbe",
+    "dbc315744a48d35b63b23bb36965077ce4f2885d6a7b25b42f8498c2598e0724",
+    "849255b36a7691d257e88559c1a7b71a420408d45c5832823119203396e19ca5"
+  ],
+  "base_seeds": [480260000, 480261000],
+  "repetitions_per_opponent_seat": 8,
+  "games_per_arm_per_seed": 112,
+  "games_per_arm": 224,
+  "arms": ["candidate_c11", "parent_p2", "incumbent_p1"],
+  "evaluation_contract": {
+    "both_seats": true,
+    "fault_inclusive": true,
+    "training_exposure": 0,
+    "cem_update": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "candidate_must_beat_each_arm_on_each_seed": true,
+    "seat_gap_limit": 0.05
+  }
+}

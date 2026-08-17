@@ -1,0 +1,24 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_policy_family_v18_cross_lineage_p1_20260816",
+  "seed_namespace": "self-owned-cg-cross-lineage-p1-v18-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v15-public-mix-20260816"
+  ],
+  "deck_recipes": [
+    {"id": "fire-v18-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269000, "ordinal": 0},
+    {"id": "dark-v18-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269001, "ordinal": 1},
+    {"id": "lightning-v18-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269002, "ordinal": 2},
+    {"id": "grass-v18-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_grass.json", "seed": 20269003, "ordinal": 3}
+  ],
+  "policy_variants": [
+    {"id": "fire-lethal-v18-00", "deck_recipe_id": "fire-v18-00", "overrides": {"lethal_bonus": 26000, "lethal_hp_margin": 2, "attack_damage_weight_milli": 2200, "attack_982_base": 33000, "attack_983_base": 62000}},
+    {"id": "dark-retreat-v18-01", "deck_recipe_id": "dark-v18-01", "overrides": {"retreat_good_score": 22000, "attach_mega_lucario": 39000, "attach_mega_2energy_bonus": 16000, "attach_overenergy_penalty": -52000}},
+    {"id": "lightning-search-v18-02", "deck_recipe_id": "lightning-v18-02", "overrides": {"search_mega_lucario": 65000, "ability_bonus": 33500, "setup_active_riolu": 45500, "setup_bench_riolu": 52000}},
+    {"id": "grass-balanced-v18-03", "deck_recipe_id": "grass-v18-03", "overrides": {"lethal_bonus": 14500, "attack_damage_weight_milli": 1650, "attack_generic_base": 15500, "ability_bonus": 29000, "evolve_mega_lucario": 57000, "retreat_good_score": 15500}}
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "cg-p2-opponent-seat-initial-v1",
+  "research_only": true,
+  "parent_candidate_id": "cg-p1-cem-incumbent-g01-c83df4408b24",
+  "parent_policy_sha256": "4261870c855d68abfbb96df029b5e66c6f019f398471701ceaac03f72f2b03c4",
+  "parent_deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+  "config": {
+    "ability_bonus": 33644,
+    "attach_mega_2energy_bonus": 9378,
+    "attach_mega_lucario": 54881,
+    "attach_overenergy_penalty": -34380,
+    "attack_982_base": 38838,
+    "attack_983_base": 62558,
+    "attack_damage_weight_milli": 1097,
+    "attack_generic_base": 12206,
+    "evolve_mega_lucario": 49719,
+    "lethal_bonus": 8584,
+    "lethal_hp_margin": 4,
+    "retreat_good_score": 10772,
+    "search_mega_lucario": 54509,
+    "setup_active_riolu": 39124,
+    "setup_bench_riolu": 32334
+  },
+  "authority": {
+    "training_allowed": false,
+    "longrun_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false
+  },
+  "usage_boundary": "research_only_cem_initial_center"
+}

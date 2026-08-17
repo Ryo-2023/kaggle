@@ -1,0 +1,17 @@
+{
+  "ability_bonus": 27294,
+  "attach_mega_2energy_bonus": 13907,
+  "attach_mega_lucario": 42600,
+  "attach_overenergy_penalty": -33753,
+  "attack_982_base": 28068,
+  "attack_983_base": 49404,
+  "attack_damage_weight_milli": 661,
+  "attack_generic_base": 6440,
+  "evolve_mega_lucario": 51078,
+  "lethal_bonus": 18518,
+  "lethal_hp_margin": -14,
+  "retreat_good_score": 11650,
+  "search_mega_lucario": 54004,
+  "setup_active_riolu": 45274,
+  "setup_bench_riolu": 31861
+}

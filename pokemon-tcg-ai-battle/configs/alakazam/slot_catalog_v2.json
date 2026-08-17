@@ -1,0 +1,38 @@
+{
+  "schema": "alakazam-slot-catalog-v2",
+  "deck_id": "alakazam-baseline-v1",
+  "count_semantics": {
+    "category_card_types": "同じカテゴリに属するCard IDの種類数。自由・調整可能属性は排他的カテゴリではなく重複する。",
+    "category_copies": "排他的カテゴリに属する採用枚数。core/dependency/stability/energy/countermeasureの合計は60。",
+    "changeable_copies": "当該Card IDについて探索で増減を許す最大枚数。0はこの探索で変更禁止。"
+  },
+  "cards": [
+    {"card_id":5,"name":"Basic {P} Energy","copies":2,"category":"energy","changeable_copies":1,"locked_reason":"Alakazamの攻撃エネルギー","dependencies":[743],"evidence":"pinned baseline"},
+    {"card_id":13,"name":"Enriching Energy","copies":1,"category":"energy","changeable_copies":0,"copy_limit":1,"locked_reason":"ACE SPECは1枚制限","dependencies":[66],"evidence":"official card data Rule=ACE SPEC"},
+    {"card_id":19,"name":"Telepath Psychic Energy","copies":4,"category":"energy","changeable_copies":1,"locked_reason":"主エネルギー基盤","dependencies":[743],"evidence":"pinned baseline"},
+    {"card_id":66,"name":"Dudunsparce","copies":2,"category":"dependency","changeable_copies":0,"locked_reason":"draw engine進化先","dependencies":[305,13],"evidence":"pinned baseline"},
+    {"card_id":140,"name":"Fezandipiti ex","copies":1,"category":"countermeasure","changeable_copies":1,"locked_reason":"補助draw/attack枠","dependencies":[],"evidence":"pinned baseline"},
+    {"card_id":305,"name":"Dunsparce","copies":3,"category":"dependency","changeable_copies":0,"locked_reason":"Dudunsparceへの進化元","dependencies":[66],"evidence":"pinned baseline"},
+    {"card_id":343,"name":"Shaymin","copies":1,"category":"countermeasure","changeable_copies":1,"locked_reason":"補助展開枠","dependencies":[],"evidence":"pinned baseline"},
+    {"card_id":741,"name":"Abra","copies":4,"category":"core","changeable_copies":0,"locked_reason":"必須進化系統","dependencies":[742,743],"evidence":"pinned baseline and public lower bounds"},
+    {"card_id":742,"name":"Kadabra","copies":4,"category":"core","changeable_copies":0,"locked_reason":"必須進化系統","dependencies":[741,743],"evidence":"pinned baseline and public lower bounds"},
+    {"card_id":743,"name":"Alakazam","copies":4,"category":"core","changeable_copies":0,"locked_reason":"主戦略","dependencies":[741,742],"evidence":"pinned baseline and public lower bounds"},
+    {"card_id":1079,"name":"Rare Candy","copies":3,"category":"stability","changeable_copies":1,"locked_reason":"進化速度","dependencies":[743],"evidence":"pinned baseline"},
+    {"card_id":1081,"name":"Enhanced Hammer","copies":4,"category":"countermeasure","changeable_copies":4,"locked_reason":"対策枠であり必須依存なし","dependencies":[],"evidence":"pinned baseline; prior 1081-to-1097 is retired"},
+    {"card_id":1086,"name":"Buddy-Buddy Poffin","copies":4,"category":"stability","changeable_copies":1,"locked_reason":"初動展開","dependencies":[741,305],"evidence":"pinned baseline"},
+    {"card_id":1097,"name":"Night Stretcher","copies":1,"category":"countermeasure","changeable_copies":1,"locked_reason":"回収枠","dependencies":[],"evidence":"pinned baseline; +1 candidate retired"},
+    {"card_id":1129,"name":"Sacred Ash","copies":1,"category":"countermeasure","changeable_copies":1,"locked_reason":"回収枠","dependencies":[],"evidence":"pinned baseline"},
+    {"card_id":1152,"name":"Poké Pad","copies":4,"category":"stability","changeable_copies":1,"locked_reason":"手札安定性","dependencies":[],"evidence":"pinned baseline"},
+    {"card_id":1182,"name":"Boss’s Orders","copies":3,"category":"countermeasure","changeable_copies":1,"locked_reason":"攻撃対象操作","dependencies":[743],"evidence":"pinned baseline"},
+    {"card_id":1184,"name":"Lana’s Aid","copies":1,"category":"countermeasure","changeable_copies":1,"locked_reason":"回収枠","dependencies":[],"evidence":"pinned baseline"},
+    {"card_id":1197,"name":"Xerosic’s Machinations","copies":3,"category":"countermeasure","changeable_copies":1,"locked_reason":"妨害枠","dependencies":[],"evidence":"pinned baseline"},
+    {"card_id":1225,"name":"Hilda","copies":4,"category":"stability","changeable_copies":1,"locked_reason":"展開安定性","dependencies":[741,305],"evidence":"pinned baseline"},
+    {"card_id":1231,"name":"Dawn","copies":4,"category":"stability","changeable_copies":1,"locked_reason":"展開安定性","dependencies":[741,305],"evidence":"pinned baseline"},
+    {"card_id":1266,"name":"Nighttime Mine","copies":2,"category":"countermeasure","changeable_copies":1,"locked_reason":"スタジアム対策","dependencies":[],"evidence":"pinned baseline"}
+  ],
+  "attribute_sets": {
+    "flex_card_types": [1081,1097],
+    "adjustable_card_types": [5,13,1079,1081,1086,1097,1129,1152,1182,1184,1197,1225,1231,1266,65,1147,1227],
+    "retired_mutations": [{"remove":1081,"add":1097,"reason":"対戦相手により結果が反転"}]
+  }
+}

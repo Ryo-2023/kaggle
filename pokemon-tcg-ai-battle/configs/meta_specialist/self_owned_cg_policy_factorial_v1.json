@@ -1,0 +1,158 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_deck_policy_factorial_v1",
+  "seed_namespace": "self-owned-cg-factorial-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-generation-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v2-20260816-00",
+    "runs/cg-self-owned-deck-generation-v2-20260816-01",
+    "runs/cg-self-owned-deck-generation-v2-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-00",
+    "runs/cg-self-owned-deck-generation-v3-20260816-01",
+    "runs/cg-self-owned-deck-generation-v3-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-03",
+    "runs/cg-self-owned-deck-generation-v3-20260816-04",
+    "runs/cg-self-owned-deck-generation-v3-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-00",
+    "runs/cg-self-owned-deck-generation-v4-20260816-01",
+    "runs/cg-self-owned-deck-generation-v4-20260816-03",
+    "runs/cg-self-owned-deck-generation-v4-20260816-04",
+    "runs/cg-self-owned-deck-generation-v4-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06"
+  ],
+  "deck_recipes": [
+    {
+      "id": "deck-v5-00",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json",
+      "seed": 20260870,
+      "ordinal": 0
+    },
+    {
+      "id": "deck-v5-01",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json",
+      "seed": 20260871,
+      "ordinal": 1
+    },
+    {
+      "id": "deck-v5-02",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v3.json",
+      "seed": 20260872,
+      "ordinal": 2
+    },
+    {
+      "id": "deck-v5-03",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json",
+      "seed": 20260873,
+      "ordinal": 3
+    },
+    {
+      "id": "deck-v5-04",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json",
+      "seed": 20260874,
+      "ordinal": 4
+    },
+    {
+      "id": "deck-v5-05",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v3.json",
+      "seed": 20260875,
+      "ordinal": 5
+    },
+    {
+      "id": "deck-v5-06",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json",
+      "seed": 20260876,
+      "ordinal": 6
+    },
+    {
+      "id": "deck-v5-07",
+      "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v2.json",
+      "seed": 20260877,
+      "ordinal": 7
+    }
+  ],
+  "policy_variants": [
+    {
+      "id": "balanced-v5-00",
+      "deck_recipe_id": "deck-v5-00",
+      "overrides": {
+        "lethal_bonus": 16000,
+        "attack_damage_weight_milli": 1250
+      }
+    },
+    {
+      "id": "lethal-v5-01",
+      "deck_recipe_id": "deck-v5-01",
+      "overrides": {
+        "lethal_bonus": 28000,
+        "lethal_hp_margin": -8,
+        "attack_982_base": 50000,
+        "attack_983_base": 65000,
+        "attack_damage_weight_milli": 1800
+      }
+    },
+    {
+      "id": "setup-v5-02",
+      "deck_recipe_id": "deck-v5-02",
+      "overrides": {
+        "setup_active_riolu": 58000,
+        "setup_bench_riolu": 55000,
+        "search_mega_lucario": 65000,
+        "evolve_mega_lucario": 62000
+      }
+    },
+    {
+      "id": "attack-v5-03",
+      "deck_recipe_id": "deck-v5-03",
+      "overrides": {
+        "attack_generic_base": 22000,
+        "attack_982_base": 58000,
+        "attack_983_base": 68000,
+        "attack_damage_weight_milli": 2500,
+        "attach_mega_lucario": 60000
+      }
+    },
+    {
+      "id": "retreat-v5-04",
+      "deck_recipe_id": "deck-v5-04",
+      "overrides": {
+        "retreat_good_score": 24000,
+        "attach_mega_lucario": 55000,
+        "attach_overenergy_penalty": -55000,
+        "attach_mega_2energy_bonus": 15000
+      }
+    },
+    {
+      "id": "ability-v5-05",
+      "deck_recipe_id": "deck-v5-05",
+      "overrides": {
+        "ability_bonus": 48000,
+        "setup_active_riolu": 50000,
+        "setup_bench_riolu": 48000
+      }
+    },
+    {
+      "id": "conservative-v5-06",
+      "deck_recipe_id": "deck-v5-06",
+      "overrides": {
+        "lethal_bonus": 6000,
+        "lethal_hp_margin": 15,
+        "attack_damage_weight_milli": 600,
+        "attach_overenergy_penalty": -58000,
+        "retreat_good_score": 20000
+      }
+    },
+    {
+      "id": "mixed-v5-07",
+      "deck_recipe_id": "deck-v5-07",
+      "overrides": {
+        "lethal_bonus": 20000,
+        "attack_damage_weight_milli": 1600,
+        "attack_generic_base": 16000,
+        "search_mega_lucario": 60000,
+        "retreat_good_score": 18000
+      }
+    }
+  ]
+}

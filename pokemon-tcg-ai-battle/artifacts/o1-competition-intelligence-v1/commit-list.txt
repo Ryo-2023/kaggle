@@ -1,0 +1,5 @@
+1b0a320 feat(competition): add Competition Intelligence sidecar foundation (O1 Slice 0-2)
+4f8339a docs(o1): document Competition Intelligence sidecar architecture and Slice 0-2 evidence
+9efe409 chore(o1): add portable evidence/patch bundle for Slice 0-2 handoff
+4e5a0a9 feat(competition): implement O1-2 replay normalization, O1-3 knowledge registry, O1-4 immutable snapshot and offline training adapter
+64d7542 docs(o1): document O1-2 through O1-4 architecture, DEC-014, and Slice 2-4 evidence

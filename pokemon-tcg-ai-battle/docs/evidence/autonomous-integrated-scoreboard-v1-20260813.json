@@ -1,0 +1,314 @@
+{
+  "schema": "autonomous-integrated-scoreboard-v1",
+  "generated_at": "2026-08-13",
+  "scope": "strong-asset common24 ranking and bounded fine-tune/deck-policy checks",
+  "policy": {
+    "existing_artifacts_immutable": true,
+    "new_performance_runs": false,
+    "bestknown_promotion": false,
+    "longrun_started": false,
+    "submission_started": false,
+    "classification_is_fail_closed": true
+  },
+  "protocol_gate": {
+    "reference": "common24",
+    "required_stages": [96, 384, 768, 1536],
+    "faults_required": 0,
+    "both_seats_required": true,
+    "authority_false_for_research": true,
+    "native_control_required": true
+  },
+  "best_known": {
+    "EvaluationBestKnown": {
+      "pair_id": "tomatomato_archaludon",
+      "policy": "native",
+      "wins": 1107,
+      "draws": 0,
+      "losses": 429,
+      "faults": 0,
+      "games": 1536,
+      "score_rate": 0.720703125,
+      "status": "provisional_native_leader"
+    },
+    "BestKnownArchaludon": {
+      "pair_id": "tomatomato_archaludon",
+      "status": "provisional_same_as_evaluation_best_known"
+    },
+    "TrainingEligibleBestKnown": {
+      "pair_id": "tomatomato_archaludon",
+      "role": "sealed_snapshot_primary; lucifer/plamen_control",
+      "status": "bounded_permission_only"
+    },
+    "SubmissionEligibleBestKnown": {
+      "pair_id": null,
+      "status": "none_among_strong_asset_population",
+      "fallback": "Rule v0 + root deck (existing production anchor; not changed here)",
+      "fallback_archive_sha256": "da4bbe9d65c6d42feae2070fc02711efde4ffbe1ca08b9f9f00bfed3d96f9b9a"
+    },
+    "GlobalBestKnown": {
+      "pair_id": null,
+      "status": "unresolved",
+      "reason": "remaining smoke/R7 assets, permission closure, and common-protocol coverage are incomplete"
+    }
+  },
+  "sources": {
+    "native_top3": {
+      "path": "docs/evidence/strong-asset-top3-pooled1536-20260812.md",
+      "sha256": "e3299aac3a666cca3d19ab80a8feb0d7dddc861be155c2479345933eb22df863"
+    },
+    "student_common24": {
+      "path": "docs/evidence/autonomous-student-v3-common24-96-reconciliation-and-evaluator-provenance-audit-20260813.md",
+      "sha256": "6488d195fcb7e87bbdf0f84130aa5ccb50c8438f0ed1cb94521dc04fc738ce88"
+    },
+    "guarded_score_bias": {
+      "path": "docs/evidence/autonomous-native-guarded-score-pilot-v1-20260813.md",
+      "sha256": "5efd647a94684d94893d022dda0b37e3eaecb66f3168665d6c8c8e297e8e6e48"
+    },
+    "mutation_plamen_1536": {
+      "path": "docs/evidence/autonomous-deck-mutation-plamen-common24-pooled1536-20260813.md",
+      "sha256": "a2db3c4259b34366a9bceced2dbc0ed68abcfa479e24f8064c57bcd61dbe7a78"
+    },
+    "mutation_tomato_direct": {
+      "path": "docs/evidence/autonomous-deck-mutation-plamen-tomato-direct-control-20260813.md",
+      "sha256": "d34c5296a6f64bd6b23e3e80b255d5527b0fbb695923c6787e74d307089dd522"
+    },
+    "mutation_tomato_policy_interaction": {
+      "path": "docs/evidence/autonomous-deck-mutation-tomato-policy-interaction-20260813.md",
+      "sha256": "67c59b4300ac75a177da6b2b29c9f3b61805f62ffee55cd8453c8d65e20d1eb1"
+    },
+    "full6_dynamic": {
+      "path": "docs/evidence/autonomous-full6-repair-and-dynamic-curriculum-v1-20260813.md",
+      "sha256": "fd710933e2ec6114a678c416c3980ec1e988eac9682bd70cfb2a8f6a3eae3f5",
+      "full6_manifest_sha256": "a38e0a6ce8ff2396e53064bd5c2e2352f8806bb09a81fbb8acc7d9443d6703c7",
+      "full6_semantic_sha256": "f5c50c93e33e95bb815154ba6c60a4f34271a17f647bfdc9b016cc2509e840f2",
+      "curriculum_manifest_sha256": "b9034c96b5f1cde1a33eab156b7e94ef73f9c35aa292492bec2cf07b8aee6a7a",
+      "curriculum_semantic_sha256": "df87a1d5866e2fb9791c9b560fa6bbf8d6798eedc1652fdec527fa816b83fde4"
+    },
+    "adapter": {
+      "path": "docs/evidence/autonomous-common24-curriculum-outcome-adapter-v1-20260813.md",
+      "sha256": "09c93500045bd25c4266c7e781401057ff4d2173dcef5b9a7232f8623559efc2"
+    }
+  },
+  "rows": [
+    {
+      "id": "native_tomato_1536",
+      "kind": "native_pair",
+      "pair_id": "tomatomato_archaludon",
+      "games": 1536,
+      "wins": 1107,
+      "draws": 0,
+      "losses": 429,
+      "faults": 0,
+      "score_rate": 0.720703125,
+      "native_delta_pt": 0.0,
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": true, "BestKnownArchaludon": true, "TrainingEligibleBestKnown": true, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS", "permission": "BOUNDED_LOCAL_ONLY", "package": "NO-GO", "longrun": "NOT_STARTED"},
+      "result": "anchor_provisional",
+      "evidence_sha256": "e3299aac3a666cca3d19ab80a8feb0d7dddc861be155c2479345933eb22df863"
+    },
+    {
+      "id": "native_lucifer_1536",
+      "kind": "native_pair",
+      "pair_id": "lucifer19_battlecore",
+      "games": 1536,
+      "wins": 1103,
+      "draws": 0,
+      "losses": 433,
+      "faults": 0,
+      "score_rate": 0.7180989583333334,
+      "native_delta_pt": -0.260416666666667,
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS", "permission": "BOUNDED_LOCAL_ONLY", "package": "NO-GO", "longrun": "NOT_STARTED"},
+      "result": "native_control",
+      "evidence_sha256": "e3299aac3a666cca3d19ab80a8feb0d7dddc861be155c2479345933eb22df863"
+    },
+    {
+      "id": "native_plamen_1536",
+      "kind": "native_pair",
+      "pair_id": "plamen06_steel",
+      "games": 1536,
+      "wins": 1102,
+      "draws": 0,
+      "losses": 434,
+      "faults": 0,
+      "score_rate": 0.7174479166666666,
+      "native_delta_pt": -0.325520833333334,
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS", "permission": "BOUNDED_LOCAL_ONLY", "package": "NO-GO", "longrun": "NOT_STARTED"},
+      "result": "native_control",
+      "evidence_sha256": "e3299aac3a666cca3d19ab80a8feb0d7dddc861be155c2479345933eb22df863"
+    },
+    {
+      "id": "student_theta0_96",
+      "kind": "student",
+      "pair_id": "student-v3-theta0-candidate-v2",
+      "games": 96,
+      "wins": 7,
+      "draws": 0,
+      "losses": 89,
+      "faults": 0,
+      "control_wins": 66,
+      "control_score_rate": 0.6875,
+      "score_rate": 0.07291666666666667,
+      "native_delta_pt": -61.45833333333333,
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS_96_SCREEN", "permission": "RESEARCH_ONLY", "package": "NO-GO", "longrun": "NO-GO"},
+      "result": "screen_no_go",
+      "evidence_sha256": "6488d195fcb7e87bbdf0f84130aa5ccb50c8438f0ed1cb94521dc04fc738ce88",
+      "reconciliation_sha256": "a46cfef693951cd809a7d8fcd546e6853521b35da43482bb043a361f5bbc6bd4"
+    },
+    {
+      "id": "student_awr_96",
+      "kind": "student",
+      "pair_id": "student-v3-awr-candidate-v2",
+      "games": 96,
+      "wins": 3,
+      "draws": 0,
+      "losses": 93,
+      "faults": 0,
+      "control_wins": 66,
+      "control_score_rate": 0.6875,
+      "score_rate": 0.03125,
+      "native_delta_pt": -65.625,
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS_96_SCREEN", "permission": "RESEARCH_ONLY", "package": "NO-GO", "longrun": "NO-GO"},
+      "result": "screen_no_go",
+      "evidence_sha256": "6488d195fcb7e87bbdf0f84130aa5ccb50c8438f0ed1cb94521dc04fc738ce88",
+      "reconciliation_sha256": "10fd95ea939b332c2c49ed3e1687040a5e186cb7f3bdf3dc6431f2b56518bae5"
+    },
+    {
+      "id": "guarded_tomato_score_bias",
+      "kind": "policy_candidate",
+      "pair_id": "tomato-guarded-score-5000",
+      "screen": {"games": 96, "wins": 75, "draws": 0, "losses": 21, "faults": 0, "control_wins": 66, "delta_pt": 9.375},
+      "confirm": {"games": 384, "wins": 262, "draws": 1, "losses": 121, "faults": 0, "control_wins": 274, "control_draws": 0, "control_losses": 110, "delta_pt": -2.9947916666666643},
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS_96_TO_384_NO_GO", "permission": "RESEARCH_ONLY", "package": "NO-GO", "longrun": "NO-GO"},
+      "result": "confirm_no_go",
+      "evidence_sha256": "5efd647a94684d94893d022dda0b37e3eaecb66f3168665d6c8c8e297e8e6e48",
+      "confirm_summary_sha256": "08adda12d4b87f4422caa0219d8f4ccbf8511e45bad4df3eb1c309231975d2c4"
+    },
+    {
+      "id": "mutation_3f6451_plamen_1536",
+      "kind": "deck_mutation",
+      "pair_id": "3f64513bf1c069b7e14c889b2c94150f7e0dd58697e9004c937871344668719f",
+      "games": 1536,
+      "wins": 1121,
+      "draws": 0,
+      "losses": 415,
+      "faults": 0,
+      "control_wins": 1095,
+      "control_losses": 441,
+      "score_rate": 0.7298177083333334,
+      "control_score_rate": 0.712890625,
+      "delta_pt": 1.692708333333337,
+      "native_overcome": true,
+      "native_overcome_scope": "Plamen_parent_only; not Tomato EvaluationBestKnown",
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS", "permission": "NO-GO", "package": "NO-GO", "longrun": "NOT_STARTED"},
+      "result": "candidate_only",
+      "evidence_sha256": "a2db3c4259b34366a9bceced2dbc0ed68abcfa479e24f8064c57bcd61dbe7a78",
+      "pooled_manifest_sha256": "6ac5a4ed93a4214c4cd0e41a37665b64df96b4ba922143fb5e17d39be7325144"
+    },
+    {
+      "id": "mutation_3f6451_tomato_direct_384",
+      "kind": "deck_policy_pair",
+      "pair_id": "3f6451-mutant-deck-plus-plamen-policy",
+      "games": 384,
+      "wins": 274,
+      "draws": 0,
+      "losses": 110,
+      "faults": 0,
+      "control_wins": 275,
+      "control_draws": 1,
+      "control_losses": 108,
+      "score_rate": 0.7135416666666666,
+      "control_score_rate": 0.7174479166666666,
+      "delta_pt": -0.390625,
+      "native_overcome": false,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS_384_DIRECT", "permission": "NO-GO", "package": "NO-GO", "longrun": "NO-GO"},
+      "result": "candidate_only_stop",
+      "evidence_sha256": "d34c5296a6f64bd6b23e3e80b255d5527b0fbb695923c6787e74d307089dd522",
+      "summary_sha256": "f5a8f077f111881b606821fc312f2aa663fd57394f10724bb131b5e4f87429ba"
+    },
+    {
+      "id": "mutation_3f6451_tomato_policy_interaction_384",
+      "kind": "deck_policy_interaction",
+      "pair_id": "3f6451-mutant-deck-plus-tomato-native-policy",
+      "games": 384,
+      "wins": 264,
+      "draws": 0,
+      "losses": 120,
+      "faults": 0,
+      "control_wins": 260,
+      "control_draws": 0,
+      "control_losses": 124,
+      "score_rate": 0.6875,
+      "control_score_rate": 0.6770833333333334,
+      "delta_pt": 1.0416666666666643,
+      "native_overcome": false,
+      "native_overcome_scope": "bounded_384_signal_only; +3pt gate not met",
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS_384_INTERACTION", "permission": "NO-GO", "package": "NO-GO", "longrun": "NO-GO"},
+      "result": "candidate_only_stop",
+      "evidence_sha256": "67c59b4300ac75a177da6b2b29c9f3b61805f62ffee55cd8453c8d65e20d1eb1",
+      "summary_sha256": "ba6486331ec8171fa9848cd22e792b55496726b2b7e4efd5d1ba7cf897b41e4a"
+    },
+    {
+      "id": "dynamic_curriculum_iteration0",
+      "kind": "curriculum_artifact",
+      "pair_id": null,
+      "games": 96,
+      "emitted_meta_train_rows": 80,
+      "meta_train_opponents": 20,
+      "meta_dev_rows": 0,
+      "meta_final_rows": 0,
+      "teacher_behavior_eligible": 0,
+      "faults": 0,
+      "native_overcome": null,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS", "permission": "NO-GO_ALL_LOCAL_EVAL_ONLY", "package": "NO-GO", "longrun": "NOT_STARTED"},
+      "result": "curriculum_research_only",
+      "curriculum_manifest_sha256": "b9034c96b5f1cde1a33eab156b7e94ef73f9c35aa292492bec2cf07b8aee6a7a"
+    },
+    {
+      "id": "full6_repair",
+      "kind": "dataset_repair",
+      "pair_id": null,
+      "games": null,
+      "faults": null,
+      "native_overcome": null,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "NOT_APPLICABLE", "seat": "NOT_APPLICABLE", "protocol": "BLOCKED_REPRODUCTION", "permission": "NO-GO", "package": "NO-GO", "longrun": "NO-GO"},
+      "result": "blocked_ordered4_and_near_duplicate; published_rows_0"
+    },
+    {
+      "id": "common24_outcome_adapter_reseal",
+      "kind": "adapter_provenance",
+      "pair_id": "student-v3-theta0-candidate-v2",
+      "games": 96,
+      "emitted_meta_train_rows": 80,
+      "faults": 0,
+      "native_overcome": null,
+      "classification": {"EvaluationBestKnown": false, "BestKnownArchaludon": false, "TrainingEligibleBestKnown": false, "SubmissionEligibleBestKnown": false, "GlobalBestKnown": false},
+      "gates": {"fault": "PASS", "seat": "PASS", "protocol": "PASS_RESEALED", "permission": "RESEARCH_ONLY", "package": "NO-GO", "longrun": "NO-GO"},
+      "artifact_manifest_sha256": "0679bc79af541759c67d480fdc1fef8bd9f8f1a955f0f5dddb69890e163faa89",
+      "artifact_semantic_sha256": "6ff323c8ec5cf377f8f2c9c75230416dcbafe9dfab01b801aada557ad6369454",
+      "result": "provenance_only; no_training_authority"
+    }
+  ],
+  "verification": {
+    "focused_tests": "35 passed in 0.75s (TMPDIR=/tmp)",
+    "docs_validator": "Validated 13 canonical documents.",
+    "git_diff_check": "PASS",
+    "artifact_mutation": "existing performance artifacts unchanged; only this new scoreboard pair added by this task"
+  },
+  "next_gate": "Do not promote or launch longrun. If work resumes, repair Full6/permission closure, then evaluate top two archetypes with native controls before public-state value/AWR and alternating deck search."
+}

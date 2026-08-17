@@ -1,0 +1,8 @@
+{
+  "schema_version": "o3-evaluation-matrix-v1",
+  "engine_seed_supported": false,
+  "pairing_mode": "seat_matched_unseeded",
+  "exact_paired_inference": false,
+  "minimum_logical_pairs": 100,
+  "champion": "rule-agent-v0"
+}

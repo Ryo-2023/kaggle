@@ -1,0 +1,64 @@
+{
+    "agent_family_versions": {
+        "deterministic": "1",
+        "exception_agent": "1",
+        "invalid_artifact": "1",
+        "neural_actual_trained": "1",
+        "random_legal": "1",
+        "rule_v0": "1",
+        "rule_v1": "1",
+        "slow_agent": "1",
+        "unknown_selection": "1"
+    },
+    "baseline_artifact_ids": [
+        "rule_v0",
+        "random_legal"
+    ],
+    "benchmark_id": "o5-benchmark-neural-vs-rule-v0-v1",
+    "benchmark_kind": "performance",
+    "benchmark_version": "1.0.0",
+    "cabt_version": "1.32.0",
+    "candidate_artifact_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+    "candidate_artifact_id": "neural_actual_trained",
+    "commit": "e7ed86e58eb9cedf06da73a276504c46507373ee",
+    "config_hash": "a2b61fc3ac3a172bad444d0bda445592e5cc6ef3d6f43e281a097d3579e569dc",
+    "created_at": "2026-07-21T04:28:44Z",
+    "deck_registry_version": "o5-deck-archetype-registry-v1",
+    "environment": "local",
+    "game_count": 20,
+    "logical_pair_count": 10,
+    "manifest_hash": "6b37f971556e9917c0709b8b74d17d4174bcb580ca918fa317a738e8cc4ad6a3",
+    "policy_pack_version": "o5-activation-opponent-factory-v1",
+    "requirements": {
+        "active_exact_decks": 0,
+        "runnable_families": 0,
+        "verified_links": 0
+    },
+    "ruleset_version": "unknown",
+    "schema_version": "o5-versioned-benchmark-manifest-v2",
+    "seat_swap_policy": "ALWAYS_SWAP",
+    "seed_set": [
+        93000,
+        93001,
+        93002,
+        93003,
+        93004,
+        93005,
+        93006,
+        93007,
+        93008,
+        93009
+    ],
+    "sets": {
+        "adversarial": [],
+        "core_regression": [
+            "rule_v0",
+            "random_legal"
+        ],
+        "current_meta": [],
+        "safety": []
+    },
+    "source_snapshot_ids": [],
+    "status": "BENCHMARK_BLOCKED_INSUFFICIENT_ACTIVE_POPULATION",
+    "time_budget_seconds": 3600.0
+}

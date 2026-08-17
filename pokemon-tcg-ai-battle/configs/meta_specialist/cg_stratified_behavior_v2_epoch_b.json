@@ -1,0 +1,91 @@
+{
+  "schema_version": "cg-stratified-behavior-source-spec-v2",
+  "research_only": true,
+  "usage_boundary": "local_eval_only",
+  "entries": [
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_3818c21f59b6",
+      "family": "alakazam",
+      "variant": "DUNSPARCE_FIRST",
+      "label": "train_a3818_dun",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_442a4cf9525c",
+      "family": "psychic",
+      "variant": "ZACIAN_FIRST",
+      "label": "train_p442_zac",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-historical-internal-meta-20260815-c/internal_nihei-MegaLopunny_19fd36050805",
+      "family": "comfey",
+      "variant": "DECKOUT_CONSERVATIVE_COMFEY",
+      "label": "train_c19_cons_comfey",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-historical-internal-meta-20260815-c/internal_nihei-MegaLopunny_24ce278aa99f",
+      "family": "comfey",
+      "variant": "DECKOUT_CONSERVATIVE_LITWICK",
+      "label": "train_c24_cons_litwick",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_c3531968323a",
+      "family": "festival",
+      "variant": "DUNSPARCE_FIRST",
+      "label": "train_f353_dun",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-hydreigon-deckout_c8430334ca23",
+      "family": "festival",
+      "variant": "SHAYMIN_SETUP_FIRST",
+      "label": "train_fc843_shay",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_e6780d317bb5",
+      "family": "alakazam",
+      "variant": "DUNSPARCE_FEZANDIPITI",
+      "label": "train_ae678_dunfez",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_dcdd60d7e792",
+      "family": "alakazam",
+      "variant": "ABRA_FEZANDIPITI",
+      "label": "train_adcdd_abraf",
+      "split": "META_TRAIN"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_c74df0e47a48",
+      "family": "alakazam",
+      "variant": "ABRA_FEZANDIPITI",
+      "label": "dev_ac74_abraf",
+      "split": "META_DEV"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_e399eda8f533",
+      "family": "festival",
+      "variant": "SHAYMIN_SETUP_FIRST",
+      "label": "dev_fe399_shay",
+      "split": "META_DEV"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_9e532f5b5cc6",
+      "family": "alakazam",
+      "variant": "DUNSPARCE_FIRST",
+      "label": "final_a9e_dun",
+      "split": "META_FINAL"
+    },
+    {
+      "base_root": "runs/cg-source-audit-20260815-k4/internal_nihei-cynthias-garchomp_dff8b4ef05af",
+      "family": "festival",
+      "variant": "POFFIN_DUNSPARCE_FIRST",
+      "label": "final_fdff_poffin",
+      "split": "META_FINAL"
+    }
+  ]
+}

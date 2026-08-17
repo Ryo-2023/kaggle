@@ -1,0 +1,30 @@
+schema_version: family-population-v1
+families:
+  MEGA_LUCARIO_EX:
+    anchor_ids: [677, 678]
+    basic_ids: [677]
+    energy_ids: [6]
+    variants: [deck-0ec8de046577ad94]
+  MEGA_ABOMASNOW_EX:
+    anchor_ids: [722, 723]
+    basic_ids: [722]
+    energy_ids: [3]
+    variants: [deck-2e7428b334577cbe]
+  ALAKAZAM:
+    anchor_ids: [741, 742, 743]
+    basic_ids: [741]
+    energy_ids: [5, 19]
+    variants: [deck-74d86ec36fd144b9]
+  MEGA_KANGASKHAN_EX:
+    anchor_ids: [756]
+    basic_ids: [756]
+    variants:
+      - deck_id: deck-252e7623b8477aee
+        energy_ids: [2, 5, 6]
+      - deck_id: deck-90324094dfc8c477
+        energy_ids: [1, 11, 14, 18]
+  ARCHALUDON_EX:
+    anchor_ids: [169, 190]
+    basic_ids: [169]
+    energy_ids: [8]
+    variants: [deck-93d105359f35c6ca, deck-cfebedc950ee7d66]

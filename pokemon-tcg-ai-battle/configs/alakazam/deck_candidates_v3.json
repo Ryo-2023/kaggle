@@ -1,0 +1,37 @@
+{
+  "schema": "alakazam-deck-candidate-results-v3",
+  "status": "CANDIDATE_ONLY_NOT_PROMOTED",
+  "baseline_comparison_status": "NO_NEW_SAME_BATCH_BASELINE",
+  "candidates": [
+    {
+      "candidate_id": "hammer_to_jumbo_ice_cream",
+      "deck_hash": "a8b69dad7748a33d3b0b56cbfcc6af129af1e4ef078654fd1f2b5cdaf0e9104f",
+      "mutation": {"remove": 1081, "add": 1147},
+      "final_games": 256,
+      "wins": 137,
+      "win_rate": 0.53515625,
+      "worst_opponent_win_rate": 0.34375,
+      "seat_win_rates": {"player_0": 0.546875, "player_1": 0.5234375},
+      "faults": 0,
+      "pre_registered_gate": "PASS",
+      "promotion": "NOT_PROMOTED_UNPAIRED_NO_NEW_BASELINE"
+    },
+    {
+      "candidate_id": "hammer_to_lanas_aid",
+      "deck_hash": "aebb721734715053836698534a20b60865d870a726c657dea23eccb0fa7b972e",
+      "mutation": {"remove": 1081, "add": 1184},
+      "final_games": 256,
+      "wins": 130,
+      "win_rate": 0.5078125,
+      "worst_opponent_win_rate": 0.296875,
+      "seat_win_rates": {"player_0": 0.484375, "player_1": 0.53125},
+      "faults": 0,
+      "pre_registered_gate": "PASS",
+      "promotion": "NOT_PROMOTED_UNPAIRED_NO_NEW_BASELINE"
+    }
+  ],
+  "limitations": [
+    "最終batchに同一scheduleの基準Deck対照を含まないため、既存の別batch基準値との比較で改善を主張しない。",
+    "default Deck、Champion、Rule v0には接続しない。"
+  ]
+}

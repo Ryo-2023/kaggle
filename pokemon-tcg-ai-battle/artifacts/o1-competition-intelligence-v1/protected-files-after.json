@@ -1,0 +1,86 @@
+{
+  "entries": {
+    "agents/__init__.py": {
+      "git_blob_sha": "6a692e712c5bfeead0f0e92c70c2eac63dca6a98",
+      "status": "present"
+    },
+    "agents/rule_agent.py": {
+      "git_blob_sha": "e94be530869b974e6b8bbb240b6891e571c3798f",
+      "status": "present"
+    },
+    "agents/rule_agent_v1.py": {
+      "git_blob_sha": "f9811482ec5237918f2f3df8e8a4721da960d765",
+      "status": "present"
+    },
+    "configs/offline_training_v1/final_acceptance_plan.json": {
+      "git_blob_sha": "d0a40619535c613c994feae517ca5e83002baacc",
+      "status": "present"
+    },
+    "configs/offline_training_v1/production.json": {
+      "git_blob_sha": "76e61d9d2b72a0680948178f377507ca8db5582a",
+      "status": "present"
+    },
+    "data/ (git-ignored data root, presence-only)": {
+      "git_blob_sha": null,
+      "status": "present_not_hashed"
+    },
+    "deck.csv": {
+      "git_blob_sha": "a1641e7a026c0e8d6e74121505b9fd713ed24879",
+      "status": "present"
+    },
+    "main.py": {
+      "git_blob_sha": "c29b39447a38e7fa8cd6cd1553194969b6ceae60",
+      "status": "present"
+    },
+    "runs/ (git-ignored data root, presence-only)": {
+      "git_blob_sha": null,
+      "status": "absent_in_this_worktree"
+    },
+    "scripts/build_kaggle_submission.py": {
+      "git_blob_sha": "c8a734317ec300210105a3bfe8acaf8f3e0ca9f0",
+      "status": "present"
+    },
+    "scripts/build_student_submission.py": {
+      "git_blob_sha": "f5bc79ed8df7267eee8f1aaf661b39b5c3484241",
+      "status": "present"
+    },
+    "scripts/build_submission.py": {
+      "git_blob_sha": "ace6609b4475b10de08492d57fb352559ce2b703",
+      "status": "present"
+    },
+    "scripts/kaggle_student_entrypoint.py": {
+      "git_blob_sha": "e0d89a5e9dd96142c6997ffd6d7a793e40a2d3f4",
+      "status": "present"
+    },
+    "scripts/kaggle_student_runtime.py": {
+      "git_blob_sha": "c4e282ccf52cb1d3ca01e8a76feb865d9a811d89",
+      "status": "present"
+    },
+    "scripts/submit_kaggle_submission.py": {
+      "git_blob_sha": "5a8c68c78a7fb5d2d16414690582ffd909a7f80f",
+      "status": "present"
+    },
+    "scripts/verify_kaggle_submission.py": {
+      "git_blob_sha": "d786e453eda69a7c909d15aab92ee52c7af35036",
+      "status": "present"
+    },
+    "src/mage_ptcg/evaluation/promotion.py": {
+      "git_blob_sha": "c34c1f19e70af45a1bb91a37c050a7201327ede2",
+      "status": "present"
+    },
+    "src/mage_ptcg/offline_training_v1_support/promotion.py": {
+      "git_blob_sha": "3d7636e05c422fd0233582e03edd4ad3955abe8e",
+      "status": "present"
+    },
+    "src/mage_ptcg/offline_training_v1_support/statistics.py": {
+      "git_blob_sha": "a4908f7a222a1397d471323e6574300be3189267",
+      "status": "present"
+    },
+    "submissions/ (git-ignored data root, presence-only)": {
+      "git_blob_sha": null,
+      "status": "present_not_hashed"
+    }
+  },
+  "repo_root": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle-o1-intelligence",
+  "schema_version": "o1-protected-files-baseline-v1"
+}

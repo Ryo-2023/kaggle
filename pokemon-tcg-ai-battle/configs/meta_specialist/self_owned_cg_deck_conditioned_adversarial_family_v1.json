@@ -1,0 +1,134 @@
+{
+  "schema_version": "self-owned-cg-deck-conditioned-adversarial-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_deck_conditioned_adversarial_family_v1_20260816",
+  "seed_namespace": "self-owned-cg-deck-conditioned-adversarial-fresh-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-adaptive-v2-20260816",
+    "runs/cg-self-owned-action-conditioned-v2-lucario-20260816",
+    "runs/cg-self-owned-seat-conditioned-v1-20260816",
+    "runs/cg-self-owned-independent-root-policy-family-v1-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "hybrid-adversarial-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v9_hybrid_support.json", "seed": 20269801, "ordinal": 801},
+    {"id": "hybrid-adversarial-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v9_hybrid_support.json", "seed": 20269802, "ordinal": 802},
+    {"id": "tempo-adversarial-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v8_tempo_energy.json", "seed": 20269803, "ordinal": 803},
+    {"id": "broad-adversarial-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20269804, "ordinal": 804},
+    {"id": "stability-adversarial-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v6_stability.json", "seed": 20269805, "ordinal": 805},
+    {"id": "neighborhood-adversarial-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v7_c06_neighborhood.json", "seed": 20269806, "ordinal": 806}
+  ],
+  "policy_variants": [
+    {
+      "id": "hard-c01-hybrid-00",
+      "deck_recipe_id": "hybrid-adversarial-00",
+      "overrides": {
+        "ability_bonus": 36188,
+        "attach_mega_2energy_bonus": 12022,
+        "attach_mega_lucario": 57478,
+        "attach_overenergy_penalty": -33800,
+        "attack_982_base": 20000,
+        "attack_983_base": 70000,
+        "attack_damage_weight_milli": 1334,
+        "attack_generic_base": 13944,
+        "evolve_mega_lucario": 56691,
+        "lethal_bonus": 6571,
+        "lethal_hp_margin": 1,
+        "retreat_good_score": 20449,
+        "search_mega_lucario": 38797,
+        "setup_active_riolu": 52595,
+        "setup_bench_riolu": 53590
+      }
+    },
+    {
+      "id": "hard-c06-hybrid-01",
+      "deck_recipe_id": "hybrid-adversarial-01",
+      "overrides": {
+        "ability_bonus": 33152,
+        "attach_mega_2energy_bonus": 4657,
+        "attach_mega_lucario": 45665,
+        "attach_overenergy_penalty": -47256,
+        "attack_982_base": 22392,
+        "attack_983_base": 63368,
+        "attack_damage_weight_milli": 2028,
+        "attack_generic_base": 2767,
+        "evolve_mega_lucario": 66862,
+        "lethal_bonus": 5324,
+        "lethal_hp_margin": 0,
+        "retreat_good_score": 25000,
+        "search_mega_lucario": 55041,
+        "setup_active_riolu": 55101,
+        "setup_bench_riolu": 52506
+      }
+    },
+    {
+      "id": "hard-c11-tempo-02",
+      "deck_recipe_id": "tempo-adversarial-02",
+      "overrides": {
+        "ability_bonus": 20869,
+        "attach_mega_2energy_bonus": 12925,
+        "attach_mega_lucario": 33752,
+        "attach_overenergy_penalty": -44681,
+        "attack_982_base": 20000,
+        "attack_983_base": 57632,
+        "attack_damage_weight_milli": 2295,
+        "attack_generic_base": 14229,
+        "evolve_mega_lucario": 58088,
+        "lethal_bonus": 2907,
+        "lethal_hp_margin": -30,
+        "retreat_good_score": 23714,
+        "search_mega_lucario": 39713,
+        "setup_active_riolu": 51976,
+        "setup_bench_riolu": 22780
+      }
+    },
+    {
+      "id": "hard-c02-broad-03",
+      "deck_recipe_id": "broad-adversarial-03",
+      "overrides": {
+        "ability_bonus": 45413,
+        "attach_mega_2energy_bonus": 16857,
+        "attach_mega_lucario": 36652,
+        "attach_overenergy_penalty": -15750,
+        "attack_982_base": 32133,
+        "attack_983_base": 47866,
+        "attack_damage_weight_milli": 41,
+        "attack_generic_base": 18781,
+        "evolve_mega_lucario": 62640,
+        "lethal_bonus": 19805,
+        "lethal_hp_margin": -30,
+        "retreat_good_score": 15642,
+        "search_mega_lucario": 55176,
+        "setup_active_riolu": 38253,
+        "setup_bench_riolu": 32286
+      }
+    },
+    {
+      "id": "hard-c08-stability-04",
+      "deck_recipe_id": "stability-adversarial-04",
+      "overrides": {
+        "ability_bonus": 50000,
+        "attach_mega_2energy_bonus": 9010,
+        "attach_mega_lucario": 65000,
+        "attach_overenergy_penalty": -31385,
+        "attack_982_base": 20000,
+        "attack_983_base": 57819,
+        "attack_damage_weight_milli": 1076,
+        "attack_generic_base": 16869,
+        "evolve_mega_lucario": 48800,
+        "lethal_bonus": 11125,
+        "lethal_hp_margin": 24,
+        "retreat_good_score": 25000,
+        "search_mega_lucario": 55505,
+        "setup_active_riolu": 48518,
+        "setup_bench_riolu": 43530
+      }
+    },
+    {
+      "id": "balanced-neighborhood-05",
+      "deck_recipe_id": "neighborhood-adversarial-05",
+      "overrides": {}
+    }
+  ]
+}

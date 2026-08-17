@@ -1,0 +1,29 @@
+{
+  "schema_version": "self-owned-cg-deck-bound-source-cem-plan-v1",
+  "source_epoch": "self_owned_cg_deck_bound_source_cem_v1_20260816",
+  "seed_namespace": "self-owned-cg-deck-bound-source-cem-fresh-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-portfolio-hard-negative-source-v2-20260816",
+    "runs/cg-portfolio-lucario-core-source-v3-retry1-20260816",
+    "runs/cg-portfolio-lucario-core-source-v4-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v21-20260816",
+    "runs/cg-self-owned-independent-cross-lineage-v20-20260816",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-margin-gated-v1-20260816"
+  ],
+  "reference_specs": [
+    {"id": "p1_root", "package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package"},
+    {"id": "aman_crustleaware_fighting", "package": "opponents/aman_crustleaware_fighting"},
+    {"id": "kojimar_lucario", "package": "opponents/kojimar_lucario"},
+    {"id": "aristophanivan_probabilistic", "package": "opponents/aristophanivan_probabilistic"}
+  ],
+  "deck_recipes": [
+    {"id": "tempo-v25", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v25_cem_tempo.json", "seed": 20269801, "ordinal": 801},
+    {"id": "search-v25", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v25_cem_search.json", "seed": 20269802, "ordinal": 802},
+    {"id": "recovery-v25", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v25_cem_recovery.json", "seed": 20269803, "ordinal": 803},
+    {"id": "switch-v25", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v25_cem_switch.json", "seed": 20269804, "ordinal": 804}
+  ]
+}

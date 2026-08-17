@@ -1,0 +1,74 @@
+[
+  {
+    "agent_id": "9144af0d5cde8d1171deb96d3069c626d0d00ab514a5be60200ee5b4bd8c5812",
+    "bundle_hash_verified": true,
+    "exit_status": "OK",
+    "extract_seconds": 0.031,
+    "files_extracted_and_verified": 13,
+    "legal_action_validation": "CABT_SMOKE_PASS",
+    "network_isolation": "NETWORK_ISOLATION_UNAVAILABLE",
+    "no_live_worktree_reference": true,
+    "no_source_branch_checkout": true,
+    "outcome": "RAN",
+    "pinned_commit": "26372f0fa4cf6c98ea42cd2d78f838064a978ca0",
+    "runtime": {
+      "deck_length": 60,
+      "deck_replay_equal": true,
+      "states": [
+        "DONE",
+        "DONE"
+      ],
+      "steps": 213
+    },
+    "runtime_seconds": 3.67,
+    "source_branch": "origin/agents/nihei-alakazam"
+  },
+  {
+    "agent_id": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+    "bundle_hash_verified": true,
+    "exit_status": "OK",
+    "extract_seconds": 0.032,
+    "files_extracted_and_verified": 13,
+    "legal_action_validation": "CABT_SMOKE_PASS",
+    "network_isolation": "NETWORK_ISOLATION_UNAVAILABLE",
+    "no_live_worktree_reference": true,
+    "no_source_branch_checkout": true,
+    "outcome": "RAN",
+    "pinned_commit": "158f435cc22c7b2a274b7e9d52167aba8c399e7a",
+    "runtime": {
+      "deck_length": 60,
+      "deck_replay_equal": true,
+      "states": [
+        "DONE",
+        "DONE"
+      ],
+      "steps": 80
+    },
+    "runtime_seconds": 3.169,
+    "source_branch": "origin/agents/nihei-festival-lead"
+  },
+  {
+    "agent_id": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+    "bundle_hash_verified": true,
+    "exit_status": "OK",
+    "extract_seconds": 0.031,
+    "files_extracted_and_verified": 13,
+    "legal_action_validation": "CABT_SMOKE_PASS",
+    "network_isolation": "NETWORK_ISOLATION_UNAVAILABLE",
+    "no_live_worktree_reference": true,
+    "no_source_branch_checkout": true,
+    "outcome": "RAN",
+    "pinned_commit": "9c9a7766a3ec0bc3638eeda045a8c13719678aac",
+    "runtime": {
+      "deck_length": 60,
+      "deck_replay_equal": true,
+      "states": [
+        "DONE",
+        "DONE"
+      ],
+      "steps": 404
+    },
+    "runtime_seconds": 4.251,
+    "source_branch": "origin/agents/ozawa-crustle-rule"
+  }
+]

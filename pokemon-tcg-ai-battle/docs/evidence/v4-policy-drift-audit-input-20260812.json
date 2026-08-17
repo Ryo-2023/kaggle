@@ -1,0 +1,45 @@
+{
+  "schema": "meta-specialist-v4-policy-drift-input-v1",
+  "selection_manifest": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle/runs/meta-specialist-two-lane-readiness/recurrent-selection/archaludon.json",
+  "selection_manifest_sha256": "b3044504df1192ce072377f1ddfbeeafdf071a715ef896076b5adb1471eaf0cc",
+  "baseline": "wave6_seed0",
+  "pairs": [
+    {"baseline": "wave6_seed0", "candidate": "wave6_seed1"},
+    {"baseline": "wave6_seed0", "candidate": "public_ood_seed0"},
+    {"baseline": "wave6_seed1", "candidate": "public_ood_seed1"}
+  ],
+  "checkpoints": [
+    {
+      "label": "wave6_seed0",
+      "family": "wave6",
+      "seed": 0,
+      "path": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle/runs/meta-specialist-v4-archaludon-longrun-wave6-current/archaludon-training-checkpoints/seed-0/best-recurrent-bc-v4.pt",
+      "file_sha256": "9eb22970fb9917d3632f415e19b943c752e60e31595efe5419960d9c27e6c8de",
+      "tensor_state_sha256": "36b6ace02e69849ea476565bd0ef283d206a6786ba2ac0c0040e82d263f3292a"
+    },
+    {
+      "label": "wave6_seed1",
+      "family": "wave6",
+      "seed": 1,
+      "path": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle/runs/meta-specialist-v4-archaludon-longrun-wave6-current/archaludon-training-checkpoints/seed-1/best-recurrent-bc-v4.pt",
+      "file_sha256": "5d137fd6e6b76b993d1d7dcc4d975bcf9c43358c9e43510a8db0c9c6181dddf6",
+      "tensor_state_sha256": "046968c1a295af0ae84594fedb8503a33b6f8a5dd33314e8fc4fe4ae09985e8a"
+    },
+    {
+      "label": "public_ood_seed0",
+      "family": "public_ood",
+      "seed": 0,
+      "path": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle/runs/meta-specialist-v4-public-confidence-ood-pilot-exec-rerun-20260812/seed-0/candidate/best-recurrent-bc-v4.pt",
+      "file_sha256": "081e60caa1fb59ff577e5761a01fc17666e780c18978c8a3b9329193e263a0e9",
+      "tensor_state_sha256": "f08982fd812518eadf771afac61eb5a48163004e45c1073746502a7521c07002"
+    },
+    {
+      "label": "public_ood_seed1",
+      "family": "public_ood",
+      "seed": 1,
+      "path": "/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle/runs/meta-specialist-v4-public-confidence-ood-pilot-exec-rerun-20260812/seed-1/candidate/best-recurrent-bc-v4.pt",
+      "file_sha256": "9d09e0b4b76430232f179bcedb8e9efcf23e5d2b9b0e8b1e5e5e74ae4a436ec7",
+      "tensor_state_sha256": "2ea9bdd6028e8b66d3c71592d732ffca3a48aa999c9790ddfdbc279ee5b249c6"
+    }
+  ]
+}

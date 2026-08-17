@@ -1,0 +1,22 @@
+<type>(<scope>): <何を・何のために>
+
+# 必要な場合だけ、1項目 = 1変更点で本文を書く
+#
+# - <変更点または理由>
+#
+# type: feat | fix | docs | refactor | test | chore | perf | experiment
+# scope例: agent | deck | solver | sim | data | submission | plan
+#
+# 破壊的変更:
+# <type>(<scope>)!: <要約>
+# BREAKING CHANGE: <影響と移行方法>
+#
+# 関連情報がある場合だけ:
+# Refs: #<issue>
+# Experiment: experiments/<record>.md
+#
+# 確認:
+# - git diff --staged に基づいている
+# - 1コミット = 1論理単位
+# - 要約は日本語・体言止め・句点なし・50字程度
+# - 未検証の性能や勝率を断定していない

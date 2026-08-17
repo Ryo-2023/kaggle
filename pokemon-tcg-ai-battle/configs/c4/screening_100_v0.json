@@ -1,0 +1,9 @@
+{
+  "schema_version": "c4-screening-config-v1",
+  "run_id": "actual-train-rule-bc-v0",
+  "games": 100,
+  "base_seed": 4000,
+  "analysis_seed": 0,
+  "model_artifact": ".local_artifacts/c4_actual_training/training/artifact",
+  "output": ".local_artifacts/c4_actual_training/screening-100.json"
+}

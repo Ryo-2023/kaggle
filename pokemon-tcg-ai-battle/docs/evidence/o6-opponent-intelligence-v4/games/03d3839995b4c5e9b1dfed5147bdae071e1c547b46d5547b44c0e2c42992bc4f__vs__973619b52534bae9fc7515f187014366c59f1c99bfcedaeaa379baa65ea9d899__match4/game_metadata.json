@@ -1,0 +1,21 @@
+{
+  "crash": false,
+  "engine_seed_capability": "ENGINE_SEED_UNSUPPORTED",
+  "execution_index": 4,
+  "fallback_usage": 0,
+  "fault": false,
+  "game_id": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899#4",
+  "latency_seconds": 0.304,
+  "pair_id": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f__vs__973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+  "participant_a": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+  "participant_b": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+  "requested_seed": 93004,
+  "runtime_duration_seconds": 0.304,
+  "schema_version": "o6-raw-game-metadata-v1",
+  "seat_0_participant": "03d3839995b4c5e9b1dfed5147bdae071e1c547b46d5547b44c0e2c42992bc4f",
+  "seat_1_participant": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899",
+  "status": "DONE",
+  "timeout": false,
+  "winner": 1,
+  "winner_participant": "973619b52534bae9fc7515f187014366c59f1c99bfcedaeaa379baa65ea9d899"
+}

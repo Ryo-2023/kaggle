@@ -1,0 +1,20 @@
+{
+  "schema_version": "self-owned-cg-deck-adaptive-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_deck_adaptive_grass_diagnostic_v1_20260816",
+  "seed_namespace": "self-owned-cg-deck-adaptive-grass-diagnostic-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-action-conditioned-v2-lucario-20260816/promoted",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-cross-lineage-v18-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted"
+  ],
+  "deck_recipes": [
+    {"id": "grass-adaptive-diagnostic-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_grass.json", "seed": 203086004, "ordinal": 603}
+  ],
+  "policy_variants": [
+    {"id": "grass-safe-diagnostic-00", "deck_recipe_id": "grass-adaptive-diagnostic-03", "overrides": {"evolve_bonus": 0, "setup_stage_bonus": 12000, "search_stage_bonus": 0, "play_pokemon_bonus": 12000, "end_penalty": -20000}}
+  ]
+}

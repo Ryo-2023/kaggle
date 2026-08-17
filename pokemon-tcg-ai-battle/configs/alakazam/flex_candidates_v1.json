@@ -1,0 +1,20 @@
+{
+  "schema": "alakazam-flex-candidates-v1",
+  "baseline_deck_id": "alakazam-baseline-v1",
+  "maximum_card_changes": 2,
+  "candidates": [
+    {
+      "candidate_id": "night-stretcher-plus1",
+      "reason": "公開観測で繰り返し現れた回収札を、基準の対策札1枚と1対1で比較する",
+      "remove": [1081],
+      "add": [1097],
+      "preserves": [741,742,743,305,66],
+      "status": "SCREENING_INCONCLUSIVE",
+      "evidence": "Git外 artifact の deck_search/ 以下。128局のscreenでfault 0だが、複数対戦相手で一貫した非劣後を確認できていない。"
+    }
+  ],
+  "limitations": [
+    "候補は公開情報と基準Deckの差分仮説であり、未観測カードの確定採用を意味しない。",
+    "SCREENING_INCONCLUSIVE の候補は default Deck または提出Deckへ反映しない。"
+  ]
+}

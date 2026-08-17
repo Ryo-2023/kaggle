@@ -1,0 +1,27 @@
+{
+  "capture_schema_version": "cabt-skill-order-observation-v1",
+  "kaggle_environments_version": "1.32.0",
+  "probe": {
+    "deck_sha256": "cafa7652a6349be806d8ac2b9abfdb6c72ca3821f368e0d912e2d989f3b54cdd",
+    "games": 2,
+    "skill_order_observation_count": 9
+  },
+  "select": {
+    "context": 34,
+    "maxCount": 2,
+    "minCount": 2,
+    "option": [
+      {
+        "cardId": 104,
+        "serial": 13,
+        "type": 15
+      },
+      {
+        "cardId": 104,
+        "serial": 74,
+        "type": 15
+      }
+    ],
+    "type": 5
+  }
+}

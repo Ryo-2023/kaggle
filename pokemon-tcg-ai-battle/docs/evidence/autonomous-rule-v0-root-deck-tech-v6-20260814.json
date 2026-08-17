@@ -1,0 +1,69 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-tech-v6-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root-deck novel Basic-energy/one-prize tech weighted48 screen",
+  "weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-tech-v6-weighted48-20260814",
+  "manifest_sha256": "1ddb3d2f9165f94a33874835da14d38c8afdaf06f1acc00d438833616dd0614b",
+  "summary_sha256": "adc102c94fdc88b3548a79dad395f50c8ff54c48cbdb52c36dbc03295e6015f5",
+  "summary_md_sha256": "b40fc48222becec4ae63294ddcca6ceca8afa372622486a2d1aa025ca7564fdd",
+  "protocol": {
+    "base_seed": 23530000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "games_per_arm": 48,
+    "opponents": 12,
+    "games_per_seat": 2,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08"
+  },
+  "arms": {
+    "parent": {
+      "wdl_fault": "5-0-43-0",
+      "summary_sha256": "829747950281b298651cb1a037c869384e06fe2d5ca1a88c2a470fb39ae1be92",
+      "manifest_sha256": "97b0ed2622a46e6c0b8a6a0da86543b8c639478395e6079f49da865d5d361814"
+    },
+    "root-basic-f-to-prism-energy": {
+      "mutation": "6 Basic Fighting Energy -> 16 Prism Energy",
+      "deck_file_sha256": "abf56108be1a5fb3f52c6a74d260e4bf4832cca18d7dd73519180c66ee9ebb6b",
+      "deck_multiset_sha256": "de2ad976fbfc13ebcedee25bc9aec5a3f2215c743996a335198284414a2d1cb6",
+      "wdl_fault": "4-0-44-0",
+      "weighted_delta_points": -3.6608298571071467,
+      "status": "candidate_only_stop",
+      "summary_sha256": "124cf6aa344070501486d3e972959a4077ac8fc080ee99a58c45381192efdd11",
+      "manifest_sha256": "1b8d06a80840c38302a67115c9642a11b2fb179b763171d60e1403327f232a47"
+    },
+    "root-riolu-to-stonjourner": {
+      "mutation": "677 Riolu -> 682 Stonjourner",
+      "deck_file_sha256": "7ed758abc40f5a1db62b721fee1d7c01498f462b7ac90c015c1a40c6b4352c4b",
+      "deck_multiset_sha256": "7042a0157e13040429fde5b273f1c14284f9998f25666f450c63787a85ffb795",
+      "wdl_fault": "3-0-45-0",
+      "weighted_delta_points": -4.388927554506647,
+      "status": "candidate_only_stop",
+      "summary_sha256": "7ff967ea543b006f38f5682d82a68da846ec1b580e022a571262933cfb2708f0",
+      "manifest_sha256": "570a4a7dc998dc5f80e3797a35077336391ce506be6ce0c51b1d201834e4b369"
+    }
+  },
+  "integrity": {
+    "all_arms_done": true,
+    "all_faults_zero": true,
+    "all_draws_zero": true,
+    "seat_counts_each_arm": {"seat0": 24, "seat1": 24},
+    "game_ids_unique_each_arm": true,
+    "seeds_unique_each_arm": true,
+    "cross_arm_seed_schedule_bound": true
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": false,
+    "confirmation_384_started": false,
+    "reason": "Both novel tech candidates were negative on weighted48; stop surface without common24."
+  }
+}

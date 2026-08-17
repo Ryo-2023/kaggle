@@ -1,0 +1,50 @@
+{
+  "schema_version": "self-owned-cg-policy-factorial-plan-v1",
+  "source_epoch": "self_owned_official_card_data_policy_family_v5_20260816",
+  "seed_namespace": "self-owned-cg-policy-family-v5-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-generation-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v2-20260816-00",
+    "runs/cg-self-owned-deck-generation-v2-20260816-01",
+    "runs/cg-self-owned-deck-generation-v2-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-00",
+    "runs/cg-self-owned-deck-generation-v3-20260816-01",
+    "runs/cg-self-owned-deck-generation-v3-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-03",
+    "runs/cg-self-owned-deck-generation-v3-20260816-04",
+    "runs/cg-self-owned-deck-generation-v3-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-00",
+    "runs/cg-self-owned-deck-generation-v4-20260816-01",
+    "runs/cg-self-owned-deck-generation-v4-20260816-03",
+    "runs/cg-self-owned-deck-generation-v4-20260816-04",
+    "runs/cg-self-owned-deck-generation-v4-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06",
+    "runs/cg-self-owned-cg-policy-factorial-v1-20260816-retry1",
+    "runs/cg-self-owned-cg-meta-batch-v2-20260816-promoted",
+    "runs/cg-self-owned-cg-meta-batch-v3-20260816-promoted",
+    "runs/cg-self-owned-cg-meta-batch-v4-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-factorial-v2-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "policy-family-v5-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260920, "ordinal": 0},
+    {"id": "policy-family-v5-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260921, "ordinal": 1},
+    {"id": "policy-family-v5-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260922, "ordinal": 2},
+    {"id": "policy-family-v5-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260923, "ordinal": 3},
+    {"id": "policy-family-v5-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260924, "ordinal": 4},
+    {"id": "policy-family-v5-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260925, "ordinal": 5},
+    {"id": "policy-family-v5-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260926, "ordinal": 6},
+    {"id": "policy-family-v5-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v4.json", "seed": 20260927, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "balanced-v5-00", "deck_recipe_id": "policy-family-v5-00", "overrides": {"lethal_bonus": 12000, "attack_damage_weight_milli": 1000}},
+    {"id": "lethal-v5-01", "deck_recipe_id": "policy-family-v5-01", "overrides": {"lethal_bonus": 24000, "attack_damage_weight_milli": 1800}},
+    {"id": "damage-v5-02", "deck_recipe_id": "policy-family-v5-02", "overrides": {"attack_generic_base": 18000, "attack_982_base": 56000, "attack_983_base": 68000, "attack_damage_weight_milli": 2400}},
+    {"id": "ability-v5-03", "deck_recipe_id": "policy-family-v5-03", "overrides": {"ability_bonus": 45000, "search_mega_lucario": 62000}},
+    {"id": "setup-v5-04", "deck_recipe_id": "policy-family-v5-04", "overrides": {"setup_active_riolu": 56000, "setup_bench_riolu": 52000, "evolve_mega_lucario": 64000}},
+    {"id": "attach-v5-05", "deck_recipe_id": "policy-family-v5-05", "overrides": {"attach_mega_lucario": 58000, "attach_mega_2energy_bonus": 16000, "attach_overenergy_penalty": -50000, "retreat_good_score": 18000}},
+    {"id": "retreat-v5-06", "deck_recipe_id": "policy-family-v5-06", "overrides": {"attach_mega_lucario": 40000, "attach_mega_2energy_bonus": 4000, "attach_overenergy_penalty": -10000, "retreat_good_score": 24000}},
+    {"id": "conservative-v5-07", "deck_recipe_id": "policy-family-v5-07", "overrides": {"lethal_bonus": 8000, "attack_damage_weight_milli": 700, "attack_generic_base": 8000, "attach_mega_lucario": 50000, "attach_overenergy_penalty": -52000}}
+  ]
+}

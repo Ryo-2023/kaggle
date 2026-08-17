@@ -1,0 +1,31 @@
+{
+  "schema_version": "meta-specialist-cg-legalized-public-meta-v1",
+  "source_epoch": "kaggle-public-20260815-sushanth-gouging-adapter-b",
+  "seed_namespace": "kaggle-public-cg-seed-20260815-sushanth-gouging-adapter-b",
+  "current_pool_manifest": "opponents/pool_manifest.json",
+  "output_root": "runs/cg-legalized-public-meta-gouging-adapter-v2-20260815",
+  "scan_roots": [
+    "runs/cg-kaggle-kernel-meta-intake-v17-20260815",
+    "runs/cg-kaggle-kernel-meta-promoted-v17-20260815",
+    "runs/cg-cross-lineage-meta-v2-lucario-20260815",
+    "runs/cg-cross-lineage-meta-promoted-v2-lucario-20260815"
+  ],
+  "sources": [
+    {
+      "candidate_id": "kaggle_sushanth_gouging_fire_legalized_adapter_v2_20260815",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260815-m/sushanth_gouging_fire",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/gouging-fire-ex-blaze-aggro-agent",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/gouging-fire-ex-blaze-aggro-agent",
+      "source_commit": "12385f70cf4e20a10874491eab3bedfd591d04c660b01d272df7310003e2a9db",
+      "entrypoint_adapter": "DECK_ON_INITIAL_SELECT_NONE_SINGLE_ARG_V1",
+      "replacements": [{"index": 25, "old": 1088, "new": 1227}]
+    }
+  ],
+  "authority": {
+    "training_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false,
+    "longrun_allowed": false
+  },
+  "research_only": true
+}

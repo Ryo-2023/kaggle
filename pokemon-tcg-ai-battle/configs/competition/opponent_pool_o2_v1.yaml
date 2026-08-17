@@ -1,0 +1,9 @@
+{
+  "schema_version": "o2-opponent-pool-v1",
+  "opponents": [
+    {"opponent_id":"rule-agent-v0","agent_kind":"rule_v0","agent_factory":"main.make_rule_agent","agent_version":"v0","artifact_reference":null,"implementation_hash":"fe855dffc9592f4957d6afdedf3b2b2fd0a3ad531e442f5ba616ff73f1bb16e6","allowed_decks":["repository-default-v1"],"configuration":{},"source":"repository","permission_scope":"LOCAL_EVALUATION","enabled":true},
+    {"opponent_id":"random-legal-v0","agent_kind":"random_legal","agent_factory":"main.make_random_agent","agent_version":"v0","artifact_reference":null,"implementation_hash":"806284f8f03d974fdb8e8dd6020c1e6dd25d7936430119e8c2b8baa1d973eef7","allowed_decks":["repository-default-v1"],"configuration":{},"source":"repository","permission_scope":"LOCAL_EVALUATION","enabled":true},
+    {"opponent_id":"bounded-search-v0","agent_kind":"bounded_search_v0","agent_factory":"main.make_bounded_search_agent","agent_version":"v0","artifact_reference":null,"implementation_hash":"70949dc3b2d3f01e09ddd0c6f9b0db8f7bbd1b9236134359c8f4c85f81ac73c3","allowed_decks":["repository-default-v1"],"configuration":{},"source":"repository","permission_scope":"LOCAL_EVALUATION","enabled":false},
+    {"opponent_id":"student-v0","agent_kind":"student_v0","agent_factory":"main.make_student_agent","agent_version":"v0","artifact_reference":null,"implementation_hash":"0052675bc38313e3382d826e9c7ae878747b287f0ae987b7a99b19bbcf88dd40","allowed_decks":["repository-default-v1"],"configuration":{},"source":"repository","permission_scope":"LOCAL_EVALUATION","enabled":false}
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": "meta-specialist-cg-legalized-public-meta-v1",
+  "source_epoch": "kaggle-public-20260815-sushanth-legalized-a",
+  "seed_namespace": "kaggle-public-cg-seed-20260815-sushanth-legalized-a",
+  "current_pool_manifest": "opponents/pool_manifest.json",
+  "output_root": "runs/cg-legalized-public-meta-v1-20260815",
+  "scan_roots": [
+    "runs/cg-kaggle-kernel-meta-intake-v17-20260815",
+    "runs/cg-kaggle-kernel-meta-promoted-v17-20260815",
+    "runs/cg-cross-lineage-meta-v2-lucario-20260815",
+    "runs/cg-cross-lineage-meta-promoted-v2-lucario-20260815"
+  ],
+  "sources": [
+    {
+      "candidate_id": "kaggle_sushanth_gardevoir_legalized_20260815",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260815-m/sushanth_gardevoir",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/mega-gardevoir-ex-psychic-energy-agent",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/mega-gardevoir-ex-psychic-energy-agent",
+      "source_commit": "0db176d8e03331fc3921681ed2e4b7721ca1e2510b7bd2937cd3159607a05f14",
+      "replacements": [{"index": 9, "old": 5, "new": 1158}]
+    },
+    {
+      "candidate_id": "kaggle_sushanth_hydreigon_legalized_20260815",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260815-m/sushanth_hydreigon",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/hydreigon-ex-dark-control-agent",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/hydreigon-ex-dark-control-agent",
+      "source_commit": "dc7842811a6f797b3c65c74c92eec56d91bf2e9af700b43bad57aa97465e6ccf",
+      "replacements": [{"index": 19, "old": 7, "new": 1088}]
+    },
+    {
+      "candidate_id": "kaggle_sushanth_dragapult_v3_legalized_20260815",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260815-m/sushanth_dragapult_v3",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/dragapult-ex-spread-damage-agent-v3",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/dragapult-ex-spread-damage-agent-v3",
+      "source_commit": "f563b8ec62df81a13ee28bf86173da06b69eadca26fa04042ca88ca6b772df35",
+      "replacements": [
+        {"index": 11, "old": 13, "new": 1184},
+        {"index": 12, "old": 13, "new": 1184},
+        {"index": 13, "old": 13, "new": 1184}
+      ]
+    },
+    {
+      "candidate_id": "kaggle_sushanth_gouging_fire_legalized_20260815",
+      "source_root": "runs/cg-kaggle-kernel-discovery-20260815-m/sushanth_gouging_fire",
+      "source_ref": "public_kaggle_kernel/sushanthtiruvaipati/gouging-fire-ex-blaze-aggro-agent",
+      "source_url": "https://www.kaggle.com/code/sushanthtiruvaipati/gouging-fire-ex-blaze-aggro-agent",
+      "source_commit": "12385f70cf4e20a10874491eab3bedfd591d04c660b01d272df7310003e2a9db",
+      "replacements": [{"index": 25, "old": 1088, "new": 1227}]
+    }
+  ],
+  "authority": {
+    "training_allowed": false,
+    "promotion_allowed": false,
+    "submission_allowed": false,
+    "longrun_allowed": false
+  },
+  "research_only": true
+}

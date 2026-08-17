@@ -1,0 +1,24 @@
+{
+  "schema_version": "self-owned-cg-independent-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_independent_policy_family_v18_cross_lineage_20260816",
+  "seed_namespace": "self-owned-cg-cross-lineage-independent-v18-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v15-public-mix-20260816"
+  ],
+  "deck_recipes": [
+    {"id": "fire-v18-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269004, "ordinal": 4},
+    {"id": "dark-v18-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269005, "ordinal": 5},
+    {"id": "lightning-v18-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269006, "ordinal": 6},
+    {"id": "grass-v18-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_grass.json", "seed": 20269007, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "fire-lethal-v18-04", "deck_recipe_id": "fire-v18-04", "overrides": {"lethal_bonus": 28000, "nonlethal_attack_penalty": -14000, "damaged_active_attack_bonus": 15000}},
+    {"id": "dark-reserve-v18-05", "deck_recipe_id": "dark-v18-05", "overrides": {"energy_reserve_penalty": -28000, "retreat_energy_reserve_bonus": 20000, "retreat_damaged_active_bonus": 18000}},
+    {"id": "lightning-search-v18-06", "deck_recipe_id": "lightning-v18-06", "overrides": {"search_before_evolve_bonus": 28000, "bench_threat_bonus": 14000, "low_hand_supporter_bonus": 9000}},
+    {"id": "grass-conservative-v18-07", "deck_recipe_id": "grass-v18-07", "overrides": {"lethal_bonus": 7000, "energy_reserve_penalty": -24000, "retreat_damaged_active_bonus": 15000, "low_hand_ability_bonus": 18000}}
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": "self-owned-cg-independent-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_independent_policy_family_v20_fresh_cross_lineage_20260816",
+  "seed_namespace": "self-owned-cg-fresh-cross-lineage-independent-v20-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-runtime-safe-v19-independent-20260816/promoted",
+    "runs/cg-self-owned-cross-lineage-v18-independent-20260816",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted",
+    "runs/cg-self-owned-cg-policy-family-v15-public-mix-20260816"
+  ],
+  "deck_recipes": [
+    {"id": "fire-v20-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269200, "ordinal": 200},
+    {"id": "dark-v20-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269201, "ordinal": 201},
+    {"id": "lightning-v20-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269202, "ordinal": 202},
+    {"id": "grass-v20-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_grass.json", "seed": 20269203, "ordinal": 203}
+  ],
+  "policy_variants": [
+    {"id": "fire-pressure-v20-00", "deck_recipe_id": "fire-v20-00", "overrides": {"lethal_bonus": 21000, "nonlethal_attack_penalty": -9000, "damaged_active_attack_bonus": 10000}},
+    {"id": "dark-reserve-v20-01", "deck_recipe_id": "dark-v20-01", "overrides": {"energy_reserve_penalty": -22000, "retreat_energy_reserve_bonus": 15000, "retreat_damaged_active_bonus": 14000}},
+    {"id": "lightning-search-v20-02", "deck_recipe_id": "lightning-v20-02", "overrides": {"search_before_evolve_bonus": 24000, "bench_threat_bonus": 10000, "low_hand_supporter_bonus": 7000}},
+    {"id": "grass-stability-v20-03", "deck_recipe_id": "grass-v20-03", "overrides": {"lethal_bonus": 10000, "energy_reserve_penalty": -18000, "retreat_damaged_active_bonus": 14000, "low_hand_ability_bonus": 15000}}
+  ]
+}

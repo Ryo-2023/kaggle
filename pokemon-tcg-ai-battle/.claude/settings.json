@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 -m py_compile *)",
+      "Bash(pytest *)",
+      "Bash(rg *)",
+      "Bash(find *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/guard_destructive.sh\"",
+            "timeout": 10,
+            "statusMessage": "破壊的コマンドの検査"
+          }
+        ]
+      }
+    ]
+  }
+}

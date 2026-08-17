@@ -1,0 +1,47 @@
+{
+  "schema_version": "self-owned-cg-independent-factorial-plan-v1",
+  "source_epoch": "self_owned_independent_root_policy_v1_20260816",
+  "seed_namespace": "self-owned-cg-independent-root-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-deck-generation-v1-20260816",
+    "runs/cg-self-owned-deck-generation-v2-20260816-00",
+    "runs/cg-self-owned-deck-generation-v2-20260816-01",
+    "runs/cg-self-owned-deck-generation-v2-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-00",
+    "runs/cg-self-owned-deck-generation-v3-20260816-01",
+    "runs/cg-self-owned-deck-generation-v3-20260816-02",
+    "runs/cg-self-owned-deck-generation-v3-20260816-03",
+    "runs/cg-self-owned-deck-generation-v3-20260816-04",
+    "runs/cg-self-owned-deck-generation-v3-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-00",
+    "runs/cg-self-owned-deck-generation-v4-20260816-01",
+    "runs/cg-self-owned-deck-generation-v4-20260816-03",
+    "runs/cg-self-owned-deck-generation-v4-20260816-04",
+    "runs/cg-self-owned-deck-generation-v4-20260816-05",
+    "runs/cg-self-owned-deck-generation-v4-20260816-06",
+    "runs/cg-self-owned-cg-policy-family-v7-broad-support-20260816",
+    "runs/cg-self-owned-cg-policy-family-v7-broad-support-20260816-promoted"
+  ],
+  "deck_recipes": [
+    {"id": "independent-v1-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261300, "ordinal": 0},
+    {"id": "independent-v1-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261301, "ordinal": 1},
+    {"id": "independent-v1-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261302, "ordinal": 2},
+    {"id": "independent-v1-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261303, "ordinal": 3},
+    {"id": "independent-v1-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261304, "ordinal": 4},
+    {"id": "independent-v1-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261305, "ordinal": 5},
+    {"id": "independent-v1-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261306, "ordinal": 6},
+    {"id": "independent-v1-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v5_broad_support.json", "seed": 20261307, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "balanced-independent-v1-00", "deck_recipe_id": "independent-v1-00", "overrides": {}},
+    {"id": "lethal-independent-v1-01", "deck_recipe_id": "independent-v1-01", "overrides": {"lethal_bonus": 26000, "nonlethal_attack_penalty": -12000, "damaged_active_attack_bonus": 12000}},
+    {"id": "ability-independent-v1-02", "deck_recipe_id": "independent-v1-02", "overrides": {"low_hand_ability_bonus": 26000, "low_hand_supporter_bonus": 16000}},
+    {"id": "retreat-independent-v1-03", "deck_recipe_id": "independent-v1-03", "overrides": {"retreat_damaged_active_bonus": 26000, "retreat_energy_reserve_bonus": 14000}},
+    {"id": "reserve-independent-v1-04", "deck_recipe_id": "independent-v1-04", "overrides": {"energy_reserve_penalty": -24000, "retreat_energy_reserve_bonus": 18000}},
+    {"id": "search-independent-v1-05", "deck_recipe_id": "independent-v1-05", "overrides": {"search_before_evolve_bonus": 26000, "bench_threat_bonus": 8000}},
+    {"id": "bench-independent-v1-06", "deck_recipe_id": "independent-v1-06", "overrides": {"bench_threat_bonus": 26000, "damaged_active_attack_bonus": 16000}},
+    {"id": "conservative-independent-v1-07", "deck_recipe_id": "independent-v1-07", "overrides": {"lethal_bonus": 9000, "nonlethal_attack_penalty": 0, "energy_reserve_penalty": -30000, "retreat_damaged_active_bonus": 8000}}
+  ]
+}

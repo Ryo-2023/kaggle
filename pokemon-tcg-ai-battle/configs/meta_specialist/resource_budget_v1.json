@@ -1,0 +1,11 @@
+{
+  "safe_free_gib": 10.0,
+  "safe_free_fraction": 0.2,
+  "critical_free_gib": 6.0,
+  "worker_memory_gib": 2.0,
+  "initial_workers": 2,
+  "max_workers": 12,
+  "ramp_workers": [1, 2, 4, 8, 12],
+  "recycle_games": 16,
+  "gpu_max": 1
+}

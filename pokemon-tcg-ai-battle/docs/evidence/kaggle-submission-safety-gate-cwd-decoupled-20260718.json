@@ -1,0 +1,22 @@
+{
+  "verdict": "SUPERSEDED_INCOMPLETE_GATE",
+  "supersedes_archive_sha256": "dd33517fb7758fc671b27cfe672a0367835761061f2121747430e084895178d8",
+  "superseded_status": "REJECTED_KAGGLE_VALIDATION",
+  "archive_sha256": "e90546ab4e0aac32d0cf3996ddf80c2802779e2525c17b6f0c6e2dd55dc680e5",
+  "model_sha256": "2318b7ff7f1d981ec4181ae01cc681b15c057f5b4daba3d5f900e71e2144eb8f",
+  "semantic_model_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+  "verification_script_commit": "a6d7beef4648ef4807efbd546373086d9c16527e",
+  "verification_script_sha256": "e2ba3d67e2740d62bd850cb992332cd36f24ca986acedf13cdf28022ca36b0e3",
+  "archive_only_verification": true,
+  "cwd_decoupled_verification": true,
+  "external_files_read": [],
+  "gates": {"G1": "PASS", "G2": "PASS", "G3": "PASS", "G4": "PASS", "G5": {"status": "PASS", "steps": 52, "statuses": ["DONE", "DONE"]}, "G6": {"status": "PASS", "games": 20, "seed": 35000, "wins": 9, "losses": 11, "draws": 0, "crashes": 0, "invalid_actions": 0, "timeouts": 0}},
+  "fallback_telemetry": {"status": "AVAILABLE", "selected_count": 919, "fallback_reasons": []},
+  "focused_tests": {"status": "PASS", "safety_gate": 40, "offline_training_v1": 32},
+  "full_regression": {"status": "FULL_REGRESSION_BLOCKED", "known_flaky": "tests/test_collect_offline_training_v1_evidence.py::test_run_command_safe_timeout_and_child_cleanup"},
+  "local_submission_ready": false,
+  "kaggle_validation_passed": false,
+  "kaggle_resubmission_executed": false,
+  "superseded_by": "docs/evidence/kaggle-submission-validation-v2-independent-review-20260718.json",
+  "invalidation_reason": "Python 3.11 enforcement, exact Kaggle temp layout, and fail-closed archived module-origin checks were not all enforced."
+}

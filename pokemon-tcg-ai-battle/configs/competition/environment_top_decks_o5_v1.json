@@ -1,0 +1,13 @@
+{
+  "schema_version": "o5-environment-top-decks-policy-v1",
+  "environment_top_decks": {
+    "top_rating_submissions": 50,
+    "recent_or_rising_submissions": 25,
+    "diversity_submissions": 25,
+    "max_episodes_per_submission_lineage": 5,
+    "max_new_replays_per_run": 200,
+    "max_total_exact_decks_per_snapshot": 500,
+    "minimum_archetype_diversity": 8,
+    "resume": true
+  }
+}

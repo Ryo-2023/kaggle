@@ -1,0 +1,35 @@
+{
+  "deck_id": "alakazam-baseline-v1",
+  "source_ref": "origin/agents/nihei-alakazam",
+  "source_commit": "26372f0fa4cf6c98ea42cd2d78f838064a978ca0",
+  "source_deck_csv_sha256": "e92d5717fd04865b0b528307df7a9d9aecc2c7b917bfbd5042fe58e3d1f26997",
+  "provenance": "TEAM_SHARED_EXACT_DECK_STATICALLY_READ_FROM_PINNED_REF",
+  "submission_evidence": "experiments/2026-07-15_leaderboard_alakazam_optimization.md on pinned source ref; package identity still requires runtime qualification",
+  "deck": [741,741,741,741,742,742,742,742,743,743,743,743,305,305,305,66,66,140,343,1079,1079,1079,1081,1081,1081,1081,1086,1086,1086,1086,1097,1129,1152,1152,1152,1152,1182,1182,1182,1184,1197,1197,1197,1225,1225,1225,1225,1231,1231,1231,1231,1266,1266,13,19,19,19,19,5,5],
+  "slot_groups": {
+    "hard_locked": [741,742,743],
+    "package_locked": [305,66],
+    "soft_core": [1079,1086,1152,1225,1231],
+    "tech": [1081,1097,1129,1182,1184,1197,1266,140,343],
+    "energy": [5,13,19],
+    "flex": []
+  },
+  "slot_classification": {
+    "core": [741,742,743],
+    "dependency": [305,66],
+    "stability": [1079,1086,1152,1225,1231],
+    "energy": [5,13,19],
+    "countermeasure": [140,343,1081,1129,1182,1184,1197,1266],
+    "flex": [1081,1097],
+    "count_adjustable": [1081,1097],
+    "confidence": "LOW_TO_MEDIUM",
+    "count_unit": "card_types_not_copies",
+    "exclusive_category_copy_total": 60,
+    "detailed_catalog": "configs/alakazam/slot_catalog_v2.json",
+    "basis": "Exact Team-shared baseline and public replay lower bounds; unobserved cards remain unconfirmed. Flex/count labels are development hypotheses, not a submission recommendation."
+  },
+  "known_limitations": [
+    "This is a development baseline, not the default submission deck.",
+    "Public replay reconstruction is tracked separately and cannot upgrade unobserved cards to confirmed."
+  ]
+}

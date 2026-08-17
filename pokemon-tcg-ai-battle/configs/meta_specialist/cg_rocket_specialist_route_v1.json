@@ -1,0 +1,34 @@
+{
+  "base_root": "runs/cg-fresh-internal-meta-intake-20260815-f/internal_ozawa-rocket-rule_de797c3646e9",
+  "output_root": "runs/cg-rocket-specialist-route-meta-20260815-b",
+  "seed_namespace": "cg-rocket-route-v1-b",
+  "source_epoch": "20260815-rocket-specialist-route-v1",
+  "variants": [
+    "A01_GENERAL",
+    "A09_GENERAL",
+    "A07_GENERAL",
+    "A11_GENERAL",
+    "A01_A09_GENERAL",
+    "A07_A11_GENERAL",
+    "GENERAL_ONLY",
+    "A01_A07_LUCMIX",
+    "A09_A11_A09MERGED",
+    "SWAP_A01_A09",
+    "SWAP_A07_A11",
+    "ROTATE_A01_A09_A07_A11"
+  ],
+  "split_by_variant": {
+    "A01_GENERAL": "META_TRAIN",
+    "A09_GENERAL": "META_TRAIN",
+    "A07_GENERAL": "META_TRAIN",
+    "A11_GENERAL": "META_TRAIN",
+    "A01_A09_GENERAL": "META_TRAIN",
+    "A07_A11_GENERAL": "META_TRAIN",
+    "GENERAL_ONLY": "META_TRAIN",
+    "A01_A07_LUCMIX": "META_TRAIN",
+    "A09_A11_A09MERGED": "META_DEV",
+    "SWAP_A01_A09": "META_DEV",
+    "SWAP_A07_A11": "META_FINAL",
+    "ROTATE_A01_A09_A07_A11": "META_FINAL"
+  }
+}

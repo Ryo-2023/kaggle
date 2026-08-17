@@ -1,0 +1,28 @@
+{
+  "schema_version": "self-owned-cg-action-conditioned-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_action_conditioned_family_v1_20260816",
+  "seed_namespace": "self-owned-cg-action-conditioned-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-runtime-safe-v19-20260816/promoted",
+    "runs/cg-self-owned-cross-lineage-v18-20260816/promoted",
+    "runs/cg-self-owned-independent-cross-element-v2-20260816/promoted"
+  ],
+  "deck_recipes": [
+    {"id": "fire-ac-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269200, "ordinal": 200},
+    {"id": "dark-ac-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269201, "ordinal": 201},
+    {"id": "lightning-ac-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269202, "ordinal": 202},
+    {"id": "fire-ac-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20269203, "ordinal": 203},
+    {"id": "dark-ac-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20269204, "ordinal": 204},
+    {"id": "lightning-ac-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20269205, "ordinal": 205}
+  ],
+  "policy_variants": [
+    {"id": "fire-aggressive-ac-00", "deck_recipe_id": "fire-ac-00", "overrides": {"attack_lethal_behind_bonus": 14000, "attack_nonlethal_behind_penalty": -9000, "attack_early_bonus": 4000}},
+    {"id": "dark-retreat-ac-01", "deck_recipe_id": "dark-ac-01", "overrides": {"retreat_damaged_bonus": 16000, "retreat_behind_bonus": 9000, "retreat_powered_bench_bonus": 7000}},
+    {"id": "lightning-setup-ac-02", "deck_recipe_id": "lightning-ac-02", "overrides": {"evolve_early_bonus": 14000, "switch_damaged_bonus": 10000, "attack_late_bonus": 3000}},
+    {"id": "fire-conservative-ac-03", "deck_recipe_id": "fire-ac-03", "overrides": {"attack_lethal_ahead_bonus": 8000, "attack_nonlethal_ahead_bonus": 6000, "attack_late_bonus": 6000}},
+    {"id": "dark-reserve-ac-04", "deck_recipe_id": "dark-ac-04", "overrides": {"attach_reserve_penalty": -12000, "retreat_powered_bench_bonus": 14000, "attack_early_bonus": -3000}},
+    {"id": "lightning-race-ac-05", "deck_recipe_id": "lightning-ac-05", "overrides": {"attack_lethal_behind_bonus": 20000, "retreat_behind_bonus": 10000, "switch_damaged_bonus": 13000}}
+  ]
+}

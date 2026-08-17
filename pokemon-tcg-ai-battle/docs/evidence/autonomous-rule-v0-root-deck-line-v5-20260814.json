@@ -1,0 +1,77 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-line-v5-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root-deck novel Solrock/Lunatone line-ratio weighted48 then common24 screen",
+  "weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-line-v5-weighted48-20260814",
+  "common24_root": "runs/final-sprint-autonomous/rule-v0-root-deck-line-v5-common24-20260814",
+  "weighted_manifest_sha256": "c0674f716c86cb4475f54b4dd06c2e8250e4798129c2d49054ccc5443df8fdcf",
+  "weighted_summary_sha256": "2e88a8cf473316dc70c93f9c09382340a0586dc967915646a457a10bd10d32b2",
+  "weighted_summary_md_sha256": "80485e03288d2dc13a5cdf4e9f679b22c0f809764f59b291e66a469f996beab8",
+  "common24_manifest_sha256": "2c99f6126d5e88d287faff6b24b031d91bd1db65ffaed5d394e0917b6e89a508",
+  "common24_summary_sha256": "c6e0a60f824b6674d7eb51344a81e2eb7f15e85cb5407b7db8ee35e2f376597a",
+  "common24_summary_md_sha256": "b4489fca8b02c6b012178e5eff0d6bc5c338ca4c337a01c3f259362baf0c6071",
+  "common24_final_sha256": "bf8587db90250991a6e83e7a189e1aa74a25cdccab1bc9a2ac6cf6e0d734b2b3",
+  "protocol": {
+    "weighted_base_seed": 23510000,
+    "common24_base_seed": 23520000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "weighted_games_per_arm": 48,
+    "common24_games_per_arm": 96,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "faults_total": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "root-solrock-to-lunatone",
+      "mutation": "676 Solrock -> 675 Lunatone",
+      "deck_file_sha256": "3f9714cfb03eea154c65062f379b999c09ec95ade5dc7b26e4eddcc3690fde58",
+      "deck_multiset_sha256": "0167e12f423ed247acdc0f957c76cabe5079ee3e59c8f1a880150036716cfce7",
+      "weighted_delta_points": 2.4331127222094393,
+      "common24_wdlf": "4-0-92-0",
+      "common24_delta_points": -11.458333333333334,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "5e3963ba2946ca8dbfd8e18da82105ef696b06b2656ba35ec0550744f9eb1a1b",
+      "weighted_arm_manifest_sha256": "4265b0b635530ccbc1224f499564ede6f056c8f54a9d0b545b894ede0698eed6",
+      "common24_arm_summary_sha256": "60357cf3443e8c78518a3ca4219ec420623eff348a56b4dd07d61cacf64edc22",
+      "common24_arm_manifest_sha256": "ddbc1ec8c1ded6350eff9e684bac34d748ded35d775186ecedcbfeed96ea851b"
+    },
+    {
+      "candidate_id": "root-lunatone-to-solrock",
+      "mutation": "675 Lunatone -> 676 Solrock",
+      "deck_file_sha256": "adc821b9a735ecebfb785515c58f34c1385104da7a052855e15f5e8e00bbf4a6",
+      "deck_multiset_sha256": "b60bb48acba85bf361bd6866197d30a8146955f9952c23f7cdf804ac4fbea841",
+      "weighted_delta_points": 4.5705272137043025,
+      "common24_wdlf": "12-0-84-0",
+      "common24_delta_points": -3.125,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "9cce9b38c011ac3c47873e6dbd122b1dbaad1bcfa43a855ec62767c89bde33ab",
+      "weighted_arm_manifest_sha256": "1a0904cd941e7d076678f06c39f9a05d704bab654ff2a75189254f8191991408",
+      "common24_arm_summary_sha256": "02078a3a6f8949382c4e56376102ef1bebd6675b24e50609f85693e454bfe637",
+      "common24_arm_manifest_sha256": "7a9a1a6e551d18c01432736478d2e24a4f1f70508f7bf8f8dbfc0736a980c17e"
+    }
+  ],
+  "parent_common24": {
+    "wdlf": "11-0-85-0",
+    "score_rate": 0.11458333333333333,
+    "summary_sha256": "3e84cb40cd11a058105cecf50a19859bc83dfd11b621b08fdeced65da401fd65",
+    "manifest_sha256": "fa60c2dcfb9574d3f2dd15819534a1f77e3591f6d0ada637b6b81d900d5cd2fe"
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": true,
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "promotion": "none",
+    "reason": "Both weighted-positive Solrock/Lunatone line-ratio candidates reversed against the root parent on common24; stop this surface without 384 or longrun."
+  }
+}

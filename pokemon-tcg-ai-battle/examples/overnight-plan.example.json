@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "safe-example",
+  "base_branch": "feature/belief-guided-search",
+  "session_branch_prefix": "overnight/",
+  "auto_integrate_low_risk": false,
+  "limits": {
+    "max_tasks": 2,
+    "max_provider_calls": 4,
+    "max_repair_attempts_per_task": 1,
+    "max_elapsed_seconds": 3600,
+    "max_prompt_bytes_per_call": 24000,
+    "max_diff_lines_for_auto_integration": 200
+  },
+  "routing": {
+    "economy": {
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "low"
+    },
+    "standard": {
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "medium"
+    },
+    "deep": {
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "high"
+    }
+  },
+  "protected_paths": [
+    "AGENTS.md",
+    "main.py",
+    "src/**",
+    "scripts/orchestration/**"
+  ],
+  "low_risk_allowlist": [
+    "examples/orchestration/generated_hello.py"
+  ],
+  "tasks": [
+    {
+      "id": "document-example",
+      "title": "安全なFake Provider例",
+      "contract": "examples/orchestration/task_contract.example.json",
+      "depends_on": [],
+      "complexity": "simple",
+      "risk_hint": "low",
+      "max_repair_attempts": 1
+    }
+  ]
+}

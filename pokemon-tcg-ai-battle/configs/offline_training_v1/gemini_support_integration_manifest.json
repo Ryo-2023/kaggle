@@ -1,0 +1,1305 @@
+{
+  "schema_version": "gemini-support-integration-manifest-v1",
+  "features": [
+    {
+      "name": "active_learning",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.active_learning"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_active_learning.py"
+      ],
+      "public_entrypoints": [
+        "plan_active_learning_queries"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.active_learning",
+      "integration_order": 20,
+      "acceptance_tests": [
+        "test_active_learning_query_planning"
+      ],
+      "reason": "Useful active learning orchestrator, but not part of the initial core runtime path."
+    },
+    {
+      "name": "api_docs",
+      "classification": "HOLD",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.api_docs"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "generate_api_reference"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "medium",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.api_docs",
+      "integration_order": -1,
+      "acceptance_tests": [],
+      "reason": "Uses reflection to inspect modules dynamically; high risk of import side-effects or environment issues, and documentation only."
+    },
+    {
+      "name": "audit_log",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.audit_log"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_audit_lineage.py"
+      ],
+      "public_entrypoints": [
+        "AuditLogger"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.audit_log",
+      "integration_order": 4,
+      "acceptance_tests": [
+        "test_audit_logger_flow"
+      ],
+      "reason": "Essential trace logging module to track execution history and actions securely."
+    },
+    {
+      "name": "calibration",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.calibration"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "compute_ece",
+        "compute_nll",
+        "compute_brier_score",
+        "fit_temperature",
+        "evaluate_group_calibration"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.calibration",
+      "integration_order": 21,
+      "acceptance_tests": [
+        "test_ece_calculation"
+      ],
+      "reason": "Calibration diagnostics like ECE and temperature scaling are non-essential for initial agent builds."
+    },
+    {
+      "name": "candidate_analysis",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.candidate_analysis"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "analyze_candidate_strength"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "medium",
+      "recommended_target_namespace": "mage_ptcg.offline_training.candidate_analysis",
+      "integration_order": 22,
+      "acceptance_tests": [],
+      "reason": "Analytical component evaluating candidate strengths, post-training usage only."
+    },
+    {
+      "name": "cards",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.cards"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "generate_model_card"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.cards",
+      "integration_order": 23,
+      "acceptance_tests": [],
+      "reason": "Generates dataset and model metadata cards. Useful for documentation, but not run-time critical."
+    },
+    {
+      "name": "comparison",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.comparison"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "compare_models"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "medium",
+      "recommended_target_namespace": "mage_ptcg.offline_training.comparison",
+      "integration_order": 24,
+      "acceptance_tests": [],
+      "reason": "Compares candidates; useful for visual verification or evaluation phase but not execution path."
+    },
+    {
+      "name": "compatibility",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.compatibility"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "check_compatibility"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.compatibility",
+      "integration_order": 25,
+      "acceptance_tests": [],
+      "reason": "Static check for environment and module compatibility, not required for model training."
+    },
+    {
+      "name": "config_lint",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.config_lint"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_schemas.py"
+      ],
+      "public_entrypoints": [
+        "lint_config_file"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.config_lint",
+      "integration_order": 26,
+      "acceptance_tests": [],
+      "reason": "Static utility to validate offline training config formats."
+    },
+    {
+      "name": "contracts",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_canonical_hash.py",
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "canonical_json",
+        "digest",
+        "walk_safe",
+        "atomic_write_json",
+        "FileLock",
+        "atomic_write_records",
+        "load_records"
+      ],
+      "dependencies": [],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.contracts",
+      "integration_order": 1,
+      "acceptance_tests": [
+        "test_canonical_json_hash_stability",
+        "test_duplicate_keys_rejection"
+      ],
+      "reason": "Core contract definitions including canonical json serialization, locking, and atomic file utilities."
+    },
+    {
+      "name": "cross_play",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.cross_play"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "generate_cross_play_report",
+        "format_cross_play_csv",
+        "format_cross_play_markdown"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.statistics"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.cross_play",
+      "integration_order": 27,
+      "acceptance_tests": [],
+      "reason": "Reports on cross-play matching results; non-critical for early training integration."
+    },
+    {
+      "name": "curriculum",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.curriculum"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "plan_curriculum_batches"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.curriculum",
+      "integration_order": 28,
+      "acceptance_tests": [],
+      "reason": "Implements curriculum difficulty scheduling, but out of scope for early v1 runtimes."
+    },
+    {
+      "name": "data_quality",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.data_quality"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "profile_dataset"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.data_quality",
+      "integration_order": 6,
+      "acceptance_tests": [],
+      "reason": "Essential data validation to ensure ingested training data is robust and free from invalid states."
+    },
+    {
+      "name": "data_repair",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.data_repair"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "DataRepairPlanner"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.data_repair",
+      "integration_order": 29,
+      "acceptance_tests": [],
+      "reason": "Optional repair planner. While useful, automatic repairs should be done carefully and not automated initially."
+    },
+    {
+      "name": "dataset_ops",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.dataset_ops"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_data_ops.py"
+      ],
+      "public_entrypoints": [
+        "DatasetLifecycleManager"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts",
+        "mage_ptcg.offline_training_v1_support.schema_registry"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "high",
+      "recommended_target_namespace": "mage_ptcg.offline_training.dataset_ops",
+      "integration_order": 5,
+      "acceptance_tests": [
+        "test_dataset_creation_and_hash"
+      ],
+      "reason": "Orchestrates datasets lifecycle, directory setups, and hashing structures."
+    },
+    {
+      "name": "dedup",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.dedup"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "process_and_deduplicate"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.dedup",
+      "integration_order": 7,
+      "acceptance_tests": [],
+      "reason": "Ensures training records do not have identical duplicates to prevent model over-indexing."
+    },
+    {
+      "name": "drift",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.drift"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "detect_categorical_drift"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.drift",
+      "integration_order": 30,
+      "acceptance_tests": [],
+      "reason": "Identifies drift over episodes, suitable for drift reporting but not a core training component."
+    },
+    {
+      "name": "errors",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.errors"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_errors.py"
+      ],
+      "public_entrypoints": [
+        "SupportPlatformError",
+        "SupportContractError",
+        "SchemaValidationError"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.errors",
+      "integration_order": 2,
+      "acceptance_tests": [],
+      "reason": "Defines domain-specific exceptions for error tracking and contracts validation."
+    },
+    {
+      "name": "evaluation_planner",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.evaluation_planner"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "plan_evaluations"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "medium",
+      "recommended_target_namespace": "mage_ptcg.offline_training.evaluation_planner",
+      "integration_order": 31,
+      "acceptance_tests": [],
+      "reason": "Orchestrates evaluation runs; redundant if the core has its own evaluation driver."
+    },
+    {
+      "name": "experiment_query",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.experiment_query"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "query_experiments"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.experiment_query",
+      "integration_order": 32,
+      "acceptance_tests": [],
+      "reason": "Provides offline metadata querying features for experiments."
+    },
+    {
+      "name": "format_benchmark",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.format_benchmark"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_benchmark.py"
+      ],
+      "public_entrypoints": [
+        "run_format_benchmark"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.format_benchmark",
+      "integration_order": 33,
+      "acceptance_tests": [],
+      "reason": "Developer utility to benchmark compression formats like json, jsonl, and gzip."
+    },
+    {
+      "name": "fuzz",
+      "classification": "HOLD",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.fuzz"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_fuzz_meta.py"
+      ],
+      "public_entrypoints": [
+        "run_fuzz_tests"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.fuzz",
+      "integration_order": -1,
+      "acceptance_tests": [],
+      "reason": "Harness for mutation/property testing; non-essential for runtime and adds maintenance cost."
+    },
+    {
+      "name": "incident",
+      "classification": "HOLD",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.incident"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "create_incident_report"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "medium",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.incident",
+      "integration_order": -1,
+      "acceptance_tests": [],
+      "reason": "Extracts logs and details. Potential risk of leaking workspace details or stack traces outside safe bounds."
+    },
+    {
+      "name": "integration_adapters",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.integration_adapters"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "TrainingStateAdapter"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "medium",
+      "recommended_target_namespace": "mage_ptcg.offline_training.integration_adapters",
+      "integration_order": 9,
+      "acceptance_tests": [
+        "test_training_state_adapter_compatibility"
+      ],
+      "reason": "Bridge logic mapping student state representations and action key adapters safely."
+    },
+    {
+      "name": "iteration",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.iteration"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "DistillationOrchestrator"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "high",
+      "recommended_target_namespace": "mage_ptcg.offline_training.iteration",
+      "integration_order": 34,
+      "acceptance_tests": [],
+      "reason": "High-level loop runner coordinating distillation phases, overlaps with primary runner paths."
+    },
+    {
+      "name": "json_schema",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.json_schema"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_schemas.py"
+      ],
+      "public_entrypoints": [
+        "get_schema",
+        "validate_dict_by_schema"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.errors"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.json_schema",
+      "integration_order": 3,
+      "acceptance_tests": [
+        "test_schema_validations"
+      ],
+      "reason": "Contract dictionary schema validator ensuring consistency across serialized outputs."
+    },
+    {
+      "name": "label_consensus",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.label_consensus"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "compute_label_consensus"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.label_consensus",
+      "integration_order": 35,
+      "acceptance_tests": [],
+      "reason": "Averages multi-teacher choices, but not required if only a single teacher is used."
+    },
+    {
+      "name": "leakage_audit",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.leakage_audit"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "audit_split_leakage"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.leakage_audit",
+      "integration_order": 8,
+      "acceptance_tests": [],
+      "reason": "Essential for scanning train/validation data boundaries to avoid data leakage before training."
+    },
+    {
+      "name": "lineage",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.lineage"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_audit_lineage.py"
+      ],
+      "public_entrypoints": [
+        "DatasetLineageTracker"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.lineage",
+      "integration_order": 10,
+      "acceptance_tests": [
+        "test_lineage_tracking_flow"
+      ],
+      "reason": "Lineage tracking to audit upstream and downstream associations of processed training datasets."
+    },
+    {
+      "name": "metric_audit",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.metric_audit"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "audit_evaluation_metrics"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.metric_audit",
+      "integration_order": 36,
+      "acceptance_tests": [],
+      "reason": "Audit verification of evaluation performance statistics."
+    },
+    {
+      "name": "mining",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.mining"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "mine_hard_states"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "medium",
+      "recommended_target_namespace": "mage_ptcg.offline_training.mining",
+      "integration_order": 11,
+      "acceptance_tests": [
+        "test_hard_state_mining"
+      ],
+      "reason": "Extracts high-disagreement training instances (teacher/student discrepancy) for active training iterations."
+    },
+    {
+      "name": "ood",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.ood"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "compute_ood_diagnostics"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.ood",
+      "integration_order": 37,
+      "acceptance_tests": [],
+      "reason": "Provides OOD detection checks. Non-essential for baseline student builds."
+    },
+    {
+      "name": "performance",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.performance"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "analyze_performance_measurements"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.performance",
+      "integration_order": 38,
+      "acceptance_tests": [],
+      "reason": "Diagnostic component verifying latency and operational speed profiles."
+    },
+    {
+      "name": "promotion",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.promotion"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "PromotionEvaluator"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "medium",
+      "recommended_target_namespace": "mage_ptcg.offline_training.promotion",
+      "integration_order": 39,
+      "acceptance_tests": [],
+      "reason": "Provides agent promotion logic; can trigger model updating but requires strict human approval and gates."
+    },
+    {
+      "name": "query_budget",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.query_budget"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "QueryBudgetTracker"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.query_budget",
+      "integration_order": 40,
+      "acceptance_tests": [],
+      "reason": "Manages API query budget limits, non-essential for initial runs."
+    },
+    {
+      "name": "ratings",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.ratings"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "compute_elo",
+        "compute_bradley_terry"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.ratings",
+      "integration_order": 41,
+      "acceptance_tests": [
+        "test_elo_ratings_calculation"
+      ],
+      "reason": "Elo and Bradley-Terry score calculation module; non-essential for building model pipeline."
+    },
+    {
+      "name": "reporting",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.reporting"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_reporting.py"
+      ],
+      "public_entrypoints": [
+        "generate_html_report"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.reporting",
+      "integration_order": 12,
+      "acceptance_tests": [
+        "test_html_report_generation"
+      ],
+      "reason": "Generates localized run/training report summaries for validation and auditing."
+    },
+    {
+      "name": "reproducibility",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.reproducibility"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "ReproducibilityBundleManager"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.reproducibility",
+      "integration_order": 13,
+      "acceptance_tests": [
+        "test_reproducibility_bundle"
+      ],
+      "reason": "Saves code snapshot, configs, and seeds in compressed artifacts for auditing and replica runs."
+    },
+    {
+      "name": "resource_budget",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.resource_budget"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "ResourceBudgetTracker"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.resource_budget",
+      "integration_order": 42,
+      "acceptance_tests": [],
+      "reason": "Limits file storage and runtime resources dynamically; can be deferred to core infrastructure."
+    },
+    {
+      "name": "retention",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.retention"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "RetentionPlanner"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.retention",
+      "integration_order": 43,
+      "acceptance_tests": [],
+      "reason": "Automates cleanup schedules for raw/intermediate datasets; defer until disk pressure is verified."
+    },
+    {
+      "name": "robust_statistics",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.robust_statistics"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "exact_binomial_test"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.robust_statistics",
+      "integration_order": 44,
+      "acceptance_tests": [],
+      "reason": "Provides exact binomial test checks; non-essential for core offline run validation."
+    },
+    {
+      "name": "sampling",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.sampling"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "priority_sample"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.sampling",
+      "integration_order": 45,
+      "acceptance_tests": [
+        "test_priority_sampling"
+      ],
+      "reason": "Implements weighted sampling strategies. Useful but not in the core distillation execution path."
+    },
+    {
+      "name": "scale_check",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.scale_check"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_adapters.py"
+      ],
+      "public_entrypoints": [
+        "check_scale_viability"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.scale_check",
+      "integration_order": 46,
+      "acceptance_tests": [],
+      "reason": "Static check verifying capacity of training arrays."
+    },
+    {
+      "name": "schedule",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.schedule"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "generate_schedule",
+        "validate_games_against_schedule"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.schedule",
+      "integration_order": 47,
+      "acceptance_tests": [
+        "test_schedule_generation"
+      ],
+      "reason": "Coordinates game evaluation schedules; non-essential for student updates."
+    },
+    {
+      "name": "schema_registry",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.schema_registry"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_schemas.py"
+      ],
+      "public_entrypoints": [
+        "SchemaRegistry"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.json_schema"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.schema_registry",
+      "integration_order": 14,
+      "acceptance_tests": [
+        "test_schema_registry_lookup"
+      ],
+      "reason": "Validates file schemas dynamically across version variations."
+    },
+    {
+      "name": "sensitivity",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.sensitivity"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "analyze_winrate_sensitivity"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.sensitivity",
+      "integration_order": 48,
+      "acceptance_tests": [],
+      "reason": "Winrate sensitivity analysis checks; non-essential for early baseline validation."
+    },
+    {
+      "name": "sequential_evaluation",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.sequential_evaluation"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "run_sprt_check"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.sequential_evaluation",
+      "integration_order": 15,
+      "acceptance_tests": [],
+      "reason": "Sequential Probability Ratio Test (SPRT) checks for screening model viability deterministically."
+    },
+    {
+      "name": "statistics",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.statistics"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "wilson_score_interval",
+        "run_stratified_bootstrap",
+        "evaluate_game_statistics"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.statistics",
+      "integration_order": 16,
+      "acceptance_tests": [
+        "test_wilson_score_interval",
+        "test_bootstrap_determinism"
+      ],
+      "reason": "Mandatory statistics functions (Wilson interval, stratified bootstrap) for evaluating agent wins deterministically."
+    },
+    {
+      "name": "stratified_analysis",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.stratified_analysis"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "detect_simpsons_paradox"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.stratified_analysis",
+      "integration_order": 49,
+      "acceptance_tests": [],
+      "reason": "Detects Simpson's paradox in stratified results; statistical safety check only."
+    },
+    {
+      "name": "sweep",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.sweep"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "SweepOrchestrator"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "high",
+      "recommended_target_namespace": "mage_ptcg.offline_training.sweep",
+      "integration_order": 50,
+      "acceptance_tests": [],
+      "reason": "Coordinates multi-parameter sweeping pipelines, redundant with standard runner."
+    },
+    {
+      "name": "synthetic_data",
+      "classification": "HOLD",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.synthetic_data"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_final_overnight_scenario.py"
+      ],
+      "public_entrypoints": [
+        "generate_synthetic_game_results",
+        "generate_synthetic_records"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.synthetic_data",
+      "integration_order": -1,
+      "acceptance_tests": [],
+      "reason": "Generates synthetic game data for testing; must remain quarantined from production training pipeline to avoid data corruption."
+    },
+    {
+      "name": "teacher_analysis",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.teacher_analysis"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_ops.py"
+      ],
+      "public_entrypoints": [
+        "analyze_teacher_reliability"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.teacher_analysis",
+      "integration_order": 51,
+      "acceptance_tests": [],
+      "reason": "Evaluates teacher failure profiles and error metrics."
+    },
+    {
+      "name": "teacher_cache",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.teacher_cache"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "TeacherCache"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.teacher_cache",
+      "integration_order": 17,
+      "acceptance_tests": [
+        "test_teacher_cache_operations"
+      ],
+      "reason": "Local inference cache for teacher policy queries to reduce solver runtimes significantly."
+    },
+    {
+      "name": "teacher_ensemble",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.teacher_ensemble"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "TeacherEnsemble"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.teacher_ensemble",
+      "integration_order": 52,
+      "acceptance_tests": [],
+      "reason": "Ensemble management for multi-teacher settings; not required for baseline single-teacher distillation."
+    },
+    {
+      "name": "teacher_registry",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.teacher_registry"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_teacher_ops.py"
+      ],
+      "public_entrypoints": [
+        "TeacherRegistry"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts",
+        "mage_ptcg.offline_training_v1_support.registries"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.teacher_registry",
+      "integration_order": 18,
+      "acceptance_tests": [
+        "test_teacher_registry_lifecycle"
+      ],
+      "reason": "Tracks registered teacher models, versions, and validation records dynamically."
+    },
+    {
+      "name": "traceability",
+      "classification": "P0",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.traceability"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_phase3_audit_lineage.py"
+      ],
+      "public_entrypoints": [
+        "AuditTraceManager"
+      ],
+      "dependencies": [
+        "mage_ptcg.offline_training_v1_support.contracts"
+      ],
+      "writes_to_disk": true,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.traceability",
+      "integration_order": 19,
+      "acceptance_tests": [
+        "test_audit_trace_lifecycle"
+      ],
+      "reason": "Traceability links tracking intermediate dataset digests with model evaluation logs."
+    },
+    {
+      "name": "uncertainty",
+      "classification": "P1",
+      "source_modules": [
+        "mage_ptcg.offline_training_v1_support.uncertainty"
+      ],
+      "tests": [
+        "tests/offline_training_v1_support/test_support_platform.py"
+      ],
+      "public_entrypoints": [
+        "diagnose_decision_uncertainty"
+      ],
+      "dependencies": [],
+      "writes_to_disk": false,
+      "privacy_risk": "low",
+      "overlap_with_core": "low",
+      "recommended_target_namespace": "mage_ptcg.offline_training.uncertainty",
+      "integration_order": 53,
+      "acceptance_tests": [],
+      "reason": "Approximates prediction uncertainty; non-essential for initial student updates."
+    }
+  ]
+}

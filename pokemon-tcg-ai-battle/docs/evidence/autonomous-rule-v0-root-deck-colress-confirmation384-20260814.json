@@ -1,0 +1,65 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-colress-confirmation384-v1",
+  "date": "2026-08-14",
+  "purpose": "384-game confirmation after positive common24 guardrail",
+  "root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814-colress-confirmation384-v1",
+  "confirmation_manifest_sha256": "0d53eba02b048b8f4cd53dd5ec6749d5f03b7aa43051a220a30629bd1ec1c07a",
+  "summary_sha256": "2d8c52b1b1fa91fa56c4afefe9c3cfe9290154bc071714eaa599864112abffeb",
+  "summary_md_sha256": "f74f2a42762dabb909f8c1fd57b7e07e7d4ef423fe2a105a0077db2ee53a1c5a",
+  "final_summary_sha256": "61575e3ead633570444e4a9c47590a0c2e0786db0ab660633f8647b25ae4ec7a7",
+  "source_common_root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814-common24-retry-v3",
+  "source_common_summary_sha256": "053eb00cf500ff1688ef3e4a741d94a4ac24fa12574608a54d9b0ed47b8e8009",
+  "protocol": {
+    "opponents": 24,
+    "games_per_arm": 384,
+    "games_per_seat": 8,
+    "base_seed": 23430000,
+    "same_seed_schedule": true,
+    "workers": 12,
+    "worker_recycle_games": 64,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "faults_total": 0,
+    "heldout_exposure": false,
+    "unique_game_ids_per_arm": true,
+    "unique_seeds_per_arm": true,
+    "seat_counts_per_arm": {"0": 192, "1": 192}
+  },
+  "arms": {
+    "parent": {
+      "wdlf": "40-0-344-0",
+      "score_rate": 0.10416666666666667,
+      "summary_sha256": "5daec9ca751b6c89af0bff507820d25d366a4c14df1b7ed8725b1075aff1e510",
+      "ledger_sha256": "a457b7836920940f0dff5f3538517758532aeb7fb52a60e13b6c1d176636ac0d",
+      "manifest_sha256": "49737075a74a03bca604c2ee13036dea8a27bb4adee65a8cdd2a015a2832d256"
+    },
+    "root-carmine-to-colress": {
+      "mutation": "1192 Carmine -> 1194 Colress's Tenacity",
+      "deck_file_sha256": "af201a2106b501533beb1b17d5b944b6cab83d0d6cd8288bfc5d4105774516f6",
+      "deck_multiset_sha256": "1c765b30b8deb5b35d35addb1ea7fecc047c1b9d8119a6bff2b1ecd3754974a5",
+      "wdlf": "41-0-343-0",
+      "score_rate": 0.10677083333333333,
+      "delta_vs_parent_points": 0.26041666666666574,
+      "status": "candidate_only_no_768",
+      "summary_sha256": "1b113e2f39c6d9b71a1ac798f734800d34b164686fa9c4073db61a83a26bf26a",
+      "ledger_sha256": "03f196a0d00de3e0d61aea1e4ec38f9ca2ff39df36f3cabab01d92db3247c3af",
+      "manifest_sha256": "1689690bd1875da732d09da604a05f358838f6e515b17bad7394e5a1589c9c6c"
+    }
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "confirmation_pass": false,
+    "difference_reproduced": false,
+    "difference_points": 0.26041666666666574,
+    "run_768": false,
+    "run_longrun": false,
+    "promotion": "none",
+    "reason": "The +2.604pt common24 signal collapsed to +0.260pt (one win) at 384; candidate remains candidate-only."
+  }
+}

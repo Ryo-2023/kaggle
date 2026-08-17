@@ -1,0 +1,54 @@
+{
+  "failed_submission_ref": "54796979",
+  "failure_stage": "Validation Episode",
+  "root_cause": "__file__ undefined under Kaggle raw exec",
+  "traceback": [
+    "File \"/kaggle_simulations/agent/main.py\", line 13, in <module>",
+    "    _ROOT = Path(__file__).resolve().parent",
+    "NameError: name '__file__' is not defined"
+  ],
+  "why_not_caught_by_previous_clean_room": "The previous clean-room verification imported the package using importlib.util.spec_from_file_location or regular Python imports, which populated the __file__ attribute globally. It did not replicate Kaggle's raw execution pattern via compile() and exec() without __file__.",
+  "new_candidate": {
+    "path": "runs/offline-training-v1/offline-long-run-actual-20260718-r1/submission_candidate/neural-student-v1-entryfix/",
+    "archive_sha256": "dd33517fb7758fc671b27cfe672a0367835761061f2121747430e084895178d8",
+    "build_commit": "c21ebed5445ee77b521ed2cd1f309b3726712766"
+  },
+  "model": {
+    "semantic_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+    "sha256": "2318b7ff7f1d981ec4181ae01cc681b15c057f5b4daba3d5f900e71e2144eb8f",
+    "bytes_matched": true
+  },
+  "added_regression_tests": [
+    "test_raw_exec_without_file",
+    "test_kaggle_get_last_callable"
+  ],
+  "verification": {
+    "kaggle_validation_reproduction": {
+      "status": "SUCCESS",
+      "steps": 215,
+      "agent0_status": "DONE",
+      "agent1_status": "DONE"
+    },
+    "smoke_test_20_games": {
+      "seed": 32000,
+      "gate_status": "CLEAN_PASS",
+      "timeouts": 0,
+      "crashes": 0,
+      "wins": 11,
+      "losses": 9
+    },
+    "full_regression_tests": {
+      "passed": 1025,
+      "failed": 1,
+      "failures": [
+        "tests/test_collect_offline_training_v1_evidence.py::test_run_command_safe_timeout_and_child_cleanup"
+      ],
+      "flaky_notes": "test_run_command_safe_timeout_and_child_cleanup is a known flaky test due to process spawning delay under system load."
+    }
+  },
+  "invariant_checks": {
+    "champion_default": "Rule Agent v0",
+    "promotion": "NO_DECISION",
+    "resubmission_executed": false
+  }
+}

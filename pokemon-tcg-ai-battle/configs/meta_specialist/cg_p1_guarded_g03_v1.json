@@ -1,0 +1,22 @@
+{
+  "schema_version": "cg-p1-guarded-config-v1",
+  "parent_candidate_id": "cg-p1-cem-incumbent-g03-c2684e0b7079",
+  "purpose": "主行動順位だけをP1へ戻し、gen3のsetup/search/retreat差分を残す反証候補",
+  "config": {
+    "ability_bonus": 25000,
+    "attach_mega_2energy_bonus": 10000,
+    "attach_mega_lucario": 45000,
+    "attach_overenergy_penalty": -30000,
+    "attack_982_base": 36000,
+    "attack_983_base": 50000,
+    "attack_damage_weight_milli": 1000,
+    "attack_generic_base": 10000,
+    "evolve_mega_lucario": 50000,
+    "lethal_bonus": 12000,
+    "lethal_hp_margin": 0,
+    "retreat_good_score": 12567,
+    "search_mega_lucario": 49496,
+    "setup_active_riolu": 39942,
+    "setup_bench_riolu": 28302
+  }
+}

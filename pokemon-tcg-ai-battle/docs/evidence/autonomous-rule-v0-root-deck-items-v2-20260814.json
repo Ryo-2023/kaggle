@@ -1,0 +1,82 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-items-v2-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root-deck novel Item weighted48 then common24 screen",
+  "weighted_root": "runs/final-sprint-autonomous/rule-v0-root-deck-items-v2-weighted48-20260814",
+  "common24_root": "runs/final-sprint-autonomous/rule-v0-root-deck-items-v2-common24-20260814",
+  "weighted_manifest_sha256": "f2b536fa5baaf4d7c9d2f5da5dfee1700bc7747a23c5adcb276b48ba621ee01e",
+  "weighted_summary_sha256": "cd318cc967561957e60739011427a494fe3820265c21b07b870b6ba1ce3da7ad",
+  "common24_manifest_sha256": "6c061c6c4a60d21d2e7924f0ae3ae9f2b18b1884d77fdd3b29cac83217440a83",
+  "common24_summary_sha256": "118f3c5f44f7f73deb2eb576f750a6aa5599192b6332a39f60d53ef03f86a57f",
+  "common24_final_sha256": "b426972f755561d99a1c2de25c7ece48509353906cd432235c04c6b028b31281",
+  "protocol": {
+    "weighted_base_seed": 23450000,
+    "common24_base_seed": 23460000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "weighted_games_per_arm": 48,
+    "common24_games_per_arm": 96,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "faults_total": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "root-premium-power-to-pokegear",
+      "mutation": "1141 Premium Power Pro -> 1122 Pokégear 3.0",
+      "deck_file_sha256": "8615cea33e1daa1251a12e9606e2b1378c0a40c126cbdbc4f0a84b18621d473f",
+      "deck_multiset_sha256": "12f6d15fe6fe89290d3f869fb804298c57276de3708bf3f71e86f24a3f43db6c",
+      "weighted_wdlf": "5-0-43-0",
+      "weighted_delta_points": 4.721075294773618,
+      "common24_wdlf": "10-1-85-0",
+      "common24_delta_points": -6.770833333333334,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "68e7193230204e750f3e00c6dd34a11514445999e3d9af6e0de9d277393face3",
+      "weighted_arm_ledger_sha256": "ff4e2350b2963c171db815bcc3ee60f207f719f73a8abda4ce3eaf07dcf27ff2",
+      "weighted_arm_manifest_sha256": "e1d33103fb6a461366ed815fe4786983733ef3ded025f82c613d3738eb2b2545",
+      "common24_arm_summary_sha256": "d777418a0ad3586e53624e950c1c3f56bd1f82c8764a918e013a77befac79af0",
+      "common24_arm_ledger_sha256": "02cee08e853609cee5cf20904b4099b8321b92dbbff688e4271acfe7503d0734",
+      "common24_arm_manifest_sha256": "34d95996a8107dc1b41e3def0fde69fca2dd32e96445f60a7ead429b1efab56a"
+    },
+    {
+      "candidate_id": "root-switch-to-ultra-ball",
+      "mutation": "1123 Switch -> 1121 Ultra Ball",
+      "deck_file_sha256": "89cb9fb52dfe4bbd8b7d913aef4b6199ffe6b0e28aff5a51361d9ea382ac3aa7",
+      "deck_multiset_sha256": "17c4e0be69c7794f3f8ce1014af9b6aafa19caddf163bc63ecb79d13e3dde528",
+      "weighted_wdlf": "7-0-41-0",
+      "weighted_delta_points": 6.607111726050268,
+      "common24_wdlf": "12-0-84-0",
+      "common24_delta_points": -5.208333333333334,
+      "status": "candidate_only_stop",
+      "weighted_arm_summary_sha256": "510d63cf7d18219f41ccff60b8744989ef2a8e14f5db100a3d96a6be8462272e",
+      "weighted_arm_ledger_sha256": "2ae76196dce3956a15ce10e646fa4a967193d198b1a1e1ca05ee799422831087",
+      "weighted_arm_manifest_sha256": "c5098670f71912b67fe73dfc24463faf00c61de2d6da284eaa095e4acac71445",
+      "common24_arm_summary_sha256": "08f4d4a548389e9245d8f8779bc6435816ef226717da0182235852c26a174778",
+      "common24_arm_ledger_sha256": "f74c24ceca5dbd99c59379aeaee9c0152d4ca6be5beb9d0233370a3aee6ad7d6",
+      "common24_arm_manifest_sha256": "5ee6f5af0b3ba06f1889c6b46aaaf9fa081571b11e40cfb090fa8b45bb4f67f4"
+    }
+  ],
+  "parent_common24": {
+    "wdlf": "17-0-79-0",
+    "score_rate": 0.17708333333333334,
+    "summary_sha256": "743fb4a4b1084f29a37ab7b324b398112813d4cf1f72ee6198cddfbeae33b8df",
+    "ledger_sha256": "a8244f883c65609d7cd5293c77babc19bd5721543782764791a6cffe9a32b0f3",
+    "manifest_sha256": "5f92422341a6672a8adcc754d5bba99230843865df12537a5362b3debce16c26"
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": true,
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "promotion": "none",
+    "reason": "Both weighted positives reversed against the parent on common24; do not rerun these surfaces."
+  }
+}

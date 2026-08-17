@@ -1,0 +1,28 @@
+{
+  "schema": "alakazam-candidate-lifecycle-v1",
+  "one_card_generation_status": "CLOSED",
+  "candidates": [
+    {
+      "candidate_id": "poke_pad_to_sacred_ash",
+      "deck_hash": "11ba61b07065923e7de737fced5691fd5428872fa38cf36fd0af505df0ad4120",
+      "stage1": {"wins": 22, "games": 32},
+      "stage2_candidate": {"wins": 58, "games": 128},
+      "matched_schedule_fresh_baseline": {"wins": 81, "games": 128},
+      "delta_percentage_points": -17.96875,
+      "status": "RETIRED_STAGE2_REGRESSION",
+      "reentry": "FORBIDDEN_SAME_DECK_OR_CHANGE"
+    },
+    {
+      "candidate_id": "hammer_to_legacy_dunsparce",
+      "stage1": {"wins": 20, "games": 32, "worst_group_win_rate": 0.125},
+      "status": "DIAGNOSTIC_ONLY_WORST_GROUP_RISK",
+      "reentry": "NOT_A_PRIMARY_JOINT_CANDIDATE"
+    },
+    {
+      "candidate_id": "hammer_to_lillies_determination",
+      "stage1": {"wins": 20, "games": 32, "worst_group_win_rate": 0.25},
+      "status": "RESERVE_NOT_VALIDATED",
+      "reentry": "NOT_A_PRIMARY_JOINT_CANDIDATE"
+    }
+  ]
+}

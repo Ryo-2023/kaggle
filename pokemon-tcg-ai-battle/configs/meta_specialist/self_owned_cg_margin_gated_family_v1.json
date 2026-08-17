@@ -1,0 +1,24 @@
+{
+  "schema_version": "self-owned-cg-margin-gated-factorial-plan-v1",
+  "source_epoch": "self_owned_cg_margin_gated_family_v1_20260816",
+  "seed_namespace": "self-owned-cg-margin-gated-fresh-v1-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "p1_source_package": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1/package",
+  "public_scan_roots": ["runs", "opponents"],
+  "deck_recipes": [
+    {"id": "fire-charizard-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_fire.json", "seed": 20270001, "ordinal": 1001},
+    {"id": "dark-gengar-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_dark.json", "seed": 20270002, "ordinal": 1002},
+    {"id": "lightning-manectric-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v18_cross_lineage_lightning.json", "seed": 20270003, "ordinal": 1003},
+    {"id": "fighting-zygarde-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_fighting.json", "seed": 20270004, "ordinal": 1004},
+    {"id": "water-starmie-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 20270005, "ordinal": 1005},
+    {"id": "psychic-gardevoir-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_psychic.json", "seed": 20270006, "ordinal": 1006}
+  ],
+  "policy_variants": [
+    {"id": "fire-lethal-00", "deck_recipe_id": "fire-charizard-00", "overrides": {"score_margin": 6000, "lethal_bonus": 8000, "early_evolve_bonus": 3000}},
+    {"id": "dark-switch-01", "deck_recipe_id": "dark-gengar-01", "overrides": {"score_margin": 6000, "damaged_retreat_bonus": 6000, "ready_switch_bonus": 4000}},
+    {"id": "lightning-prize-02", "deck_recipe_id": "lightning-manectric-02", "overrides": {"score_margin": 6000, "behind_attack_bonus": 6000, "overkill_penalty": -4000}},
+    {"id": "fighting-evolve-03", "deck_recipe_id": "fighting-zygarde-03", "overrides": {"score_margin": 5000, "lethal_bonus": 4000, "early_evolve_bonus": 6000}},
+    {"id": "water-switch-04", "deck_recipe_id": "water-starmie-04", "overrides": {"score_margin": 7000, "damaged_retreat_bonus": 5000, "ready_switch_bonus": 7000, "seat_bias": 1500}},
+    {"id": "psychic-prize-05", "deck_recipe_id": "psychic-gardevoir-05", "overrides": {"score_margin": 5000, "behind_attack_bonus": 5000, "overkill_penalty": -3000, "seat_bias": -1500}}
+  ]
+}

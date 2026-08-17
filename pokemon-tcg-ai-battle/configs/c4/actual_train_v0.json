@@ -1,0 +1,9 @@
+{
+  "schema_version": "c4-pipeline-config-v1",
+  "run_id": "actual-train-rule-bc-v0",
+  "collector": {"requested_games": 32, "maximum_games": 64, "resume": true},
+  "teacher": {"source": "Rule Agent v0", "quality": "RULE_ONLY", "objective": "RULE_IMITATION"},
+  "training": {"device": "cpu", "seed": 0},
+  "gates": {"run_gate_a": true, "run_gate_b": true, "gate_b_games": 20},
+  "artifacts": {"collection_root": ".local_artifacts/c4_runs", "training_root": ".local_artifacts/c4_actual_training/training", "pipeline_root": ".local_artifacts/c4_actual_training/pipeline"}
+}

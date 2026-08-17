@@ -1,0 +1,10 @@
+[Unit]
+Description=Pokemon candidate opponent incremental ingestion
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle
+Environment=PYTHONPATH=/home/bfe-lab-ono/kaggle/pokemon-tcg-ai-battle/src
+Environment=OPPONENT_INGEST_ARTIFACT_ROOT=/home/bfe-lab-ono/kaggle/handoff-artifacts/family-opponent-population-expansion-v1
+TimeoutStartSec=30min
+ExecStart=/usr/bin/env bash scripts/opponent_ingest/06_run_incremental_ingestion.sh

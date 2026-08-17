@@ -1,0 +1,205 @@
+{
+  "schema_version": "meta-specialist-native-advantage-source-route-comparison-v1",
+  "generated_at": "2026-08-13",
+  "status": "DESIGN_ONLY",
+  "scope": {
+    "research_only": true,
+    "execution_started": false,
+    "collection_started": false,
+    "evaluation_started": false,
+    "cabt_started": false,
+    "training_started": false,
+    "submission_started": false,
+    "longrun_started": false,
+    "authority": {
+      "training_authority": false,
+      "promotion_authority": false,
+      "submission_authority": false,
+      "external_execution_authority": false
+    }
+  },
+  "current_gate": {
+    "meta_manifest": {
+      "path": "runs/final-sprint-autonomous/meta-distribution-v1/manifest.json",
+      "sha256": "e430f1284e587e7f301f9e29abe377faad79ff5120a39c42b7b2f6a5223dd2ae",
+      "rows": 102,
+      "usage_boundary": "local_eval_only",
+      "training_allowed_rows": 2,
+      "behavior_allowed_rows": 0,
+      "submission_allowed_rows": 0
+    },
+    "curriculum_manifest": {
+      "path": "runs/final-sprint-autonomous/meta-train-curriculum-v1/iteration-0000/manifest.json",
+      "sha256": "b9034c96b5f1cde1a33eab156b7e94ef73f9c35aa292492bec2cf07b8aee6a7a",
+      "teacher_behavior_eligible_rows": 0
+    },
+    "real_public_advantage_table": {
+      "present": false,
+      "synthetic_fixture_sha256": "d62bb3ec85115976c1e101282c60c0aa1d23e90b8b07382fd9268ad159b183b0",
+      "synthetic_is_performance_evidence": false
+    },
+    "blocked_materializer": {
+      "run_root": "runs/final-sprint-autonomous/native-meta-overfit-dryrun-v1-20260813",
+      "reason": "META_TRAIN curriculum entry lacks exposure/behavior permission",
+      "progress_summary_sha256": "bbc6510516d94c4396cc75eaa17b21616cbf48c94e2b931ae91f00749d5fdfa8",
+      "run_manifest_sha256": "def3733f0cbde92da13d4668727eb2203012f1f882071603f06265327f3b4b63",
+      "ready_for_evaluation": false
+    }
+  },
+  "source_inventory": [
+    {"role": "pool_manifest", "path": "opponents/pool_manifest.json", "sha256": "e0013cf31b3e6e24db54591faeef6f092b9ebf85247bd0e57598eb8d447f20ca"},
+    {"role": "broad_arena_config", "path": "configs/meta_specialist/performance_first_broad_pool_v1.json", "sha256": "832273ff656280d2556c9df09a9a3db9f2564a181be78a3e658509d3b396209b"},
+    {"role": "permission_policy", "path": "configs/opponents/permissions/pokemon_team_agents_internal_v1.yaml", "sha256": "8adebfe8b886831c21883e5d7c4298afcd39827a5f22d75958e12c5ce8261f05"},
+    {"role": "derivation_decision", "path": "docs/decisions/2026-08-05-archaludon-teacher-derivation.md", "sha256": "e64cc3f3e74bf5b96932438b4718af3079f56d1c7da64bc27524d02432e3a6fc"},
+    {"role": "meta_schedule", "path": "runs/final-sprint-autonomous/meta-distribution-v1/meta_schedule.json", "sha256": "9db6e1d9ea3a6913f2080ac5ca4f08b748ed9fa1469cfd0a7a74d0253cb16b6a"},
+    {"role": "outcome_adapter", "path": "runs/final-sprint-autonomous/common24-curriculum-outcome-adapter-v1/theta0-common24-96-v2/adapter-manifest.json", "sha256": "0679bc79af541759c67d480fdc1fef8bd9f8f1a955f0f5dddb69890e163faa89"},
+    {"role": "teacher_collector", "path": "src/mage_ptcg/meta_specialist/collect_teacher_records_v1.py", "sha256": "a9c49337b6686ea528bf213e9b75cc7ee1862fea0cdf23a64745cc4568fd1198"},
+    {"role": "native_pilot", "path": "scripts/run_native_policy_candidate_pilot_v1.py", "sha256": "7c559621eb960f7be0a63ad53adf615bacaf30b7058885e6b433b2a83d951a32"},
+    {"role": "advantage_contract", "path": "src/mage_ptcg/meta_specialist/native_public_advantage_v1.py", "sha256": "dfdcf729debf3699e935412d8fc9f8ed149a90affd8dcbf8e8148a4165293e3d"},
+    {"role": "public_projection", "path": "src/mage_ptcg/meta_specialist/actor_visible_v2.py", "sha256": "f58de501cf92bc3b573d7f6a6e02915aaa1a8112331ae2a5da507773d8e99877"},
+    {"role": "tomato_policy", "path": "opponents/tomatomato_archaludon/main.py", "sha256": "8908af5caad296820a6ce5a9c8d388f04869eb499b308ac446142d9dcdaced9e"},
+    {"role": "tomato_deck", "path": "opponents/tomatomato_archaludon/deck.csv", "sha256": "42165967b565dd42ec426ecccfe79bfa7d72aa8306590e149dface0ee8bd530e"}
+  ],
+  "permissioned_v2b_snapshots": [
+    {
+      "teacher_id": "tomatomato_archaludon",
+      "manifest_path": "runs/meta-specialist-teacher-records/archaludon-teacher-tomatomato-96-autonomous-v2b-20260813/teacher_dataset_manifest.json",
+      "manifest_sha256": "de04f029ff18cbe0e2209c57dd17a73d90d5ae7a4ac6a0bc8706543349e2d41c",
+      "collection_contract_sha256": "ad694afe690b21c4be2f9293ad4688d7997b8b4e8ba82129cc5996dae47b8a83",
+      "permission_manifest_id": "441a6b83373c9ff2e7af765bb1d7e926bc5af9b3967537dc5d0be8d842956ca0",
+      "permission_content_hash": "566547d31ebe0b7fc5a1143c9e7595705bb57912221661b8932924195df3faad",
+      "permission_trusted_bytes_sha256": "10bd678807b2ff942f5804122356ac084a2567be394b2f8fefd87c4a2ceb07f2",
+      "allowed_usages": ["training-local"],
+      "teacher_usage_boundary": "local_eval_only",
+      "games": 96,
+      "records": 5110
+    },
+    {
+      "teacher_id": "lucifer19_battlecore",
+      "manifest_path": "runs/meta-specialist-teacher-records/archaludon-teacher-lucifer19-96-autonomous-v2b-20260813/teacher_dataset_manifest.json",
+      "manifest_sha256": "a03dfc1f410cdf23b2404cdd3411271776805018f679ad61f6777f32ea949e0d",
+      "collection_contract_sha256": "75db78a399e8901a95b0c43be168c7647a62ec0b569f95e0d4110a82b935e5c9",
+      "permission_manifest_id": "83074da078f50149081a73c740803476f5b548d4c795f533b3f3e800ad74a70f",
+      "permission_content_hash": "64a9275893f11a7da6de98e12015f06a4d7740d9bc6c5295fa6eab40124225dd",
+      "permission_trusted_bytes_sha256": "a7fc71cca3bc4be6587328bcda31ff2f53cfda788474f480a4e843a3c004e40c",
+      "allowed_usages": ["training-local"],
+      "teacher_usage_boundary": "local_eval_only",
+      "games": 96,
+      "records": 5245
+    },
+    {
+      "teacher_id": "plamen06_steel",
+      "manifest_path": "runs/meta-specialist-teacher-records/archaludon-teacher-plamen06-96-autonomous-v2b-20260813/teacher_dataset_manifest.json",
+      "manifest_sha256": "ade4643925ac9ec3b4c737499b0cb8994279555505fb458d629ae5fdc8e1f45e",
+      "collection_contract_sha256": "6c4e29d9e65677eb28e3f79b221f3a44bcfaddf8736adcaada7713b93af9d9a5",
+      "permission_manifest_id": "57ea7822b197e20fdbb7e0111c4974d68c5c2d79f2db85345be348cede280a29",
+      "permission_content_hash": "596724128c5974f91128be7227ec9fce78b4fa91e7a4c28779689861cd0c29fd",
+      "permission_trusted_bytes_sha256": "4c9f1bcc48ed216638255ad2321ed63ec7964d03448c1e4b7176d04303002041",
+      "allowed_usages": ["training-local"],
+      "teacher_usage_boundary": "local_eval_only",
+      "games": 96,
+      "records": 5275
+    }
+  ],
+  "routes": {
+    "A_explicit_permissioned_meta_train_behavior_source": {
+      "status": "BLOCKED_UNTIL_EXPLICIT_BEHAVIOR_PERMISSION",
+      "shortest_if_granted": true,
+      "new_games_required": 0,
+      "source_kind": "derived_teacher_snapshot_public_projection",
+      "required_new_artifacts": [
+        "new derived META_TRAIN behavior manifest",
+        "public-only projection audit and source-to-derived row ledger",
+        "real META_TRAIN public advantage table with canonical table_sha256",
+        "strict curriculum whose selected rows all pass training+behavior permission"
+      ],
+      "permission_requirements": [
+        "Never mutate current local_eval_only rows or infer behavior permission from training_allowed=true.",
+        "Issuer must explicitly authorize chosen actions as a local research behavior source in addition to existing training-local derived-weight permission.",
+        "Bind permission ID/content hash/trusted bytes, snapshot SHA, policy/deck SHA, collection contract SHA, and decision reference.",
+        "Keep training/promotion/submission/external-execution authority false and submission_allowed false."
+      ],
+      "projection_rules": [
+        "Redact private_state, hidden cards, opponent hidden information, future RNG, and local action indices.",
+        "Derive state_digest from canonical public state and action_key from stable public action identity.",
+        "Bind terminal outcome, seat, opponent stratum, source teacher identity, and fault/unknown ledger without silently dropping faults."
+      ],
+      "training_surface": ["public value targets", "filtered BC", "outcome-weighted public action rows"],
+      "not_proven": ["AWR importance correction", "native log probabilities", "submission permission"],
+      "cost": {"new_games": 0, "wall_time": "not estimated; process existing sealed records only"},
+      "gates": [
+        "verified issuered behavior decision and trusted bytes reload",
+        "new manifest is hash-bound and separate from current local_eval_only manifest",
+        "all selected META_TRAIN rows have training_allowed=true, behavior_allowed=true, training-local usage, submission_allowed=false",
+        "public projection has zero private/hidden fields and exact state/action hashes",
+        "Task1 table and Task2 strict materializer reload successfully"
+      ]
+    },
+    "B_native_tomato_self_rollout": {
+      "status": "DESIGN_ONLY_NOT_STARTED",
+      "shortest_without_external_behavior_permission": true,
+      "new_games_required_per_snapshot": 96,
+      "schedule": {
+        "protocol": "common24",
+        "opponent_ids": 24,
+        "seats_per_opponent": 2,
+        "repetitions_per_seat": 2,
+        "requested_games": 96,
+        "fault_denominator": "all requested games"
+      },
+      "subject": {
+        "candidate_id": "tomatomato_archaludon",
+        "policy_sha256": "8908af5caad296820a6ce5a9c8d388f04869eb499b308ac446142d9dcdaced9e",
+        "deck_sha256": "42165967b565dd42ec426ecccfe79bfa7d72aa8306590e149dface0ee8bd530e"
+      },
+      "collector_contract": {
+        "schema": "native-public-rollout-collector-v1",
+        "bind": [
+          "policy/deck/evaluator/engine/runner source SHAs",
+          "pool manifest, selected IDs, common24 protocol, game IDs, seeds, seat schedule",
+          "public projection schema and stable action-key schema",
+          "source commit, collector snapshot, run root, and resume contract"
+        ],
+        "record_fields": ["game_id", "seed", "seat", "opponent_id", "public_state_digest", "action_key", "terminal_outcome", "fault_status"],
+        "forbidden_fields": ["teacher label", "teacher action target", "native log probability", "private_state", "hidden cards", "opponent hidden information"],
+        "authority": {"training_authority": false, "promotion_authority": false, "submission_authority": false, "external_execution_authority": false, "research_only": true},
+        "atomicity": ["per-game sidecar and append-only attempts", "contract-bound resume", "atomic final table/manifest publication"]
+      },
+      "permission_requirements": [
+        "Do not infer third-party behavior permission from Tomato's current local_eval_only row.",
+        "Bind a separate local research self-rollout decision/manifest authorizing the native policy's own public actions/outcomes.",
+        "Keep native code/deck submission and external redistribution prohibited."
+      ],
+      "training_surface": ["public value targets", "native-preserving self-imitation diagnostics", "outcome-filtered public action rows"],
+      "not_proven": ["AWR correction without logprob", "improvement over native by itself", "teacher-label legality"],
+      "gates": [
+        "collector/source contract reloads byte-for-byte",
+        "all records are public-only and legal action keys",
+        "96/96 games complete or faults remain in denominator; unknown/step-limit rows excluded",
+        "seat/opponent coverage and game ID/seed universe match common24",
+        "native baseline identity bound before materialization",
+        "real table self-verifies and Task2 strict materializer accepts it",
+        "native-vs-candidate 96→384→768→1536 gate before promotion"
+      ],
+      "risk": "Self-rollout may reproduce rather than improve native policy; value/search or a separate student policy is required for an improvement claim."
+    }
+  },
+  "comparison": {
+    "lowest_game_cost": "A",
+    "currently_unblocked_design_route": "B",
+    "recommended_next_implementation": "native-public-rollout-collector-v1 contract and public projection fixture, unless an issuered behavior permission for A arrives first",
+    "recommended_order": [
+      "Keep current local_eval_only and behavior_allowed=false rows immutable.",
+      "Request/record explicit behavior-source permission for A without running collection.",
+      "Implement and test B contract only; launch its 96-game snapshot only after permission and contract gates pass.",
+      "Prefer A for the first real table if permission closes because it reuses sealed snapshots with zero new games.",
+      "Otherwise run B at 96 games, then apply 96→384→768→1536 native baseline gates."
+    ],
+    "no_go_now": [
+      "Do not rewrite current meta-distribution permission flags.",
+      "Do not use the synthetic Task1 table as performance evidence.",
+      "Do not label existing teacher actions as behavior data while behavior_allowed=false.",
+      "Do not start collector/evaluator/trainer in this design-only step."
+    ]
+  }
+}

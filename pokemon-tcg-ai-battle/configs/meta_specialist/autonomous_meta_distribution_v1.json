@@ -1,0 +1,43 @@
+{
+  "schema_version": "meta-specialist-autonomous-meta-distribution-config-v1",
+  "manifest_path": "runs/final-sprint-autonomous/meta-distribution-v1/manifest.json",
+  "manifest_sha256": "e430f1284e587e7f301f9e29abe377faad79ff5120a39c42b7b2f6a5223dd2ae",
+  "schedule_path": "runs/final-sprint-autonomous/meta-distribution-v1/meta_schedule.json",
+  "schedule_sha256": "9db6e1d9ea3a6913f2080ac5ca4f08b748ed9fa1469cfd0a7a74d0253cb16b6a",
+  "split_policy": {
+    "META_TRAIN": "all census rows not reserved for META_DEV or META_FINAL; training permission is still required before collection",
+    "META_DEV": [
+      "kiyotah_abomasnow",
+      "sue124_alakazam",
+      "skarin_dragapult",
+      "ozawa_crustle_v2",
+      "nihei_megalopunny",
+      "yaroslav_crustleaware_lucario"
+    ],
+    "META_FINAL": [
+      "plamen06_steel",
+      "lucifer19_battlecore",
+      "aristophanivan_multiply",
+      "nihei_alakazam",
+      "dashimaki360_crustlecounter",
+      "ozawa_starmie"
+    ]
+  },
+  "weight_components": {
+    "top_meta": 0.6,
+    "hard_negative": 0.25,
+    "archetype_diversity": 0.15
+  },
+  "evaluation_quota": 512,
+  "permission_filtered_training_quota": 256,
+  "research_only": true,
+  "training_authority": false,
+  "promotion_authority": false,
+  "submission_authority": false,
+  "longrun_allowed": false,
+  "notes": [
+    "All source and split identities are verified by the manifest loader.",
+    "META_FINAL is held out from candidate selection and training schedules.",
+    "local_eval_only does not grant teacher, behavior, training, or submission permission."
+  ]
+}

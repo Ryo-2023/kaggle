@@ -1,0 +1,91 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-support-item-weighted48-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root-deck novel Supporter/Item weighted META_TRAIN screen",
+  "root": "runs/final-sprint-autonomous/rule-v0-root-deck-weighted-support-item-v1-20260814",
+  "manifest_sha256": "6aa07690b4f605309418e1a574bd24050758412b185a3b2285974b77f052b417",
+  "weighted_summary_sha256": "06dee2fbb89bf2913fff99108f7175e4b397ba7fb7381f1951179f963456e1a7",
+  "final_summary_sha256": "2331c5e9721ea2b38045b70ca057776f5ac35fe9788f43c1ea7ac0b727d23784",
+  "pair": {
+    "policy": "Rule v0",
+    "package_policy_sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+    "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+    "parent_multiset_sha256": "17f54317635c2aa09a31062c8e07e19cb2c4caa3079d6c5334cd32d3036fcd12"
+  },
+  "subset": {
+    "selected_count": 12,
+    "games_per_arm": 48,
+    "subset_sha256": "09176f164b0f7719de70c903195e6b11b00dc3895ee8a98a154263fd8cbd72ed",
+    "heldout_excluded": true
+  },
+  "protocol": {
+    "base_seed": 23410000,
+    "same_seed_schedule": true,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "requested_games_total": 144,
+    "completed_games_total": 144,
+    "faults_total": 0,
+    "seat_counts_per_arm": {"0": 24, "1": 24},
+    "opponents_per_arm": 12,
+    "unique_game_ids_per_arm": true,
+    "unique_seeds_per_arm": true
+  },
+  "arms": [
+    {
+      "arm_id": "parent",
+      "wdlf": "5-0-43-0",
+      "score_rate": 0.10416666666666667,
+      "weighted_meta_score": 0.10380431143685012,
+      "summary_sha256": "e03849dbc4d2444c8aa9cb289018234f2d0b3343417f9b6d30f9a5aacbadd2f6",
+      "ledger_sha256": "4c17963f7e4081589ec970e8ae15156c3face1af2f430064f44acbed09f7ceeb",
+      "manifest_sha256": "d4f86344ae464a6a884aac61461be2bdf220819270b2e2205aba418414257535"
+    },
+    {
+      "arm_id": "root-carmine-to-colress",
+      "mutation": "1192 Carmine -> 1194 Colress's Tenacity",
+      "deck_file_sha256": "af201a2106b501533beb1b17d5b944b6cab83d0d6cd8288bfc5d4105774516f6",
+      "deck_multiset_sha256": "1c765b30b8deb5b35d35addb1ea7fecc047c1b9d8119a6bff2b1ecd3754974a5",
+      "wdlf": "7-0-41-0",
+      "score_rate": 0.14583333333333334,
+      "weighted_meta_score": 0.13898486943492763,
+      "weighted_delta_points": 3.518055799807751,
+      "fault0": true,
+      "status": "weighted_positive_common24_eligible",
+      "summary_sha256": "2908ba473a44d224574614ce7f559970d759cb418f2d3c61409a198aabecbf41",
+      "ledger_sha256": "e7432465d6d8bc9e0c2f56b61a370a69d822327acef37cbb0b7c9867ff0180e",
+      "manifest_sha256": "b6b0d15d0d4feb492fcb1a7ec53e05ef29d3409a3c852c4287c3915861d148b5"
+    },
+    {
+      "arm_id": "root-switch-to-hammer",
+      "mutation": "1123 Switch -> 1120 Crushing Hammer",
+      "deck_file_sha256": "f887f7a88d9c972dd27ee1287df41c898de4f60e9106011541486ad8da510a98",
+      "deck_multiset_sha256": "4e3d098fe1430298d813f36932c9fa621adb4ffae481430fd574381bd0390308",
+      "wdlf": "0-0-48-0",
+      "score_rate": 0.0,
+      "weighted_meta_score": 0.0,
+      "weighted_delta_points": -10.380431143685012,
+      "fault0": true,
+      "status": "candidate_only_stop",
+      "summary_sha256": "8d694b6009d701466f922c98ae8e0d3a847942c53af189432e717cba0d1954d5",
+      "ledger_sha256": "0e4a4ee8ca8efc1bff5bdab183c60550cd528a275f8603eaae63e9ec5a0fb355",
+      "manifest_sha256": "5b245d181ee0dc89d59d0ff850a4e521efc22cd81d3bd6282f733fd0980b0a03"
+    }
+  ],
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": false,
+    "confirmation_384_started": false,
+    "longrun_started": false,
+    "promotion": "none",
+    "next": "Run common24 only for root-carmine-to-colress after independent review; do not run root-switch-to-hammer again."
+  }
+}

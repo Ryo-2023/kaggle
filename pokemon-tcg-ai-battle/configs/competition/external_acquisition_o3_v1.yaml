@@ -1,0 +1,8 @@
+{
+  "schema_version": "o3-live-acquisition-v1",
+  "competition": "pokemon-tcg-ai-battle",
+  "timeout_seconds": 20.0,
+  "maximum_replays": 10,
+  "team_id_env": "O3_TEAM_ID",
+  "team_name_env": "O3_TEAM_NAME"
+}

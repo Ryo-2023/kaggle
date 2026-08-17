@@ -1,0 +1,34 @@
+{
+  "base_root": "runs/cg-fresh-internal-meta-intake-20260815-f/internal_ozawa-rocket-rule_de797c3646e9",
+  "output_root": "runs/cg-rocket-theta-behavior-meta-20260815-a",
+  "seed_namespace": "cg-rocket-theta-v2-a",
+  "source_epoch": "20260815-rocket-theta-v2",
+  "variants": [
+    "SETUP_SHRINK",
+    "SETUP_EXPAND",
+    "BOARD_WIDE",
+    "BOARD_LEAN",
+    "SUPPORTER_FLATTEN",
+    "SUPPORTER_CONCENTRATE",
+    "ATTACK_SHRINK",
+    "ATTACK_EXPAND",
+    "GUARD_CONSERVATIVE",
+    "GUARD_AGGRESSIVE",
+    "SETUP_SHRINK+SUPPORTER_FLATTEN",
+    "SETUP_EXPAND+ATTACK_EXPAND"
+  ],
+  "split_by_variant": {
+    "SETUP_SHRINK": "META_TRAIN",
+    "SETUP_EXPAND": "META_TRAIN",
+    "BOARD_WIDE": "META_TRAIN",
+    "BOARD_LEAN": "META_TRAIN",
+    "SUPPORTER_FLATTEN": "META_TRAIN",
+    "SUPPORTER_CONCENTRATE": "META_TRAIN",
+    "ATTACK_SHRINK": "META_TRAIN",
+    "ATTACK_EXPAND": "META_TRAIN",
+    "GUARD_CONSERVATIVE": "META_DEV",
+    "GUARD_AGGRESSIVE": "META_DEV",
+    "SETUP_SHRINK+SUPPORTER_FLATTEN": "META_FINAL",
+    "SETUP_EXPAND+ATTACK_EXPAND": "META_FINAL"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": "o6-trusted-league-roots-v1",
+  "trusted_roots": [
+    {
+      "evidence_schema": "o6-public-trajectory-v1",
+      "population_id": "team-agents-v1-f4c8f9b87ae6601a",
+      "run_id": "o6-team-league-f4c8f9b87ae6-public-v2",
+      "run_root_sha256": "935c577ffd3f89e64ca2909409c0bc71a1f792c89e59b9926c51e3fe2bd96a28",
+      "source_commit": "b86b8d931307cff1f76f0f8fbe99b5948c83924f",
+      "status": "TRUSTED"
+    }
+  ]
+}

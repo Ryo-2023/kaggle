@@ -1,0 +1,80 @@
+{
+  "schema_version": "autonomous-rule-v0-root-deck-novel-v8-weighted48-v1",
+  "date": "2026-08-14",
+  "purpose": "P0 Rule v0/root deck novel Fighting-search/mobility weighted48 screen",
+  "root": "runs/final-sprint-autonomous/rule-v0-root-deck-novel-v8-weighted48-20260814",
+  "manifest_sha256": "e2afec222de1d66909171c862366639677777fdbfaba0208276b3f7a4695d51f",
+  "summary_sha256": "97b40ca777e5fe5e64ba18c705fff695caebf3129c10d2cb1de98fac74f338d4",
+  "summary_md_sha256": "a3450f84bb34951f0cffbda5558d74aba9dc22e5fbd08e511ac9d10d105f69ae",
+  "runner_sha256": "9002c75d1653dee760beae9d8c890b358080cb0b7fc9d74ccb4fa941abaa2b7a",
+  "protocol": {
+    "base_seed": 23570000,
+    "workers": 12,
+    "worker_recycle_games": 16,
+    "opponents": 12,
+    "games_per_arm": 48,
+    "games_per_seat": 2,
+    "same_seed_schedule": true,
+    "heldout_exposure": false,
+    "evaluator_sha256": "b1c1eefa8240d724a85228d4e87e93b43bf974a23e081c38706222e1a2e41c08",
+    "weighted_subset_sha256": "09176f164b0f7719de70c903195e6b11b00dc3895ee8a98a154263fd8cbd72ed"
+  },
+  "parent": {
+    "deck_sha256": "2a541d7bf3d9e6b36037123f53f4dfef6348223f79fd27095dafc602a5357c19",
+    "policy_sha256": "750a8dacaa283fecfb42edca05eb3cc6ce0d6a21525395d2866b2234de081e3b",
+    "wdl_fault": "5-0-43-0",
+    "summary_sha256": "362306a3298d44ba0426795d41e79065055a6a5d720f319dcc86549e2446ed14",
+    "manifest_sha256": "8772d5115dc831ccaf084ec08dc5af69a2169c3726ea941ab83a5bb53dbe1df4",
+    "ledger_sha256": "a4d0d3e94281123ed00410ff75feda4b068c3a4a301477929063dae7b8fa06b0"
+  },
+  "candidates": [
+    {
+      "candidate_id": "root-fighting-gong-to-switch",
+      "mutation": "1142 Fighting Gong -> 1123 Switch",
+      "deck_sha256": "26f56f8e4e18255ba98724bc38cc1d99b1ecf96ae5ec788d41ebd49a10c325e5",
+      "deck_multiset_sha256": "3eec2ec66b17303ed64abfe9f91c7050c8b24020d47f92843046653ec8770473",
+      "wdl_fault": "3-0-45-0",
+      "weighted_delta_points": -4.765005091243927,
+      "summary_sha256": "5f77d1fe9bbf3cf65722ac249d3c3ab593bc8707049cb3f6282c1da97ea6f8a9",
+      "manifest_sha256": "cc79880470f6e85ccd6eb380a4200497251bb29450c47c7316df753e5526080f",
+      "ledger_sha256": "0b4f7bf68a5215a84109d7d8fbe1bab70a12fbc48f0d9e9254e3531d8ef98e5d",
+      "fault_gate": true,
+      "status": "candidate_only_stop"
+    },
+    {
+      "candidate_id": "root-fighting-gong-to-premium-power-pro",
+      "mutation": "1142 Fighting Gong -> 1141 Premium Power Pro",
+      "deck_sha256": "94bd117cbe487e4d6eb68b852ba721e5495b19d30d56bd2b263fd8eb37b41dfc",
+      "deck_multiset_sha256": "e548908e8487dcb78d41edee21692fa9a50675f901fa30fb7532f69aa8d152fc",
+      "wdl_fault": "0-0-0-48",
+      "weighted_delta_points": -10.916060015405924,
+      "summary_sha256": "9369a1ee84cb372366a0de97ff8a5664ee69f5e125e84c1b9816ae61b4f27ff3",
+      "manifest_sha256": "a8ae40d822d941d6141455874b4db4d1a12b51836f5ae342ebcf71f551f34ce4",
+      "ledger_sha256": "fdedaedb30adbca17e368c57d1406aacace271a848a09b52060dea809de347a4",
+      "fault_gate": false,
+      "fault_detail": "AGENT_INVALID; cabt terminal result unavailable",
+      "status": "invalid_no_score"
+    }
+  ],
+  "integrity": {
+    "all_game_ids_unique": true,
+    "all_seeds_unique_per_arm": true,
+    "all_arms_seat_counts": {"parent": {"seat0": 24, "seat1": 24}, "switch": {"seat0": 24, "seat1": 24}, "premium_power_pro": {"seat0": 24, "seat1": 24}},
+    "all_arms_opponents": 12,
+    "done_fault_zero_arms": ["parent", "root-fighting-gong-to-switch"],
+    "invalid_arm_preserved": true
+  },
+  "authority": {
+    "research_only": true,
+    "execution_authority": false,
+    "training_authority": false,
+    "promotion_authority": false,
+    "submission_authority": false,
+    "longrun_authority": false
+  },
+  "decision": {
+    "common24_started": false,
+    "confirmation_384_started": false,
+    "reason": "Switch is negative and Premium Power Pro is invalid; no candidate is eligible for common24. Invalid arm is not scored or retried."
+  }
+}

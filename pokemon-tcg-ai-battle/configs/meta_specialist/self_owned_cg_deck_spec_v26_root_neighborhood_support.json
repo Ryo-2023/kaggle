@@ -1,0 +1,28 @@
+{
+  "schema_version": "self-owned-cg-deck-spec-v1",
+  "archetype_id": "deck-bound-cem-root-neighborhood-support-v26",
+  "max_non_energy_copies": 4,
+  "require_ace_spec_count": 1,
+  "required_basic_pokemon_min": 1,
+  "required_basic_energy_min": 1,
+  "roles": [
+    {"role": "basic_makuhita", "card_ids": [673], "count": 2},
+    {"role": "hariyama", "card_ids": [674], "count": 2},
+    {"role": "lunatone", "card_ids": [675], "count": 2},
+    {"role": "solrock", "card_ids": [676], "count": 3},
+    {"role": "riolu", "card_ids": [677], "count": 4},
+    {"role": "mega_lucario", "card_ids": [678], "count": 4},
+    {"role": "fighting_energy", "card_ids": [6], "count": 14},
+    {"role": "dusk_ball", "card_ids": [1102], "count": 4},
+    {"role": "premium_power_pro", "card_ids": [1141], "count": 4},
+    {"role": "fighting_gong", "card_ids": [1142], "count": 4},
+    {"role": "carmine", "card_ids": [1192], "count": 3},
+    {"role": "carmine_variant", "card_ids": [1191], "count": 1},
+    {"role": "lillies_determination", "card_ids": [1227], "count": 4},
+    {"role": "boss_orders", "card_ids": [1182], "count": 3},
+    {"role": "switch", "card_ids": [1123], "count": 2},
+    {"role": "poke_pad", "card_ids": [1152], "count": 2},
+    {"role": "hero_cape", "card_ids": [1159], "count": 1},
+    {"role": "gravity_mountain", "card_ids": [1252], "count": 1}
+  ]
+}

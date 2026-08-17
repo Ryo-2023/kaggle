@@ -1,0 +1,35 @@
+{
+  "schema_version": "offline-training-v1-config-v1",
+  "profile": "production",
+  "run_id_prefix": "offline-training-v1",
+  "collection": {
+    "source": "actual",
+    "games": 2048,
+    "base_seed": 3000,
+    "validation_percent": 20,
+    "split_seed": 0
+  },
+  "dataset": {
+    "shard_size": 1024,
+    "train_fraction": 0.8,
+    "validation_fraction": 0.1,
+    "test_fraction": 0.1,
+    "split_seed": 12345
+  },
+  "model": {
+    "preset": "medium"
+  },
+  "training": {
+    "epochs": 40,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "grad_clip": 1.0,
+    "patience": 5,
+    "seed": 7,
+    "max_batch_decisions": 1024
+  },
+  "screening": {
+    "games": 100,
+    "base_seed": 7000
+  }
+}

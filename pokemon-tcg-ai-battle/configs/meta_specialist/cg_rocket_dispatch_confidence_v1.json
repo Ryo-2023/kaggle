@@ -1,0 +1,43 @@
+{
+  "schema_version": "cg-rocket-dispatch-confidence-config-v1",
+  "source_epoch": "rocket-dispatch-confidence-20260815-d",
+  "seed_namespace": "cg-rocket-dispatch-confidence-meta-20260815-d",
+  "base_source_root": "runs/cg-fresh-internal-meta-intake-20260815-f/internal_ozawa-rocket-rule_de797c3646e9",
+  "source_family": "rocket_dispatch_confidence_v1",
+  "variants": [
+    "GENERAL_ONLY",
+    "TURN1_DELAY",
+    "TURN2_DELAY",
+    "TWO_TURN_CONFIRM",
+    "MULTI_CARD_CONFIRM",
+    "TURN1_OR_MULTI_CARD",
+    "TWO_TURN_OR_MULTI_CARD",
+    "THREE_TURN_CONFIRM",
+    "TWO_TURN_AND_MULTI_CARD",
+    "TURN3_OR_MULTI_CARD",
+    "FOUR_TURN_CONFIRM",
+    "TURN1_AND_MULTI_CARD"
+  ],
+  "split_by_variant": {
+    "GENERAL_ONLY": "META_TRAIN",
+    "TURN1_DELAY": "META_TRAIN",
+    "TURN2_DELAY": "META_TRAIN",
+    "TWO_TURN_CONFIRM": "META_TRAIN",
+    "MULTI_CARD_CONFIRM": "META_TRAIN",
+    "TURN1_OR_MULTI_CARD": "META_TRAIN",
+    "TWO_TURN_OR_MULTI_CARD": "META_TRAIN",
+    "THREE_TURN_CONFIRM": "META_TRAIN",
+    "TWO_TURN_AND_MULTI_CARD": "META_DEV",
+    "TURN3_OR_MULTI_CARD": "META_DEV",
+    "FOUR_TURN_CONFIRM": "META_FINAL",
+    "TURN1_AND_MULTI_CARD": "META_FINAL"
+  },
+  "contract": {
+    "observation_boundary": "visible_state_only",
+    "current_pool_update": false,
+    "research_only": true,
+    "authority": false,
+    "promotion_requires_independent_lower_tail_seat_safe": true,
+    "smoke_train_only": true
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": "kaggle-agent-package-config-v1",
+  "competition_slug": "pokemon-tcg-ai-battle",
+  "agent_kind": "cg",
+  "output_dir": "runs/final-sprint-autonomous/kaggle-cg-wrapper-p1-20260815-v1",
+  "source_candidate": "runs/final-sprint-autonomous/cg-policy-screen-v1-retry-safe4-20260814/candidates/cg-lethal-target-v1",
+  "contract": {
+    "submission_method": "UNKNOWN",
+    "archive_type": "UNKNOWN",
+    "entrypoint": "main.py"
+  }
+}

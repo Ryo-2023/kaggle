@@ -1,0 +1,32 @@
+{
+  "schema_version": "self-owned-cg-independent-factorial-plan-v1",
+  "source_epoch": "self_owned_independent_cross_element_v2_20260816",
+  "seed_namespace": "self-owned-cg-independent-cross-element-v2-20260816",
+  "card_database": "data/raw/EN_Card_Data.csv",
+  "public_scan_roots": [
+    "opponents",
+    "runs/cg-self-owned-cg-policy-family-v16-hybrid-support-20260816/promoted",
+    "runs/cg-self-owned-independent-root-policy-family-v1-20260816-promoted",
+    "runs/cg-self-owned-cg-policy-family-v15-public-mix-20260816"
+  ],
+  "deck_recipes": [
+    {"id": "zygarde-v17-00", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_fighting.json", "seed": 20268000, "ordinal": 0},
+    {"id": "zygarde-v17-01", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_fighting.json", "seed": 20268001, "ordinal": 1},
+    {"id": "zygarde-v17-02", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_fighting.json", "seed": 20268002, "ordinal": 2},
+    {"id": "starmie-v17-03", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 20268003, "ordinal": 3},
+    {"id": "starmie-v17-04", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 20268004, "ordinal": 4},
+    {"id": "starmie-v17-05", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_water.json", "seed": 20268005, "ordinal": 5},
+    {"id": "gardevoir-v17-06", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_psychic.json", "seed": 20268006, "ordinal": 6},
+    {"id": "gardevoir-v17-07", "spec": "configs/meta_specialist/self_owned_cg_deck_spec_v17_cross_element_psychic.json", "seed": 20268007, "ordinal": 7}
+  ],
+  "policy_variants": [
+    {"id": "zygarde-balanced-v17-00", "deck_recipe_id": "zygarde-v17-00", "overrides": {}},
+    {"id": "zygarde-lethal-v17-01", "deck_recipe_id": "zygarde-v17-01", "overrides": {"lethal_bonus": 22000, "nonlethal_attack_penalty": -10000, "damaged_active_attack_bonus": 10000}},
+    {"id": "zygarde-retreat-v17-02", "deck_recipe_id": "zygarde-v17-02", "overrides": {"retreat_damaged_active_bonus": 24000, "retreat_energy_reserve_bonus": 12000}},
+    {"id": "starmie-lethal-v17-03", "deck_recipe_id": "starmie-v17-03", "overrides": {"lethal_bonus": 24000, "nonlethal_attack_penalty": -12000, "damaged_active_attack_bonus": 14000}},
+    {"id": "starmie-search-v17-04", "deck_recipe_id": "starmie-v17-04", "overrides": {"search_before_evolve_bonus": 24000, "bench_threat_bonus": 10000}},
+    {"id": "starmie-reserve-v17-05", "deck_recipe_id": "starmie-v17-05", "overrides": {"energy_reserve_penalty": -22000, "retreat_energy_reserve_bonus": 18000}},
+    {"id": "gardevoir-ability-v17-06", "deck_recipe_id": "gardevoir-v17-06", "overrides": {"low_hand_ability_bonus": 24000, "low_hand_supporter_bonus": 14000}},
+    {"id": "gardevoir-conservative-v17-07", "deck_recipe_id": "gardevoir-v17-07", "overrides": {"lethal_bonus": 9000, "energy_reserve_penalty": -26000, "retreat_damaged_active_bonus": 10000}}
+  ]
+}

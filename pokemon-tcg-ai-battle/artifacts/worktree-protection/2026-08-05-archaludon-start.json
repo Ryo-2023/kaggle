@@ -1,0 +1,26 @@
+{
+  "recorded_at_utc": "2026-08-04T17:06:01Z",
+  "branch": "feature/belief-guided-search",
+  "head": "57098129828a05746a839a665d814df98c610497",
+  "porcelain_v1": [
+    "?? .claude/skills/",
+    "?? artifacts/worktree-protection/",
+    "?? configs/meta_specialist/",
+    "?? \"docs/plan/\\343\\203\\241\\343\\202\\277\\351\\247\\206\\345\\213\\225\\343\\203\\207\\343\\203\\203\\343\\202\\255\\345\\260\\202\\351\\226\\200\\346\\226\\271\\347\\255\\226_\\346\\217\\220\\345\\207\\272\\344\\273\\225\\346\\247\\230\\345\\217\\215\\346\\230\\240\\343\\203\\254\\343\\203\\223\\343\\203\\245\\343\\203\\274\\347\\211\\210_2026-08-01.md\"",
+    "?? docs/runbooks/meta-specialist-p0-foundation.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-census-calibration.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-cli-pipeline-integration.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-deck-search.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-global-evaluation.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-orchestrator.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-teachers.md",
+    "?? docs/superpowers/plans/2026-08-01-meta-specialist-vtrace-curriculum.md",
+    "?? docs/superpowers/specs/2026-08-05-archaludon-meta-specialist-design.md",
+    "?? scripts/build_meta_specialist_submission.py",
+    "?? scripts/run_meta_specialist_pipeline.py",
+    "?? scripts/verify_meta_specialist_submission.py",
+    "?? src/mage_ptcg/meta_specialist/",
+    "?? templates/",
+    "?? tests/meta_specialist/"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "gate_status": "CLEAN_PASS",
+  "candidate_fixed": {
+    "archive_sha256": "d4e2cdcb4557b4bbb9968266a0990525a7e172b9a9e664b477a21f957892e67d",
+    "archive_size_bytes": 630679,
+    "model_file_sha256": "2318b7ff7f1d981ec4181ae01cc681b15c057f5b4daba3d5f900e71e2144eb8f",
+    "semantic_model_hash": "94564328a10f1e914beb63073235722694093e281905b5cbd546b2a35742dea4",
+    "uncompressed_size_bytes": 1478085,
+    "member_count": 18
+  },
+  "provenance": {
+    "training_base_commit": "062533feee8ac91914d10fd67231181f6ef7949e",
+    "model_export_commit": "062533feee8ac91914d10fd67231181f6ef7949e",
+    "submission_runtime_commit": "062533feee8ac91914d10fd67231181f6ef7949e",
+    "package_build_commit": "062533feee8ac91914d10fd67231181f6ef7949e",
+    "promotion_gate_commit": "3ef1ba39794180cdc36162a0b0347d3ffbcc6239"
+  },
+  "verification": {
+    "reproducible_build": "IDENTICAL_MATCH",
+    "clean_room": "PASS",
+    "policy_identity": "IDENTITY_CHECK_PASS",
+    "smoke_test_20_games": {
+      "status": "CLEAN_PASS",
+      "win_rate": 0.60,
+      "wins": 12,
+      "losses": 8,
+      "timeouts": 0,
+      "crashes": 0,
+      "invalid_actions": 0,
+      "fallback_count": 0,
+      "exception_count": 0
+    },
+    "pytest": {
+      "total": 1024,
+      "passed": 1023,
+      "failed": 1,
+      "failed_tests": [
+        "tests/test_collect_offline_training_v1_evidence.py::test_run_command_safe_timeout_and_child_cleanup"
+      ],
+      "note": "Failed test is a known flaky environment-dependent timeout test."
+    }
+  },
+  "invariant_conditions": {
+    "champion_default": "Rule Agent v0",
+    "promotion_status": "NO_DECISION",
+    "kaggle_submission": "not_executed"
+  }
+}

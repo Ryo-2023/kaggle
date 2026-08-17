@@ -1,0 +1,375 @@
+{
+    "adversarial": {
+        "games": 0,
+        "members": {},
+        "status": "BENCHMARK_BLOCKED_INSUFFICIENT_ACTIVE_POPULATION"
+    },
+    "core_regression": {
+        "games": 0,
+        "members": {},
+        "status": "EXCLUDED_BY_BENCHMARK_KIND"
+    },
+    "current_meta": {
+        "games": 0,
+        "members": {},
+        "status": "EXCLUDED_BY_BENCHMARK_KIND"
+    },
+    "overall": {
+        "attribution_available": true,
+        "attribution_missing_games": 0,
+        "candidate_exception": 0,
+        "candidate_fallback_games": 0,
+        "candidate_fallback_total": 0,
+        "candidate_invalid": 0,
+        "candidate_timeout": 0,
+        "crashes": 16,
+        "decided_games": 32,
+        "draws": 0,
+        "fallbacks": 0,
+        "game_length_steps": {
+            "p50": 6.0,
+            "p95": 76.69999999999996
+        },
+        "games": 80,
+        "invalid_actions": 32,
+        "losses": 20,
+        "match_latency_seconds": {
+            "max": 7.07217,
+            "p50": 0.057861499999999996,
+            "p95": 1.1539750499999992
+        },
+        "opponent_exception": 16,
+        "opponent_fallback_games": 0,
+        "opponent_fallback_total": 0,
+        "opponent_invalid": 32,
+        "opponent_timeout": 0,
+        "reproducible": true,
+        "seat_wld": {
+            "champion_player_0": {
+                "draws": 0,
+                "losses": 9,
+                "wins": 7
+            },
+            "champion_player_1": {
+                "draws": 0,
+                "losses": 11,
+                "wins": 5
+            }
+        },
+        "seeds": [
+            94000,
+            94001,
+            94002,
+            94003,
+            94000,
+            94001,
+            94002,
+            94003,
+            94000,
+            94001,
+            94002,
+            94003,
+            94000,
+            94001,
+            94002,
+            94003,
+            94000,
+            94001,
+            94002,
+            94003
+        ],
+        "timeouts": 0,
+        "wilson_ci_95": [
+            0.2293388721551334,
+            0.5474559277860367
+        ],
+        "win_rate": 0.375,
+        "wins": 12
+    },
+    "safety": {
+        "games": 80,
+        "members": {
+            "exception_agent": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 16,
+                "decided_games": 0,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 6.0,
+                    "p95": 12.0
+                },
+                "games": 16,
+                "invalid_actions": 0,
+                "losses": 0,
+                "match_latency_seconds": {
+                    "max": 0.086326,
+                    "p50": 0.057861499999999996,
+                    "p95": 0.083551
+                },
+                "opponent_exception": 16,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 0,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 0,
+                        "wins": 0
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 0,
+                        "wins": 0
+                    }
+                },
+                "seeds": [
+                    94000,
+                    94001,
+                    94002,
+                    94003
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.0,
+                    0.0
+                ],
+                "win_rate": 0.0,
+                "wins": 0
+            },
+            "invalid_artifact": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 0,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 2.5,
+                    "p95": 4.0
+                },
+                "games": 16,
+                "invalid_actions": 16,
+                "losses": 0,
+                "match_latency_seconds": {
+                    "max": 0.054623,
+                    "p50": 0.047129500000000005,
+                    "p95": 0.05235275
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 16,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 0,
+                        "wins": 0
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 0,
+                        "wins": 0
+                    }
+                },
+                "seeds": [
+                    94000,
+                    94001,
+                    94002,
+                    94003
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.0,
+                    0.0
+                ],
+                "win_rate": 0.0,
+                "wins": 0
+            },
+            "random_legal": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 16,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 28.0,
+                    "p95": 103.25
+                },
+                "games": 16,
+                "invalid_actions": 0,
+                "losses": 8,
+                "match_latency_seconds": {
+                    "max": 0.905542,
+                    "p50": 0.1654,
+                    "p95": 0.7432599999999999
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 0,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 4,
+                        "wins": 4
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 4,
+                        "wins": 4
+                    }
+                },
+                "seeds": [
+                    94000,
+                    94001,
+                    94002,
+                    94003
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.27999563470387406,
+                    0.7200043652961259
+                ],
+                "win_rate": 0.5,
+                "wins": 8
+            },
+            "slow_agent": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 16,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 25.5,
+                    "p95": 183.5
+                },
+                "games": 16,
+                "invalid_actions": 0,
+                "losses": 12,
+                "match_latency_seconds": {
+                    "max": 7.07217,
+                    "p50": 0.8942415,
+                    "p95": 5.9623515000000005
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 0,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 5,
+                        "wins": 3
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 7,
+                        "wins": 1
+                    }
+                },
+                "seeds": [
+                    94000,
+                    94001,
+                    94002,
+                    94003
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.10182067420167083,
+                    0.49498316729703157
+                ],
+                "win_rate": 0.25,
+                "wins": 4
+            },
+            "unknown_selection": {
+                "attribution_available": true,
+                "attribution_missing_games": 0,
+                "candidate_exception": 0,
+                "candidate_fallback_games": 0,
+                "candidate_fallback_total": 0,
+                "candidate_invalid": 0,
+                "candidate_timeout": 0,
+                "crashes": 0,
+                "decided_games": 0,
+                "draws": 0,
+                "fallbacks": 0,
+                "game_length_steps": {
+                    "p50": 2.5,
+                    "p95": 4.0
+                },
+                "games": 16,
+                "invalid_actions": 16,
+                "losses": 0,
+                "match_latency_seconds": {
+                    "max": 0.053336,
+                    "p50": 0.0467985,
+                    "p95": 0.0523145
+                },
+                "opponent_exception": 0,
+                "opponent_fallback_games": 0,
+                "opponent_fallback_total": 0,
+                "opponent_invalid": 16,
+                "opponent_timeout": 0,
+                "reproducible": true,
+                "seat_wld": {
+                    "champion_player_0": {
+                        "draws": 0,
+                        "losses": 0,
+                        "wins": 0
+                    },
+                    "champion_player_1": {
+                        "draws": 0,
+                        "losses": 0,
+                        "wins": 0
+                    }
+                },
+                "seeds": [
+                    94000,
+                    94001,
+                    94002,
+                    94003
+                ],
+                "timeouts": 0,
+                "wilson_ci_95": [
+                    0.0,
+                    0.0
+                ],
+                "win_rate": 0.0,
+                "wins": 0
+            }
+        },
+        "status": "EXECUTED"
+    }
+}
