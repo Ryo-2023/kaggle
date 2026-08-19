@@ -205,6 +205,7 @@ Baseline 再現
 ## 8. データ・生成物
 
 - Kaggle data、checkpoint、prediction、submission CSV、大容量 artifact は原則 Git 管理外。
+- ただし、`graphify-out/` の再利用可能な知識グラフ成果物（`graph.json`、`GRAPH_REPORT.md`、`graph.html`、`manifest.json`）はプロジェクト資産として Git 管理する。`cache/` と `.graphify_*` の中間ファイルは管理外とする。
 - `.gitignore` を尊重する。
 - Kaggle credential、API token、秘密情報をコード・ログ・文書・commit に入れない。
 - `~/.kaggle` は認証用であり内容を読み上げたりコピーしたりしない。

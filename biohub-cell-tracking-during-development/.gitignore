@@ -29,6 +29,10 @@ artifacts/
 submissions/*.csv
 notebooks/.ipynb_checkpoints/
 
+# Graphify reusable outputs are tracked; caches and intermediate sidecars are not.
+graphify-out/cache/
+graphify-out/.graphify_*
+
 # Local scratch
 scratch/
 tmp/
