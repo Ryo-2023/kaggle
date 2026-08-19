@@ -29,6 +29,17 @@ def test_dockerfile_forces_github_to_use_docker_desktop_agent_socket():
     assert f"IdentityAgent {SSH_AUTH_SOCK}" in dockerfile
 
 
+def test_dockerfile_persists_colored_git_aware_root_prompt():
+    dockerfile = (PROJECT_ROOT / "docker" / "Dockerfile").read_text()
+    assert "__biohub_git_branch()" in dockerfile
+    assert "/root/.bashrc" in dockerfile
+    assert r"\[\e[31m\]\u" in dockerfile
+    assert r"\[\e[34m\]\h" in dockerfile
+    assert r"\[\e[36m\]\w" in dockerfile
+    assert r"\[\e[33m\]$(__biohub_git_branch)" in dockerfile
+    assert r"\[\e[31m\]\$" in dockerfile
+
+
 def test_pyproject_allows_tracksdata_direct_reference_and_uses_cpu_torch():
     pyproject = (PROJECT_ROOT / "pyproject.toml").read_text()
     assert "allow-direct-references = true" in pyproject
