@@ -10,7 +10,8 @@ The MacBook development environment runs inside a persistent **Ubuntu 24.04 Dock
 
 1. [`docs/COMPETITION_GUIDE.md`](docs/COMPETITION_GUIDE.md) — コンペ仕様、データ、sparse ground truth、公式metric、submission、開発ロードマップ
 2. [`docs/EXPERIMENT_PLAYBOOK.md`](docs/EXPERIMENT_PLAYBOOK.md) — baseline、仮説、比較、実験記録、採用/棄却判断
-3. [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) — Kaggle提出前の最終チェック
+3. [`docs/VISUAL_INSPECTION.md`](docs/VISUAL_INSPECTION.md) — 入力画像と予測・TP/FP/FNを並べて確認するローカルビューア
+4. [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) — Kaggle提出前の最終チェック
 
 ドキュメント全体の目次は [`docs/README.md`](docs/README.md)。AIエージェント向け共通開発ルールは [`AGENTS.md`](AGENTS.md)。
 
@@ -76,6 +77,20 @@ You can also enter the container from Terminal:
 docker compose exec biohub bash
 ```
 
+## Visual inspection
+
+入力OME-Zarrと予測GEFFを指定すると、左に生画像、右に予測node・追跡edge・公式metric由来のTP/FP/FNを重ねた画像を表示する。
+
+```bash
+python -m biohub.visualizer \
+  --image data/train/<dataset>.zarr \
+  --prediction <prediction>.geff \
+  --ground-truth data/train/<dataset>.geff \
+  --no-browser
+```
+
+Mac側で `http://localhost:8765` を開く。時刻・Z断面を動かし、追跡を再生しながら入力と出力を並べて確認できる。詳しくは [`docs/VISUAL_INSPECTION.md`](docs/VISUAL_INSPECTION.md)。
+
 ## Environment
 
 Inside the container:
@@ -136,9 +151,12 @@ biohub-cell-tracking-during-development/
 │   ├── README.md
 │   ├── COMPETITION_GUIDE.md
 │   ├── EXPERIMENT_PLAYBOOK.md
+│   ├── VISUAL_INSPECTION.md
 │   ├── SUBMISSION_CHECKLIST.md
 │   └── superpowers/
 ├── src/biohub/
+│   ├── official_metrics/
+│   └── visualizer/
 ├── tests/
 ├── .dockerignore
 ├── .gitignore
