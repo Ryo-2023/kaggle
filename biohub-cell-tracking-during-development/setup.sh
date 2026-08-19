@@ -53,6 +53,9 @@ docker compose exec -T biohub bash -lc 'grep -q "^VERSION_ID=\"24.04\"" /etc/os-
 log "Verifying Python 3.11 and uv"
 docker compose exec -T biohub bash -lc 'python --version | grep -Eq "^Python 3\.11\." && uv --version'
 
+log "Verifying Git repository visibility"
+docker compose exec -T biohub bash -lc 'git rev-parse --show-toplevel | grep -qx "/workspace" && git remote get-url origin'
+
 log "Verifying Biohub scientific dependencies"
 docker compose exec -T biohub python - <<'PY'
 import numpy
@@ -92,7 +95,8 @@ VS Code:
   2. Open the Command Palette.
   3. Choose "Dev Containers: Attach to Running Container...".
   4. Select `biohub-dev`.
-  5. Open `/workspace`.
+  5. Open `/workspace/biohub-cell-tracking-during-development`.
 
-The project files remain on your Mac and are mounted at `/workspace` inside Ubuntu 24.04.
+The full Kaggle Git repository is mounted at `/workspace`, so Git branches,
+remotes, diffs, and Source Control are available inside the container.
 EOF
