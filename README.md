@@ -4,9 +4,17 @@ Kaggle コンペティションの作業リポジトリ。コンペごとにデ�
 
 | ディレクトリ | コンペ | 状態 |
 |---|---|---|
+| [biohub-cell-tracking-during-development/](biohub-cell-tracking-during-development/) | Biohub – Cell Tracking During Development | 開発中 |
 | [pokemon-tcg-ai-battle/](pokemon-tcg-ai-battle/) | The Pokemon Company - PTCG AI Battle Challenge (Simulation) | 終了・アーカイブ |
 | [house-prices-advanced-regression-techniques/](house-prices-advanced-regression-techniques/) | House Prices - Advanced Regression Techniques | — |
 | [titanic/](titanic/) | Titanic - Machine Learning from Disaster | — |
+
+## biohub-cell-tracking-during-development
+
+3D+time microscopy 上の細胞検出・追跡を扱う Kaggle コンペティション用プロジェクト。MacBook では Docker ベースの CPU 開発環境を使用し、重い学習は Kaggle または NVIDIA/Linux 環境へ持ち出せる構成にする。
+
+- [ローカル開発手順](biohub-cell-tracking-during-development/README.md)
+- [データ配置と認証情報](biohub-cell-tracking-during-development/data/README.md)
 
 ## pokemon-tcg-ai-battle
 
