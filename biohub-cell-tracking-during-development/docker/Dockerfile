@@ -23,7 +23,7 @@ RUN apt-get update \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv python install 3.11
 
-WORKDIR /workspace
+WORKDIR /workspace/biohub-cell-tracking-during-development
 
 COPY pyproject.toml README.md ./
 COPY src ./src
