@@ -23,6 +23,12 @@ def test_dockerfile_installs_ssh_client_and_trusts_official_github_host_key():
     assert GITHUB_ED25519_HOST_KEY in dockerfile
 
 
+def test_dockerfile_forces_github_to_use_docker_desktop_agent_socket():
+    dockerfile = (PROJECT_ROOT / "docker" / "Dockerfile").read_text()
+    assert "Host github.com" in dockerfile
+    assert f"IdentityAgent {SSH_AUTH_SOCK}" in dockerfile
+
+
 def test_pyproject_allows_tracksdata_direct_reference_and_uses_cpu_torch():
     pyproject = (PROJECT_ROOT / "pyproject.toml").read_text()
     assert "allow-direct-references = true" in pyproject
@@ -55,8 +61,9 @@ def test_devcontainer_opens_biohub_inside_parent_git_repository():
 def test_setup_script_verifies_ssh_backed_git_remote_access():
     setup = (PROJECT_ROOT / "setup.sh").read_text()
     assert "command -v ssh" in setup
-    assert 'test -S "$SSH_AUTH_SOCK"' in setup
-    assert "ssh-add -L" in setup
+    assert f'HOST_SSH_AUTH_SOCK="{SSH_AUTH_SOCK}"' in setup
+    assert 'test -S "$HOST_SSH_AUTH_SOCK"' in setup
+    assert 'SSH_AUTH_SOCK="$HOST_SSH_AUTH_SOCK" ssh-add -L' in setup
     assert "git ls-remote origin HEAD" in setup
 
 
