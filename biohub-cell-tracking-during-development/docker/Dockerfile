@@ -24,10 +24,14 @@ RUN apt-get update \
 # GitHub's published Ed25519 host key. Keeping this in the system known-hosts
 # file avoids interactive first-contact prompts without copying host SSH state
 # or disabling StrictHostKeyChecking.
-RUN mkdir -p /etc/ssh \
+RUN mkdir -p /etc/ssh /etc/ssh/ssh_config.d \
     && printf '%s\n' \
         'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
-        > /etc/ssh/ssh_known_hosts
+        > /etc/ssh/ssh_known_hosts \
+    && printf '%s\n' \
+        'Host github.com' \
+        '    IdentityAgent /run/host-services/ssh-auth.sock' \
+        > /etc/ssh/ssh_config.d/99-biohub-github-agent.conf
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv python install 3.11
