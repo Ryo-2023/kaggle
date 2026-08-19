@@ -1,0 +1,16 @@
+{
+  "name": "Kaggle Biohub",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "biohub",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  },
+  "postCreateCommand": "uv sync"
+}
