@@ -4,13 +4,13 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    working_dir: /workspace
+    working_dir: /workspace/biohub-cell-tracking-during-development
     volumes:
-      - .:/workspace
+      - ..:/workspace
       - ${HOME}/.kaggle:/root/.kaggle:ro
       - biohub-uv-cache:/root/.cache/uv
     environment:
-      CELLMOT_DATA_DIR: /workspace/data/train
+      CELLMOT_DATA_DIR: /workspace/biohub-cell-tracking-during-development/data/train
     stdin_open: true
     tty: true
     init: true
