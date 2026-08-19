@@ -2,10 +2,13 @@
   "name": "Kaggle Biohub",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "biohub",
-  "workspaceFolder": "/workspace",
+  "workspaceFolder": "/workspace/biohub-cell-tracking-during-development",
   "shutdownAction": "none",
   "customizations": {
     "vscode": {
+      "settings": {
+        "git.openRepositoryInParentFolders": "always"
+      },
       "extensions": [
         "ms-python.python",
         "charliermarsh.ruff"
