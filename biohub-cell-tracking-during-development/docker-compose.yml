@@ -1,5 +1,6 @@
 services:
   biohub:
+    container_name: biohub-dev
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -7,8 +8,19 @@ services:
     volumes:
       - .:/workspace
       - ${HOME}/.kaggle:/root/.kaggle:ro
+      - biohub-uv-cache:/root/.cache/uv
     environment:
       CELLMOT_DATA_DIR: /workspace/data/train
     stdin_open: true
     tty: true
-    command: bash
+    init: true
+    command: sleep infinity
+    healthcheck:
+      test: ["CMD-SHELL", "python --version >/dev/null 2>&1 && uv --version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  biohub-uv-cache:
