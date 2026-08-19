@@ -1,0 +1,14 @@
+services:
+  biohub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - ${HOME}/.kaggle:/root/.kaggle:ro
+    environment:
+      CELLMOT_DATA_DIR: /workspace/data/train
+    stdin_open: true
+    tty: true
+    command: bash
