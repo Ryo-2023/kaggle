@@ -10,7 +10,10 @@ Biohub – Cell Tracking During Development のドキュメント入口。
 2. [`EXPERIMENT_PLAYBOOK.md`](EXPERIMENT_PLAYBOOK.md)  
    baseline、仮説、比較、metric記録、採用・棄却判断など、実験を再現可能に回すための規約。
 
-3. [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md)  
+3. [`VISUAL_INSPECTION.md`](VISUAL_INSPECTION.md)  
+   入力OME-Zarrと予測GEFFを左右に並べ、公式metric由来のTP/FP/FNを画像上で確認する方法。
+
+4. [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md)  
    Kaggle提出直前に使うチェックリスト。CSV schema、graph構造、offline実行、runtime、round-tripなどを確認する。
 
 ## リポジトリ直下の文書
@@ -18,6 +21,11 @@ Biohub – Cell Tracking During Development のドキュメント入口。
 - [`../README.md`](../README.md) — Docker / Ubuntu 開発環境のセットアップと通常利用
 - [`../AGENTS.md`](../AGENTS.md) — Codex、Claude Code、その他AIエージェント向け共通ルール
 - [`../data/README.md`](../data/README.md) — competition data と Kaggle credential の扱い
+
+## 実装上の正本
+
+- `../src/biohub/official_metrics/` — upstream commitとblob SHAを固定した公式metricコード
+- `../src/biohub/visualizer/` — 入力画像・予測graph・評価分類を表示するローカルWebビューア
 
 ## Superpowers文書
 
@@ -28,6 +36,7 @@ docs/
 ├── README.md
 ├── COMPETITION_GUIDE.md
 ├── EXPERIMENT_PLAYBOOK.md
+├── VISUAL_INSPECTION.md
 ├── SUBMISSION_CHECKLIST.md
 └── superpowers/
     ├── plans/
@@ -68,6 +77,12 @@ pyproject.toml / Dockerfile / docker-compose.yml / tests
 AGENTS.md
 docs/COMPETITION_GUIDE.md
 docs/EXPERIMENT_PLAYBOOK.md
+```
+
+予測結果を調べるタスクなら追加で:
+
+```text
+docs/VISUAL_INSPECTION.md
 ```
 
 提出関連なら追加で:

@@ -12,6 +12,8 @@ services:
         source: /run/host-services/ssh-auth.sock
         target: /run/host-services/ssh-auth.sock
       - biohub-uv-cache:/root/.cache/uv
+    ports:
+      - "127.0.0.1:8765:8765"
     environment:
       CELLMOT_DATA_DIR: /workspace/biohub-cell-tracking-during-development/data/train
       SSH_AUTH_SOCK: /run/host-services/ssh-auth.sock
