@@ -58,25 +58,28 @@ docker compose exec -T biohub bash -lc 'git rev-parse --show-toplevel | grep -qx
 
 log "Verifying SSH-backed GitHub access"
 docker compose exec -T biohub bash -lc '
+  HOST_SSH_AUTH_SOCK="/run/host-services/ssh-auth.sock"
+
   command -v ssh >/dev/null || {
     echo "OpenSSH client is missing from the container." >&2
     exit 1
   }
 
-  test "${SSH_AUTH_SOCK:-}" = "/run/host-services/ssh-auth.sock" || {
-    echo "SSH_AUTH_SOCK is not configured for Docker Desktop agent forwarding." >&2
-    exit 1
-  }
-
-  test -S "$SSH_AUTH_SOCK" || {
+  test -S "$HOST_SSH_AUTH_SOCK" || {
     echo "The Docker Desktop SSH agent socket is not available in the container." >&2
     exit 1
   }
 
-  ssh-add -L >/dev/null 2>&1 || {
-    echo "No SSH identity is available through the forwarded macOS SSH agent." >&2
+  SSH_AUTH_SOCK="$HOST_SSH_AUTH_SOCK" ssh-add -L >/dev/null 2>&1 || {
+    echo "No SSH identity is available through the Docker Desktop forwarded macOS SSH agent." >&2
     echo "Add the GitHub key to the host agent, for example:" >&2
     echo "  ssh-add --apple-use-keychain ~/.ssh/id_ed25519" >&2
+    exit 1
+  }
+
+  ssh_config="$(ssh -G github.com 2>/dev/null)"
+  printf "%s\n" "$ssh_config" | grep -Fq "identityagent $HOST_SSH_AUTH_SOCK" || {
+    echo "OpenSSH is not pinned to the Docker Desktop SSH agent for github.com." >&2
     exit 1
   }
 
@@ -129,6 +132,7 @@ VS Code:
 
 The full Kaggle Git repository is mounted at `/workspace`, so Git branches,
 remotes, diffs, and Source Control are available inside the container.
-GitHub SSH operations use the Mac host's SSH agent through Docker Desktop;
-private SSH keys are not copied into the container.
+GitHub SSH operations are pinned to the Mac host's SSH agent through Docker
+Desktop, so IDE-specific SSH_AUTH_SOCK overrides do not affect GitHub access.
+Private SSH keys are not copied into the container.
 EOF
