@@ -3,7 +3,7 @@
   "dockerComposeFile": "../docker-compose.yml",
   "service": "biohub",
   "workspaceFolder": "/workspace",
-  "shutdownAction": "stopCompose",
+  "shutdownAction": "none",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -11,6 +11,5 @@
         "charliermarsh.ruff"
       ]
     }
-  },
-  "postCreateCommand": "uv sync"
+  }
 }
