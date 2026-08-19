@@ -8,9 +8,13 @@ services:
     volumes:
       - ..:/workspace
       - ${HOME}/.kaggle:/root/.kaggle:ro
+      - type: bind
+        source: /run/host-services/ssh-auth.sock
+        target: /run/host-services/ssh-auth.sock
       - biohub-uv-cache:/root/.cache/uv
     environment:
       CELLMOT_DATA_DIR: /workspace/biohub-cell-tracking-during-development/data/train
+      SSH_AUTH_SOCK: /run/host-services/ssh-auth.sock
     stdin_open: true
     tty: true
     init: true
