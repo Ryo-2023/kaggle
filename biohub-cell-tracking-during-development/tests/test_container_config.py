@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_WORKSPACE = "/workspace/biohub-cell-tracking-during-development"
 SSH_AUTH_SOCK = "/run/host-services/ssh-auth.sock"
@@ -33,11 +32,10 @@ def test_dockerfile_persists_colored_git_aware_root_prompt():
     dockerfile = (PROJECT_ROOT / "docker" / "Dockerfile").read_text()
     assert "__biohub_git_branch()" in dockerfile
     assert "/root/.bashrc" in dockerfile
-    assert r"\[\e[31m\]\u" in dockerfile
-    assert r"\[\e[34m\]\h" in dockerfile
-    assert r"\[\e[36m\]\w" in dockerfile
+    assert r"\[\e[92m\]\u@\h\[\e[0m\]" in dockerfile
+    assert r"\[\e[34m\]\w" in dockerfile
     assert r"\[\e[33m\]$(__biohub_git_branch)" in dockerfile
-    assert r"\[\e[31m\]\$" in dockerfile
+    assert r"\[\e[37m\]\$" in dockerfile
 
 
 def test_pyproject_allows_tracksdata_direct_reference_and_uses_cpu_torch():
