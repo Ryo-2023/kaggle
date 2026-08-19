@@ -4,6 +4,16 @@ Workspace for the Kaggle competition **Biohub – Cell Tracking During Developme
 
 The MacBook development environment runs inside a persistent **Ubuntu 24.04 Docker container**. The host macOS keeps the source files, while Python, uv, PyTorch, scientific libraries, tests, and command-line tools live inside the container.
 
+## Start here
+
+コンペそのものを理解したい場合は、まず次を読む。
+
+1. [`docs/COMPETITION_GUIDE.md`](docs/COMPETITION_GUIDE.md) — コンペ仕様、データ、sparse ground truth、公式metric、submission、開発ロードマップ
+2. [`docs/EXPERIMENT_PLAYBOOK.md`](docs/EXPERIMENT_PLAYBOOK.md) — baseline、仮説、比較、実験記録、採用/棄却判断
+3. [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) — Kaggle提出前の最終チェック
+
+ドキュメント全体の目次は [`docs/README.md`](docs/README.md)。AIエージェント向け共通開発ルールは [`AGENTS.md`](AGENTS.md)。
+
 ## First-time setup
 
 Requirements:
@@ -123,10 +133,16 @@ biohub-cell-tracking-during-development/
 ├── data/
 ├── docker/
 ├── docs/
+│   ├── README.md
+│   ├── COMPETITION_GUIDE.md
+│   ├── EXPERIMENT_PLAYBOOK.md
+│   ├── SUBMISSION_CHECKLIST.md
+│   └── superpowers/
 ├── src/biohub/
 ├── tests/
 ├── .dockerignore
 ├── .gitignore
+├── AGENTS.md
 ├── docker-compose.yml
 ├── pyproject.toml
 ├── setup.sh
