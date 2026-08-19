@@ -56,6 +56,36 @@ docker compose exec -T biohub bash -lc 'python --version | grep -Eq "^Python 3\.
 log "Verifying Git repository visibility"
 docker compose exec -T biohub bash -lc 'git rev-parse --show-toplevel | grep -qx "/workspace" && git remote get-url origin'
 
+log "Verifying SSH-backed GitHub access"
+docker compose exec -T biohub bash -lc '
+  command -v ssh >/dev/null || {
+    echo "OpenSSH client is missing from the container." >&2
+    exit 1
+  }
+
+  test "${SSH_AUTH_SOCK:-}" = "/run/host-services/ssh-auth.sock" || {
+    echo "SSH_AUTH_SOCK is not configured for Docker Desktop agent forwarding." >&2
+    exit 1
+  }
+
+  test -S "$SSH_AUTH_SOCK" || {
+    echo "The Docker Desktop SSH agent socket is not available in the container." >&2
+    exit 1
+  }
+
+  ssh-add -L >/dev/null 2>&1 || {
+    echo "No SSH identity is available through the forwarded macOS SSH agent." >&2
+    echo "Add the GitHub key to the host agent, for example:" >&2
+    echo "  ssh-add --apple-use-keychain ~/.ssh/id_ed25519" >&2
+    exit 1
+  }
+
+  git ls-remote origin HEAD >/dev/null || {
+    echo "GitHub SSH authentication failed from inside the container." >&2
+    exit 1
+  }
+'
+
 log "Verifying Biohub scientific dependencies"
 docker compose exec -T biohub python - <<'PY'
 import numpy
@@ -99,4 +129,6 @@ VS Code:
 
 The full Kaggle Git repository is mounted at `/workspace`, so Git branches,
 remotes, diffs, and Source Control are available inside the container.
+GitHub SSH operations use the Mac host's SSH agent through Docker Desktop;
+private SSH keys are not copied into the container.
 EOF
