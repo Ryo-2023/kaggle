@@ -1,0 +1,34 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Kaggle credentials
+kaggle.json
+access_token
+.env
+.env.*
+
+# Competition data
+data/*
+!data/README.md
+
+# Generated outputs
+models/
+checkpoints/
+predictions/
+artifacts/
+submissions/*.csv
+notebooks/.ipynb_checkpoints/
+
+# Local scratch
+scratch/
+tmp/
