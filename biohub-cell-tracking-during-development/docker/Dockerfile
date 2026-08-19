@@ -33,6 +33,21 @@ RUN mkdir -p /etc/ssh /etc/ssh/ssh_config.d \
         '    IdentityAgent /run/host-services/ssh-auth.sock' \
         > /etc/ssh/ssh_config.d/99-biohub-github-agent.conf
 
+# Persistent interactive Bash prompt:
+#   user=root: red, container host: blue, path: cyan, Git branch: yellow,
+#   prompt character: red. Non-printing ANSI sequences are wrapped in \[...\]
+#   so Readline keeps cursor positioning correct.
+RUN printf '%s\n' \
+        '' \
+        '# Biohub persistent colored shell prompt.' \
+        '__biohub_git_branch() {' \
+        '    local branch' \
+        '    branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" || return 0' \
+        '    printf " (%s)" "$branch"' \
+        '}' \
+        'PS1='\''\[\e[31m\]\u\[\e[0m\]@\[\e[34m\]\h\[\e[0m\]:\[\e[36m\]\w\[\e[0m\]\[\e[33m\]$(__biohub_git_branch)\[\e[0m\]\[\e[31m\]\$\[\e[0m\] '\''' \
+        >> /root/.bashrc
+
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && uv python install 3.11
 
