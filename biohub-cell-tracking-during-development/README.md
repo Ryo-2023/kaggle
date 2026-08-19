@@ -2,16 +2,16 @@
 
 Workspace for the Kaggle competition **Biohub – Cell Tracking During Development**.
 
-The local MacBook environment is intentionally Docker-based and CPU-only. Heavy 3D model training should later run on Kaggle or an NVIDIA/Linux machine while keeping the same source layout.
+The MacBook development environment runs inside a persistent **Ubuntu 24.04 Docker container**. The host macOS keeps the source files, while Python, uv, PyTorch, scientific libraries, tests, and command-line tools live inside the container.
 
-## Requirements
+## First-time setup
+
+Requirements:
 
 - Docker Desktop
 - Git
-- Kaggle account with the competition rules accepted
-- Kaggle API credentials in `~/.kaggle/` (optional until data access is needed)
 
-## Clone and enter the project
+Clone the repository and switch to the Biohub bootstrap branch if you have not already done so:
 
 ```bash
 git clone git@github.com:Ryo-2023/kaggle.git
@@ -20,64 +20,100 @@ git switch feat/biohub-bootstrap
 cd biohub-cell-tracking-during-development
 ```
 
-After this bootstrap branch is merged, switch back to `main` for normal work and create short-lived feature branches from there.
-
-## Build
+Then run exactly this:
 
 ```bash
-docker compose build
+git pull --ff-only && bash setup.sh
 ```
 
-## Open a shell
+`setup.sh` performs the full local setup automatically:
+
+1. starts Docker Desktop on macOS if necessary;
+2. validates Docker Compose;
+3. builds the Ubuntu 24.04 image;
+4. installs uv-managed Python 3.11;
+5. installs the Biohub dependencies;
+6. uses CPU-only PyTorch for the MacBook container;
+7. creates and starts the persistent `biohub-dev` container;
+8. verifies Ubuntu, Python, uv, and the scientific stack;
+9. runs pytest and Ruff.
+
+A successful run leaves `biohub-dev` running and ready for development.
+
+## Normal daily use
+
+After the first setup, you do not need to rebuild the environment every time.
+
+Use Docker Desktop to start or stop the container named:
+
+```text
+biohub-dev
+```
+
+Then in VS Code:
+
+1. install the **Dev Containers** extension;
+2. open the Command Palette;
+3. select **Dev Containers: Attach to Running Container...**;
+4. select `biohub-dev`;
+5. open `/workspace`.
+
+The repository directory on macOS is bind-mounted to `/workspace`, so files edited through VS Code are the same files tracked by Git on the Mac.
+
+You can also enter the container from Terminal:
 
 ```bash
-docker compose run --rm biohub
+docker compose exec biohub bash
 ```
 
-## Resolve and lock dependencies
+## Environment
 
-The first host-mounted sync creates `uv.lock` in this directory:
+Inside the container:
 
-```bash
-docker compose run --rm biohub uv sync
+```text
+Ubuntu 24.04
+Python 3.11
+uv
+PyTorch CPU build
+tracksdata
+Zarr
+SciPy
+Polars
+NumPy
+pytest
+Ruff
+Kaggle CLI
 ```
 
-Commit `uv.lock` after it has been generated and verified. Subsequent reproducible installs should use:
+The local MacBook container is intentionally CPU-only. GPU training will use a separate NVIDIA-oriented environment later; the source tree does not need to change.
 
-```bash
-docker compose run --rm biohub uv sync --frozen
+## Kaggle credentials and data
+
+Kaggle credentials are expected under the host directory:
+
+```text
+~/.kaggle/
 ```
 
-## Verify the environment
-
-```bash
-docker compose run --rm biohub uv run pytest -q
-docker compose run --rm biohub uv run ruff check .
-```
-
-The smoke test checks Python 3.11 and imports the core scientific stack.
-
-## VS Code Dev Containers
-
-Open this directory in VS Code and choose **Dev Containers: Reopen in Container**. The configuration uses the same `biohub` Compose service and runs `uv sync` after creation.
-
-## Kaggle data
+This directory is mounted read-only at `/root/.kaggle` inside the container. `setup.sh` creates the directory if it does not exist, but it does not create Kaggle credentials for you.
 
 Competition data is not version-controlled. See [`data/README.md`](data/README.md).
 
-From the container, first inspect the available files:
+Once credentials and competition access are configured, run inside the container:
 
 ```bash
 kaggle competitions files -c biohub-cell-tracking-during-development
 ```
 
-Then download only what you need. If you do want the whole competition dataset:
+## Rebuilding after environment changes
+
+If `Dockerfile`, `docker-compose.yml`, or `pyproject.toml` changes, rerun:
 
 ```bash
-kaggle competitions download -c biohub-cell-tracking-during-development -p data/raw
+git pull --ff-only && bash setup.sh
 ```
 
-Do not commit downloaded data, credentials, generated checkpoints, predictions, or submission CSVs.
+This is also the recovery command if the local container is deleted.
 
 ## Project structure
 
@@ -93,10 +129,9 @@ biohub-cell-tracking-during-development/
 ├── .gitignore
 ├── docker-compose.yml
 ├── pyproject.toml
+├── setup.sh
 └── README.md
 ```
-
-Additional `configs/`, `scripts/`, `notebooks/`, `models/`, `predictions/`, and `submissions/` directories should be added only when the corresponding workflow is introduced.
 
 ## Dependency policy
 
@@ -109,4 +144,4 @@ The environment follows the official Biohub baseline closely:
 - Polars
 - `tracksdata` pinned to commit `7bfeaf845ceb951226f19b72fe5b80e01601018a`
 
-The pin avoids an unexpected break from upstream `tracksdata` changes while the competition is active.
+The pinned `tracksdata` revision avoids unexpected upstream changes during the competition.
