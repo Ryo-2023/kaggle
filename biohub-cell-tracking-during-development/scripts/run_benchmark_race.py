@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Narrow image-only entrypoint for the benchmark-race ``blob_lap`` lane.
+"""Narrow image-only entrypoint for the benchmark-race classical lanes.
 
-The later race task owns multi-method dispatch and evaluation.  This script
-therefore exposes only bounded ``smoke`` and ``infer`` commands; neither
-command accepts a ground-truth path or opens a GEFF input.
+The script exposes bounded ``smoke`` and ``infer`` commands for ``blob_lap``
+and ``cc_flow``.  Neither command accepts a ground-truth path or opens a GEFF
+input.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from biohub.benchmark_race.blob_lap import run_blob_lap  # noqa: E402
+from biohub.benchmark_race.cc_flow import run_cc_flow  # noqa: E402
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec  # noqa: E402
 
 DEFAULT_SCALE = (1.625, 0.40625, 0.40625)
@@ -72,6 +73,12 @@ def _build_request(args: argparse.Namespace, *, max_frames: int | None) -> RaceR
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--method",
+        choices=("blob_lap", "cc_flow"),
+        default="blob_lap",
+        help="Image-only detector/linker lane (default: blob_lap)",
+    )
     parser.add_argument("--image-stem", type=Path, required=True, help="Relative OME-Zarr image path/stem")
     parser.add_argument("--cache-root", type=Path, default=Path("artifacts/multi_method_race/cache"))
     parser.add_argument("--output-root", type=Path, default=Path("artifacts/multi_method_race"))
@@ -79,7 +86,7 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run image-only benchmark-race blob_lap inference.")
+    parser = argparse.ArgumentParser(description="Run image-only benchmark-race classical inference.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     smoke = subparsers.add_parser("smoke", help="Run a bounded two-frame image-only smoke")
     _add_common_arguments(smoke)
@@ -94,11 +101,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     max_frames = args.max_frames
     request = _build_request(args, max_frames=max_frames)
-    artifact = run_blob_lap(request)
+    runners = {"blob_lap": run_blob_lap, "cc_flow": run_cc_flow}
+    artifact = runners[args.method](request)
     print(
         json.dumps(
             {
-                "method_id": "blob_lap",
+                "method_id": args.method,
                 "prediction_path": str(artifact.prediction_path),
                 "prediction_manifest": str(artifact.prediction_manifest_path),
                 "run_json": str(artifact.run_json_path),
