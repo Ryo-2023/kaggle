@@ -383,10 +383,12 @@ def _build_edge_arrays(
     voxel_delta = (nodes.tzyx[target, 1:].astype(np.float32) - nodes.tzyx[source, 1:].astype(np.float32))
     physical_delta = nodes.physical_zyx[target] - nodes.physical_zyx[source]
     if edge_activation == "softmax":
-        forward_probability = _softmax(forward_logits.reshape(-1, 1), axis=0).reshape(-1)
-        reverse_probability = _softmax(reverse_logits.reshape(-1, 1), axis=0).reshape(-1)
-        # Preserve upstream row-wise softmax per frame pair rather than the
-        # flattened whole-cache normalization.
+        # Preserve upstream row-wise softmax per frame pair.  Do not first
+        # normalize the flattened cache: that pass is both mathematically
+        # discarded below and needlessly allocates temporary arrays for
+        # millions of candidate pairs.
+        forward_probability = np.empty_like(forward_logits)
+        reverse_probability = np.empty_like(reverse_logits)
         offset = 0
         for pair in state.pairs:
             if pair.source_t is None or pair.reverse_logits is None:
