@@ -297,6 +297,15 @@ def _normalise_image(image: np.ndarray, config: BlobLapConfig) -> np.ndarray:
     return np.where(finite, normalised, 0.0).astype(np.float32)
 
 
+def _normalise_frame(frame: np.ndarray, low: float, high: float) -> np.ndarray:
+    values = np.asarray(frame, dtype=np.float32)
+    if not np.isfinite(low) or not np.isfinite(high) or high <= low:
+        return np.zeros(values.shape, dtype=np.float32)
+    finite = np.isfinite(values)
+    normalised = np.clip((values - low) / (high - low), 0.0, 1.0)
+    return np.where(finite, normalised, 0.0).astype(np.float32)
+
+
 def _frame_candidates(frame: np.ndarray, frame_index: int, config: BlobLapConfig) -> list[tuple[float, int, int, int]]:
     smoothed = gaussian_filter(frame, sigma=config.gaussian_sigma, mode="nearest")
     local_maximum = maximum_filter(smoothed, size=config.local_max_size, mode="nearest")
@@ -330,6 +339,43 @@ def detect_blob_candidates(image: np.ndarray, config: BlobLapConfig | Mapping[st
     rows: list[tuple[float, int, int, int, int]] = []
     for frame_index in range(normalised.shape[0]):
         rows.extend(_frame_candidates(normalised[frame_index], frame_index, config))
+    rows.sort(key=lambda row: (row[1], row[2], row[3], row[4]))
+    coordinates = np.asarray([[frame, z, y, x] for _, frame, z, y, x in rows], dtype=np.float64).reshape(-1, 4)
+    physical = voxel_to_physical(coordinates[:, 1:], config.scale).reshape(-1, 3)
+    scores = np.asarray([score for score, *_ in rows], dtype=np.float64)
+    return CandidateTable(coordinates, physical, scores)
+
+
+def detect_blob_candidates_streaming(
+    image: Any,
+    config: BlobLapConfig | Mapping[str, Any],
+    *,
+    quantiles: Mapping[str, float],
+    max_frames: int | None = None,
+) -> CandidateTable:
+    """Detect candidates frame-by-frame from a Zarr-like ``(T,Z,Y,X)`` array.
+
+    The sample metadata already stores the fixed image quantiles, so the full
+    movie never needs to be materialized in memory.  The ndarray API above is
+    retained for small unit fixtures.
+    """
+
+    config = config if isinstance(config, BlobLapConfig) else BlobLapConfig.from_mapping(config)
+    shape = tuple(int(value) for value in image.shape)
+    if len(shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {shape!r}")
+    frame_count = shape[0] if max_frames is None else int(max_frames)
+    if frame_count <= 0 or frame_count > shape[0]:
+        raise ValueError(f"max_frames must be in [1, {shape[0]}]")
+    try:
+        low = float(quantiles[str(config.q_low)])
+        high = float(quantiles[str(config.q_high)])
+    except KeyError as exc:
+        raise ValueError("sample quantiles are missing detector quantile bounds") from exc
+    rows: list[tuple[float, int, int, int, int]] = []
+    for frame_index in range(frame_count):
+        frame = _normalise_frame(np.asarray(image[frame_index]), low, high)
+        rows.extend(_frame_candidates(frame, frame_index, config))
     rows.sort(key=lambda row: (row[1], row[2], row[3], row[4]))
     coordinates = np.asarray([[frame, z, y, x] for _, frame, z, y, x in rows], dtype=np.float64).reshape(-1, 4)
     physical = voxel_to_physical(coordinates[:, 1:], config.scale).reshape(-1, 3)
@@ -417,7 +463,7 @@ def build_prediction_graph(candidates: CandidateTable, edges: EdgeTable) -> Any:
     return graph
 
 
-def _open_image(path: Path) -> np.ndarray:
+def _open_image(path: Path) -> Any:
     import zarr
 
     root = zarr.open(str(path), mode="r")
@@ -427,10 +473,9 @@ def _open_image(path: Path) -> np.ndarray:
         array = root["0"]
     else:
         raise ValueError(f"image Zarr is missing array '0': {path}")
-    values = np.asarray(array)
-    if values.ndim != 4:
-        raise ValueError(f"image must have shape (T, Z, Y, X), got {values.shape!r}")
-    return values
+    if len(array.shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {array.shape!r}")
+    return array
 
 
 def _git_commit() -> str:
@@ -457,11 +502,14 @@ def _git_commit() -> str:
     return "unknown"
 
 
-def _image_digest(image: np.ndarray) -> str:
+def _image_digest(image: Any, *, max_frames: int | None = None) -> str:
     digest = hashlib.sha256()
     digest.update(str(image.dtype).encode("ascii"))
-    digest.update(repr(tuple(image.shape)).encode("ascii"))
-    digest.update(np.ascontiguousarray(image).tobytes())
+    shape = tuple(int(value) for value in image.shape)
+    frame_count = shape[0] if max_frames is None else int(max_frames)
+    digest.update(repr((frame_count, *shape[1:])).encode("ascii"))
+    for frame_index in range(frame_count):
+        digest.update(np.ascontiguousarray(np.asarray(image[frame_index])).tobytes())
     return digest.hexdigest()
 
 
@@ -497,7 +545,7 @@ def _sample_path(request: RaceRequest) -> Path:
 def _save_candidate_cache(
     request: RaceRequest,
     candidates: CandidateTable,
-    image: np.ndarray,
+    image: Any,
     config: BlobLapConfig,
     max_frames: int | None,
     source_commit: str,
@@ -506,7 +554,7 @@ def _save_candidate_cache(
     detector_config["max_frames"] = max_frames
     cache_manifest = build_cache_manifest(
         sample=request.sample,
-        image_digest=_image_digest(image),
+        image_digest=_image_digest(image, max_frames=max_frames),
         detector_config=detector_config,
         source_commit=source_commit,
     )
@@ -548,8 +596,12 @@ def run_blob_lap(request: RaceRequest) -> PredictionArtifact:
     if max_frames is not None:
         if max_frames > image.shape[0]:
             raise ValueError(f"max_frames {max_frames} exceeds image frame count {image.shape[0]}")
-        image = image[:max_frames]
-    candidates = detect_blob_candidates(image, config)
+    candidates = detect_blob_candidates_streaming(
+        image,
+        config,
+        quantiles=request.sample.quantiles,
+        max_frames=max_frames,
+    )
     edges = link_blob_lap(candidates, config)
     source_commit = _git_commit()
     source_file_sha256 = _source_file_digest()
@@ -595,7 +647,7 @@ def run_blob_lap(request: RaceRequest) -> PredictionArtifact:
         "source_file_sha256": source_file_sha256,
         "sample_id": request.sample.sample_id,
         "image_stem": request.sample.image_stem.as_posix(),
-        "image_shape": list(image.shape),
+        "image_shape": [max_frames or int(image.shape[0]), *[int(value) for value in image.shape[1:]]],
         "config": config.as_dict(),
         "expected_device": request.expected_device,
         "actual_device": "cpu",
