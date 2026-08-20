@@ -1,0 +1,35 @@
+{
+  "fixture_origin": "sanitized copy of artifacts/strong_baseline_v1/harmonic_ilp/run.json",
+  "status": "success",
+  "mode": "harmonic-ilp",
+  "source_commit": "075fc5f5a52d11077f9dc2b074644618f26939e2",
+  "checkpoint_sha256": "347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235",
+  "image_stem": "data/train/44b6_0113de3b",
+  "prediction_path": "artifacts/strong_baseline_v1/harmonic_ilp/44b6_0113de3b.geff",
+  "prediction_manifest": "artifacts/strong_baseline_v1/harmonic_ilp/prediction_manifest.json",
+  "raw_detection_node_count": 26887,
+  "prediction_node_count": 26301,
+  "prediction_edge_count": 24205,
+  "expected_device": "cpu",
+  "actual_device": "cpu",
+  "device": "cpu",
+  "torch_cuda_available": false,
+  "kaggle_artifact_version": 1,
+  "organizer_notebook_version": 331429261,
+  "elapsed_seconds": 4459.703853908999,
+  "return_code": 0,
+  "config": {
+    "harmonic_reverse_weight": 0.2,
+    "method": "strong_baseline_v1_official_ilp"
+  },
+  "command": [
+    "python",
+    "scripts/run_strong_baseline_v1.py",
+    "infer-harmonic",
+    "--upstream-root", "artifacts/strong_baseline_v1/upstream",
+    "--image-stem", "data/train/44b6_0113de3b",
+    "--checkpoint", "artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth",
+    "--output-dir", "artifacts/strong_baseline_v1/harmonic_ilp",
+    "--expected-device", "cpu"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "fixture_origin": "sanitized copy of artifacts/strong_baseline_v1/visual_sanity/visual_sanity.json",
+  "schema_version": 1,
+  "sample_stem": "44b6_0113de3b",
+  "image_shape": [100, 64, 256, 256],
+  "scale": [1.625, 0.40625, 0.40625],
+  "max_distance_um": 7.0,
+  "ground_truth_node_count": 52,
+  "ground_truth_edge_count": 50,
+  "prediction_node_count": 26301,
+  "prediction_edge_count": 24205,
+  "metrics": {
+    "division_fn": 0,
+    "division_fp": 0,
+    "division_tp": 0,
+    "edge_fn": 2,
+    "edge_fp": 2,
+    "edge_tp": 48
+  },
+  "overlay_totals": {
+    "fn": 2,
+    "fp": 2,
+    "prediction": 24155,
+    "tp": 48
+  },
+  "raw_slice_endpoint": {
+    "path": "/api/frame",
+    "bytes": 39490,
+    "sha256": "69b6c5d2c322f092c8538f94c3aa2fffc672a1425857c9677597dcbb1a5b84e4",
+    "query": {"t": 0, "z": 0}
+  },
+  "windows": {
+    "matched": {
+      "category": "tp",
+      "t": 0,
+      "z": 62.0,
+      "z_radius": 0.75,
+      "source": {"node_id": 219, "t": 0, "z": 62.0, "y": 224.0, "x": 248.0},
+      "target": {"node_id": 441, "t": 1, "z": 62.0, "y": 228.0, "x": 248.0},
+      "visible_node_kinds": {"prediction": 3},
+      "visible_edge_categories": {"prediction": 2, "tp": 1}
+    },
+    "error": {
+      "category": "fp",
+      "t": 47,
+      "z": 31.0,
+      "z_radius": 0.75,
+      "source": {"node_id": 11624, "t": 47, "z": 31.0, "y": 108.0, "x": 120.0},
+      "target": {"node_id": 11886, "t": 48, "z": 28.0, "y": 108.0, "x": 116.0},
+      "visible_node_kinds": {"ground_truth": 1, "prediction": 6},
+      "visible_edge_categories": {"fn": 1, "fp": 1, "prediction": 3}
+    },
+    "sparse_unmatched": {
+      "category": "prediction",
+      "t": 0,
+      "z": 1.0,
+      "z_radius": 0.75,
+      "source": {"node_id": 0, "t": 0, "z": 1.0, "y": 8.0, "x": 52.0},
+      "target": {"node_id": 225, "t": 1, "z": 1.0, "y": 16.0, "x": 52.0},
+      "visible_node_kinds": {"prediction": 12},
+      "visible_edge_categories": {"prediction": 12}
+    }
+  }
+}

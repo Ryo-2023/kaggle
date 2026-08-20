@@ -1,0 +1,22 @@
+{
+  "fixture_origin": "sanitized copy of artifacts/strong_baseline_v1/inputs/source_receipt.json",
+  "official_source": {
+    "repository": "https://github.com/royerlab/kaggle-cell-tracking-competition.git",
+    "commit": "075fc5f5a52d11077f9dc2b074644618f26939e2",
+    "license": "BSD-3-Clause"
+  },
+  "kaggle_artifact": {
+    "dataset": "thibautgoldsborough/cellmot-baseline-artifacts",
+    "version": 1,
+    "license": "Unknown",
+    "checkpoint": {
+      "sha256": "347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235",
+      "size_bytes": 8357783
+    },
+    "organizer_notebook_version": 331429261
+  },
+  "selected_inputs": {
+    "checkpoint": "artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth",
+    "selection_reason": "Downloaded version 1 and local candidate checkpoint/config hashes match."
+  }
+}

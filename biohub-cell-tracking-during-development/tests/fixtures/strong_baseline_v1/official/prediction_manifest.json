@@ -1,0 +1,13 @@
+{
+  "fixture_origin": "sanitized copy of artifacts/strong_baseline_v1/official_ilp/prediction_manifest.json",
+  "prediction_path": "artifacts/strong_baseline_v1/official_ilp/44b6_0113de3b.geff",
+  "directory_sha256": "294e1cbad1c2a8464a5af93c63ed3bcb49fc9559cf7ad9dba891b626cf1d3840",
+  "hash_algorithm": "sha256(sorted relative file path + NUL + file bytes + NUL)",
+  "files": 33,
+  "total_bytes": 332170,
+  "nodes": 25994,
+  "edges": 23536,
+  "structural_reload": "tracksdata.graph.IndexedRXGraph.from_geff succeeded",
+  "manifest_action": "created automatically after prediction GEFF structural reload",
+  "manifest_created_at": "2026-08-19T20:21:28.290051+00:00"
+}

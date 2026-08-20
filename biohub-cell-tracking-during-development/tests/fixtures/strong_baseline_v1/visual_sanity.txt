@@ -1,0 +1,5 @@
+fixture_origin=artifacts/strong_baseline_v1/visual_sanity/visual_sanity.txt
+raw_slice_endpoint=/api/frame
+window.matched.category=tp
+window.error.category=fp
+window.sparse_unmatched.category=prediction

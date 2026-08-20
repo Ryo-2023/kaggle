@@ -1,0 +1,21 @@
+{
+  "fixture_origin": "sanitized copy of artifacts/strong_baseline_v1/harmonic_ilp/source_receipt.json",
+  "source": {
+    "author": "Yusuke Togashi",
+    "notebook_slug": "no-hack-biohub-cell-another-approch-3rd",
+    "version_number": 18,
+    "script_version_id": 338569479,
+    "url": "https://www.kaggle.com/code/yusuketogashi/no-hack-biohub-cell-another-approch-3rd?scriptVersionId=338569479",
+    "version_url": "https://www.kaggle.com/code/yusuketogashi/no-hack-biohub-cell-another-approch-3rd/versions/18"
+  },
+  "acquisition": {
+    "source_format": "Kaggle notebook JSON",
+    "source_sha256": "dd3819cff82851b491d9cbeb6f5f0fc36e8da3c5e9ca90a8b0d5284785a250d"
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "evidence_url": "https://www.kaggle.com/code/yusuketogashi/no-hack-biohub-cell-another-approch-3rd/versions/18"
+  },
+  "organizer_notebook_version": 331429261,
+  "formula_fixture_status": "BLOCKED: retained notebook JSON is unavailable; no source cell is fabricated."
+}

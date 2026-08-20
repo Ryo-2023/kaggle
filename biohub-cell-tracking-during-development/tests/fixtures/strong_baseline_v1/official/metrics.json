@@ -1,0 +1,16 @@
+{
+  "adjusted_edge_jaccard": 0.8837944835207503,
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_jaccard": null,
+  "division_tp": 0,
+  "edge_fn": 4,
+  "edge_fp": 2,
+  "edge_jaccard": 0.8846153846153846,
+  "edge_tp": 46,
+  "final_score": 0.8837944835207503,
+  "node_recall": 1.0,
+  "prediction_edge_count": 23536,
+  "prediction_node_count": 25994,
+  "total_node_ratio": 0.009279751504562221
+}
