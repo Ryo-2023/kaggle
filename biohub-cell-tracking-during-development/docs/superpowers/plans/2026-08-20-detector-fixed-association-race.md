@@ -331,13 +331,13 @@ Expected:既存`biohub-dev`がhealthy、CPU-onlyをreceiptへ記録。開発samp
 
 - [ ] **Step 2: detector cacheを一度だけmaterializeする**
 
-Run: `docker compose exec -T biohub env PYTHONPATH=/workspace/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --device cpu --output artifacts/detector_fixed_race`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --device cpu --output artifacts/detector_fixed_race'`
 
 Expected: `READY`付きcache、manifestの`ground_truth_included=false`、node/candidate edge digest、detector call count 1。途中停止時はREADY無しで再開可能。
 
 - [ ] **Step 3: cacheから公式/harmonicを再構成する**
 
-Run: `docker compose exec -T biohub env PYTHONPATH=/workspace/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0113de3b --methods official_ilp,harmonic_v1,mutual_confidence,motion_gated --cache artifacts/detector_fixed_race/cache/44b6_0113de3b`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0113de3b --methods official_ilp,harmonic_v1,mutual_confidence,motion_gated --cache artifacts/detector_fixed_race/cache/44b6_0113de3b'`
 
 Expected: 4 prediction GEFFと各metric receiptが生成され、全ての`cache_hash`が一致。official/harmonicのnode/edge/metricが既存canonical artifactsとの差を許容可能な決定論差として記録される。
 
@@ -359,13 +359,13 @@ Expected: 4 prediction GEFFと各metric receiptが生成され、全ての`cache
 
 - [ ] **Step 1: 実metricを読む前にpanelをfreezeする**
 
-Run: `docker compose exec -T biohub env PYTHONPATH=/workspace/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py freeze-panel --minimum 3 --maximum 5 --development-sample 44b6_0113de3b --output artifacts/detector_fixed_race/validation_panel.json`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py freeze-panel --minimum 3 --maximum 5 --development-sample 44b6_0113de3b --output artifacts/detector_fixed_race/validation_panel.json'`
 
 Expected: `44b6_0113de3b`、`44b6_0b24845f`、`44b6_0c582fdc`、`44b6_0db75fae`、`44b6_12dfb391`のうち、画像取得に成功した最低3件を含む固定panel。`44b6_12dfb391`はdivision候補として優先し、sample ID、shape、GT存在、division有無の根拠だけを含める。score、method、winnerは含まれない。
 
 - [ ] **Step 2: panelの全primaryを同一条件で走らせる**
 
-Run: `docker compose exec -T biohub env PYTHONPATH=/workspace/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py panel --panel artifacts/detector_fixed_race/validation_panel.json --methods official_ilp,harmonic_v1,mutual_confidence,motion_gated --output artifacts/detector_fixed_race/validation`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py panel --panel artifacts/detector_fixed_race/validation_panel.json --methods official_ilp,harmonic_v1,mutual_confidence,motion_gated --output artifacts/detector_fixed_race/validation'`
 
 Expected: 最低3 sample、各sample同一4 method、cache hash receipt、公式metricを取得。Kaggleから取得した画像/GTのfile digestとcompetition file versionをreceiptへ残す。失敗sampleは理由と実行時間を`failed_samples`へ残す。
 
@@ -406,13 +406,13 @@ git commit -m "Record detector-fixed association race validation"
 
 - [ ] **Step 1: changed-scope testsを実行する**
 
-Run: `docker compose exec -T biohub env PYTHONPATH=/workspace/biohub-cell-tracking-during-development/src uv run pytest -q tests/test_detector_fixed_cache.py tests/test_detector_fixed_upstream_adapter.py tests/test_detector_fixed_association.py tests/test_detector_fixed_prediction.py tests/test_detector_fixed_panel.py tests/test_detector_fixed_cli.py tests/test_detector_fixed_report.py`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run pytest -q tests/test_detector_fixed_cache.py tests/test_detector_fixed_upstream_adapter.py tests/test_detector_fixed_association.py tests/test_detector_fixed_prediction.py tests/test_detector_fixed_panel.py tests/test_detector_fixed_cli.py tests/test_detector_fixed_report.py'`
 
 Expected: 全changed-scope tests PASS。未実行なら成功と報告しない。
 
 - [ ] **Step 2: Ruffとdiffを確認する**
 
-Run: `docker compose exec -T biohub env PYTHONPATH=/workspace/biohub-cell-tracking-during-development/src uv run ruff check src/biohub/detector_fixed_race tests/test_detector_fixed_*.py scripts/run_detector_fixed_race.py` and `git diff --check`。
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run ruff check src/biohub/detector_fixed_race tests/test_detector_fixed_*.py scripts/run_detector_fixed_race.py'` and `git diff --check`。
 
 Expected: changed scopeにRuff/whitespace error無し。既存unrelated errorは修正しない。
 
