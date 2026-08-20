@@ -430,7 +430,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "",
             "```bash",
             (
-            "docker compose exec -T -w "
+                "docker compose exec -T -e BIOHUB_BENCHMARK_RACE_SOURCE_REVISION=ac2ece5 -w "
                 "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
@@ -438,7 +438,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
                 "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
             ),
             (
-                "docker compose exec -T -w "
+                "docker compose exec -T -e BIOHUB_BENCHMARK_RACE_SOURCE_REVISION=ac2ece5 -w "
                 "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
@@ -446,7 +446,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
                 "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
             ),
             (
-                "docker compose exec -T -w "
+                "docker compose exec -T -e BIOHUB_BENCHMARK_RACE_SOURCE_REVISION=ac2ece5 -w "
                 "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
