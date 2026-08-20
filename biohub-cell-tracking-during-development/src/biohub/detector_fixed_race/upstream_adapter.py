@@ -54,7 +54,11 @@ class CaptureConfig:
             raise ValueError("threshold must be in [0, 1]")
         if self.edge_activation not in {"softmax", "sigmoid"}:
             raise ValueError("edge_activation must be softmax or sigmoid")
-        if isinstance(self.unet_batch_size, bool) or self.unet_batch_size < 1:
+        if (
+            isinstance(self.unet_batch_size, bool)
+            or not isinstance(self.unet_batch_size, int)
+            or self.unet_batch_size < 1
+        ):
             raise ValueError("unet_batch_size must be a positive integer")
 
 
