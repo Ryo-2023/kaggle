@@ -1,0 +1,21 @@
+{
+  "adjusted_edge_jaccard": 0.8837944835207503,
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_jaccard": null,
+  "division_tp": 0,
+  "edge_fn": 4,
+  "edge_fp": 2,
+  "edge_jaccard": 0.8846153846153846,
+  "edge_tp": 46,
+  "final_score": 0.8837944835207503,
+  "node_recall": 1.0,
+  "prediction_edge_count": 23536,
+  "prediction_manifest_directory_sha256": "294e1cbad1c2a8464a5af93c63ed3bcb49fc9559cf7ad9dba891b626cf1d3840",
+  "prediction_manifest_path": "artifacts/strong_baseline_v1/official_ilp/prediction_manifest.json",
+  "prediction_manifest_validated_at": "2026-08-20T01:30:37.442380+00:00",
+  "prediction_manifest_validated_before_gt": true,
+  "prediction_manifest_validation_action": "validated persisted prediction manifest before opening ground truth",
+  "prediction_node_count": 25994,
+  "total_node_ratio": 0.009279751504562221
+}

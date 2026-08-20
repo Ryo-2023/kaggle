@@ -1,0 +1,14 @@
+{
+  "directory_sha256": "6163e0643d27062854a32fcf102fde24aa2ead55384a0afb965af1f589307fbc",
+  "edges": 24205,
+  "files": 33,
+  "harmonic_reverse_weight": 0.2,
+  "hash_algorithm": "sha256(sorted relative file path + NUL + file bytes + NUL)",
+  "hash_persisted_before_evaluation": true,
+  "method": "strong_baseline_v1_harmonic_ilp",
+  "nodes": 26301,
+  "prediction_path": "artifacts/strong_baseline_v1/harmonic_ilp/44b6_0113de3b.geff",
+  "raw_detection_node_count": 26887,
+  "structural_reload": "tracksdata.graph.IndexedRXGraph.from_geff succeeded",
+  "total_bytes": 339949
+}
