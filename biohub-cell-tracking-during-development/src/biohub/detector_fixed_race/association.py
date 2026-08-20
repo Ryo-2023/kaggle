@@ -208,6 +208,7 @@ def _candidate_rows(cache: DetectorCache, spec: AssociationSpec) -> list[tuple[i
         scores = _score_matrix(cache, spec, row_indices, source_ids, target_ids)
         source_lookup = {int(node_id): index for index, node_id in enumerate(source_ids.tolist())}
         target_lookup = {int(node_id): index for index, node_id in enumerate(target_ids.tolist())}
+        pair_rows: list[tuple[int, int, float, float]] = []
         for row_index in row_indices.tolist():
             source = int(edges.source_node_id[row_index])
             target = int(edges.target_node_id[row_index])
@@ -223,8 +224,13 @@ def _candidate_rows(cache: DetectorCache, spec: AssociationSpec) -> list[tuple[i
                 else OFFICIAL_EDGE_THRESHOLD
             )
             if score > threshold:
-                rows.append((source, target, score, distance))
-    rows.sort(key=lambda row: (row[0], row[1]))
+                pair_rows.append((source, target, score, distance))
+        # The pinned upstream predictor sorts candidate tuples by probability
+        # descending before adding them to the tracksdata graph.  Keep that
+        # order (including deterministic source/target tie breaks) so ILP
+        # tie handling remains comparable to the official path.
+        pair_rows.sort(key=lambda row: (row[2], row[0], row[1]), reverse=True)
+        rows.extend(pair_rows)
     return rows
 
 
