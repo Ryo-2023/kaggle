@@ -14,6 +14,7 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -26,6 +27,9 @@ from biohub.benchmark_race.blob_lap import run_blob_lap  # noqa: E402
 from biohub.benchmark_race.cc_flow import run_cc_flow  # noqa: E402
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec  # noqa: E402
 from biohub.benchmark_race.motion import ensure_blob_cache, run_motion_lap  # noqa: E402
+from biohub.benchmark_race.report import write_summary  # noqa: E402
+from biohub.strong_baseline.evaluation import evaluate_prediction  # noqa: E402
+from biohub.strong_baseline.manifest import validate_prediction_manifest  # noqa: E402
 
 DEFAULT_SCALE = (1.625, 0.40625, 0.40625)
 
@@ -101,11 +105,110 @@ def _build_parser() -> argparse.ArgumentParser:
     infer = subparsers.add_parser("infer", help="Run image-only benchmark-race inference")
     _add_common_arguments(infer)
     infer.add_argument("--max-frames", type=int)
+
+    evaluate = subparsers.add_parser(
+        "evaluate",
+        help="Evaluate a persisted prediction against GT after manifest validation",
+    )
+    evaluate.add_argument("--prediction", type=Path, required=True)
+    evaluate.add_argument("--ground-truth", type=Path, required=True)
+    evaluate.add_argument("--metrics", type=Path)
+    evaluate.add_argument("--scale", type=float, nargs=3, default=DEFAULT_SCALE)
+    evaluate.add_argument("--max-distance", type=float, default=7.0)
+
+    summarize = subparsers.add_parser(
+        "summarize",
+        help="Render a deterministic Japanese report from persisted receipts and metrics",
+    )
+    summarize.add_argument(
+        "--root",
+        "--input-root",
+        "--race-root",
+        dest="root",
+        type=Path,
+        required=True,
+        help="Project/artifacts root containing race and/or strong-baseline receipts",
+    )
+    summarize.add_argument(
+        "--output",
+        type=Path,
+        default=Path("docs/results/multi_method_benchmark_race.md"),
+    )
+    summarize.add_argument("--summary-json", type=Path)
     return parser
+
+
+def evaluate_prediction_after_manifest(
+    prediction: Path,
+    ground_truth: Path,
+    *,
+    scale: tuple[float, float, float],
+    max_distance: float = 7.0,
+) -> dict[str, Any]:
+    """Evaluate only after the persisted prediction manifest is validated.
+
+    ``evaluate_prediction`` already performs this validation as a defensive
+    boundary.  Keeping an explicit validation here makes the CLI phase
+    boundary visible and testable: a missing or tampered manifest prevents any
+    attempt to open the GT path.
+    """
+
+    manifest_receipt = validate_prediction_manifest(Path(prediction))
+    metrics = evaluate_prediction(
+        Path(prediction),
+        Path(ground_truth),
+        scale=scale,
+        max_distance=max_distance,
+    )
+    result = dict(metrics)
+    result["prediction_manifest_validation_receipt"] = manifest_receipt
+    return result
+
+
+def run_evaluate(
+    *,
+    prediction: Path,
+    ground_truth: Path,
+    metrics_path: Path | None,
+    scale: tuple[float, float, float],
+    max_distance: float,
+) -> dict[str, Any]:
+    """Run post-hoc official evaluation and persist its metric receipt."""
+
+    metrics = evaluate_prediction_after_manifest(
+        prediction,
+        ground_truth,
+        scale=scale,
+        max_distance=max_distance,
+    )
+    target = Path(metrics_path) if metrics_path is not None else Path(prediction).parent / "metrics.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    return metrics
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    if args.command == "evaluate":
+        metrics = run_evaluate(
+            prediction=args.prediction,
+            ground_truth=args.ground_truth,
+            metrics_path=args.metrics,
+            scale=tuple(args.scale),
+            max_distance=args.max_distance,
+        )
+        print(json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "summarize":
+        summary = write_summary(
+            args.root,
+            args.output,
+            args.summary_json,
+        )
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+
     max_frames = args.max_frames
     request = _build_request(args, max_frames=max_frames)
     if args.method == "motion_lap":
