@@ -87,7 +87,8 @@ def _relative_path(value: object, *, root: Path) -> str | None:
     if not path.is_absolute():
         return path.as_posix()
     try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
+        relative = path.resolve().relative_to(root.resolve()).as_posix()
+        return f"{root.name}/{relative}" if root.name == "artifacts" else relative
     except ValueError:
         # A receipt may point at the shared read-only data directory.  A
         # report still needs a useful, machine-independent identifier, but
@@ -361,6 +362,103 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "- `division_jaccard=null` は公式summarizerのdivision項が存在しない場合の値です。",
             "- official detectorを共有するmotion laneは今回のraceでは未実施です。",
             "  `motion_lap`はblob候補上の古典motion associationです。",
+            "",
+        ],
+    )
+    lines.extend(
+        [
+            "## 実験条件・判定",
+            "",
+            "- sample: `44b6_0113de3b.zarr`（`(T,Z,Y,X)=(100,64,256,256)`、uint16）。",  # noqa: RUF001
+            "- physical scale: `(1.625, 0.40625, 0.40625)` µm、公式 evaluator `max_distance=7.0` µm。",
+            "- GT: `data/train/44b6_0113de3b.geff`。GTは推論入力に渡さず、"
+            "prediction manifestを検証した後の評価phaseだけで開いた。",
+            "- cache/run/prediction receiptの`ground_truth_included`は全laneで`false`。"
+            "divisionは初回raceでは無効化した。",
+            "- 公式metricはリポジトリ内のRoyerLab由来vendor実装を使用し、再実装していない。",
+            "",
+            "## 手法構成と最終判定",
+            "",
+            "- `blob_lap`: 3D Gaussian/local-max + physical NMSの画像-only detector、"
+            "Hungarian/LAP linker。新規手法ではFinal Score `0.9140773262846648`で、"
+            "公式比`+0.0302828427639145`。",
+            "- `cc_flow`: quantile foreground + 3D connected components、全フレーム "
+            "`networkx.network_simplex` global min-cost flow。node recall "
+            "`0.1346153846153846`、Final Score `0.04212152980003883`で、"
+            "候補detectorが今回のデータに適合しなかった。",
+            "- `motion_lap`: 固定blob候補に速度・加速度priorを加えたframe-local LAP。"
+            "公式detector共有laneではない。Final Score `0.8968305842792937`で、"
+            "blob単独より`-0.0172467420053711`となり、今回の設定では採用しない。",
+            (
+                "- Best Method（全比較）: `harmonic v1`"  # noqa: RUF001
+                "（Final Score `0.9211200215044129`）。"  # noqa: RUF001
+                "Best new lane: `blob_lap`（`0.9140773262846648`）。"  # noqa: RUF001
+            ),
+            "- 次に深掘りする候補: 公式TemporalUNet3Dのcenter detector候補を固定し、"
+            "harmonic bidirectional association + ILPへ接続する実験。"
+            "今回の公開実装調査ではofficial detector中間cacheが無く、別laneとしては未実施。",
+            "- 相補component: blob候補のnode recallは`1.0`だったため、"
+            "まずconfidence calibration/NMSと、harmonic associationの組合せを優先する。"
+            "motion priorは今回のreceipt上の改善根拠がない。",
+            "",
+            "## 失敗・未実施候補",
+            "",
+            "- HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、"
+            "公開source/checkpointまたはsegmentation/instance-mask入力契約、依存、"
+            "checkpoint schemaの不足を`docs/results/multi_method_feasibility_ja.md`に記録した。"
+            "今回の3本の公式評価値には含めていない。",
+            (
+                "- `official_motion`（公式detectorを共有するmotion ablation）は、"  # noqa: RUF001
+                "upstreamに永続detector cache APIが無く、CPU 100-frame detector再実行を避けるため"
+                "deferredとした。"
+            ),
+            "- 全laneはCPU実行。`cc_flow`はsolver status `optimal`だが、detector側の低recallが支配的だった。",
+            "",
+            "## 再現コマンド",
+            "",
+            "```bash",
+            (
+                "docker compose exec -T -w "
+                "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
+                "biohub-cell-tracking-during-development "
+                "biohub uv run --no-sync python scripts/run_benchmark_race.py "
+                "infer --method blob_lap --image-stem data/train/44b6_0113de3b.zarr "
+                "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
+            ),
+            (
+                "docker compose exec -T -w "
+                "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
+                "biohub-cell-tracking-during-development "
+                "biohub uv run --no-sync python scripts/run_benchmark_race.py "
+                "infer --method cc_flow --image-stem data/train/44b6_0113de3b.zarr "
+                "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
+            ),
+            (
+                "docker compose exec -T -w "
+                "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
+                "biohub-cell-tracking-during-development "
+                "biohub uv run --no-sync python scripts/run_benchmark_race.py "
+                "infer --method motion_lap --image-stem data/train/44b6_0113de3b.zarr "
+                "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
+            ),
+            (
+                "docker compose exec -T -w "
+                "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
+                "biohub-cell-tracking-during-development "
+                "biohub uv run --no-sync python scripts/run_benchmark_race.py "
+                "evaluate --prediction artifacts/multi_method_race/methods/<method>/44b6_0113de3b.geff "
+                "--ground-truth data/train/44b6_0113de3b.geff "
+                "--metrics artifacts/multi_method_race/evaluation/<method>/metrics.json"
+            ),
+            (
+                "docker compose exec -T -w "
+                "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
+                "biohub-cell-tracking-during-development "
+                "biohub uv run --no-sync python scripts/run_benchmark_race.py "
+                "summarize --root . --output docs/results/multi_method_benchmark_race.md "
+                "--summary-json artifacts/multi_method_race/race_summary.json"
+            ),
+            "```",
             "",
         ],
     )

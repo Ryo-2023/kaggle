@@ -16,15 +16,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from biohub.benchmark_race.blob_lap import run_blob_lap  # noqa: E402
-from biohub.benchmark_race.cc_flow import run_cc_flow  # noqa: E402
+from biohub.benchmark_race.cc_flow import run_cc_flow, stream_image_quantiles  # noqa: E402
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec  # noqa: E402
 from biohub.benchmark_race.motion import ensure_blob_cache, run_motion_lap  # noqa: E402
 from biohub.benchmark_race.report import write_summary  # noqa: E402
@@ -47,11 +45,7 @@ def _image_metadata(image_stem: Path) -> tuple[tuple[int, int, int, int], dict[s
     metadata = attrs.get("image_statistics", {})
     quantiles = metadata.get("quantiles", {}) if isinstance(metadata, dict) else {}
     if not {"0.001", "0.999"}.issubset(quantiles):
-        values = np.asarray(array)
-        quantiles = {
-            "0.001": float(np.nanquantile(values, 0.001)),
-            "0.999": float(np.nanquantile(values, 0.999)),
-        }
+        quantiles = stream_image_quantiles(array, (0.001, 0.999))
     return shape, {"0.001": float(quantiles["0.001"]), "0.999": float(quantiles["0.999"])}
 
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -13,9 +15,11 @@ import zarr
 from biohub.benchmark_race.cc_flow import (
     CandidateTable,
     CCFlowConfig,
+    _save_candidate_cache,
     detect_cc_candidates,
     link_cc_flow,
     run_cc_flow,
+    stream_image_quantiles,
 )
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec
 
@@ -45,6 +49,23 @@ def _two_frame_blobs() -> np.ndarray:
     image[1, 2, 3, 2:4] = (9.0, 7.0)
     image[1, 2, 7, 8:10] = (8.0, 8.0)
     return image
+
+
+class _FrameChunkArray:
+    """Array-like fixture that rejects attempts to materialize the full movie."""
+
+    def __init__(self, values: np.ndarray) -> None:
+        self._values = values
+        self.shape = values.shape
+        self.dtype = values.dtype
+
+    def __array__(self, *args: object, **kwargs: object) -> np.ndarray:
+        raise AssertionError("the full movie must not be materialized")
+
+    def __getitem__(self, index: object) -> np.ndarray:
+        if isinstance(index, tuple):
+            assert isinstance(index[0], (int, np.integer)), "streaming reads must select one frame"
+        return self._values[index]
 
 
 def test_cc_detector_returns_component_centroid_area_and_intensity_features() -> None:
@@ -89,6 +110,116 @@ def test_cc_detector_uses_finite_values_for_quantile_normalization() -> None:
 
     assert len(candidates) == 1
     assert candidates.areas.tolist() == [1]
+
+
+def test_stream_image_quantiles_reads_frames_without_materializing_full_movie() -> None:
+    image = np.asarray(
+        [
+            [[[0.0, 1.0], [2.0, np.nan]]],
+            [[[3.0, 4.0], [5.0, 6.0]]],
+        ],
+        dtype=np.float32,
+    )
+
+    quantiles = stream_image_quantiles(_FrameChunkArray(image), (0.001, 0.999))
+
+    assert quantiles["0.001"] == pytest.approx(np.nanquantile(image, 0.001))
+    assert quantiles["0.999"] == pytest.approx(np.nanquantile(image, 0.999))
+
+
+def test_benchmark_race_cli_streams_missing_image_quantiles(monkeypatch: pytest.MonkeyPatch) -> None:
+    image = np.asarray(
+        [
+            [[[0.0, 1.0], [2.0, np.nan]]],
+            [[[3.0, 4.0], [5.0, 6.0]]],
+        ],
+        dtype=np.float32,
+    )
+    fake_array = _FrameChunkArray(image)
+
+    class _FakeRoot:
+        def __init__(self) -> None:
+            self.attrs: dict[str, object] = {}
+
+        def __getitem__(self, key: str) -> _FrameChunkArray:
+            assert key == "0"
+            return fake_array
+
+    fake_zarr = types.SimpleNamespace(open=lambda path, mode: _FakeRoot())
+    monkeypatch.setitem(sys.modules, "zarr", fake_zarr)
+    script = Path(__file__).parents[1] / "scripts" / "run_benchmark_race.py"
+    spec = importlib.util.spec_from_file_location("benchmark_race_cli_streaming", script)
+    assert spec is not None and spec.loader is not None
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+
+    shape, quantiles = cli._image_metadata(Path("synthetic.zarr"))
+
+    assert shape == image.shape
+    assert quantiles["0.001"] == pytest.approx(np.nanquantile(image, 0.001))
+    assert quantiles["0.999"] == pytest.approx(np.nanquantile(image, 0.999))
+
+
+def test_cc_flow_rejects_full_image_shape_mismatch_including_time(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    image_path = tmp_path / "synthetic.zarr"
+    root = zarr.open_group(image_path, mode="w")
+    root.create_array("0", data=np.zeros((3, 2, 3, 3), dtype=np.float32), chunks=(1, 2, 3, 3))
+    request = RaceRequest(
+        sample=SampleSpec(
+            sample_id="synthetic",
+            image_stem="synthetic.zarr",
+            shape=(2, 2, 3, 3),
+            scale=(2.0, 0.5, 0.5),
+            quantiles={"0.001": 0.0, "0.999": 1.0},
+        ),
+        cache_root=Path("artifacts/cache"),
+        output_root=Path("artifacts/cc_flow"),
+        expected_device="cpu",
+    )
+
+    with pytest.raises(ValueError, match=r"image shape .*sample"):
+        run_cc_flow(request)
+
+    assert not (tmp_path / "artifacts").exists()
+
+
+def test_cc_flow_cache_rejects_full_image_shape_mismatch_including_time(tmp_path: Path) -> None:
+    request = RaceRequest(
+        sample=SampleSpec(
+            sample_id="synthetic",
+            image_stem="synthetic.zarr",
+            shape=(2, 2, 3, 3),
+            scale=(2.0, 0.5, 0.5),
+            quantiles={"0.001": 0.0, "0.999": 1.0},
+        ),
+        cache_root=Path("artifacts/cache"),
+        output_root=Path("artifacts/cc_flow"),
+        expected_device="cpu",
+    )
+    image = np.zeros((3, 2, 3, 3), dtype=np.float32)
+    empty = CandidateTable(
+        coordinates=np.empty((0, 4)),
+        physical_coordinates=np.empty((0, 3)),
+        areas=np.empty((0,), dtype=np.int64),
+        mean_intensities=np.empty((0,)),
+        max_intensities=np.empty((0,)),
+        scores=np.empty((0,)),
+    )
+
+    with pytest.raises(ValueError, match=r"image shape .*sample"):
+        _save_candidate_cache(
+            request,
+            empty,
+            image,
+            _config(scale=(2.0, 0.5, 0.5)),
+            None,
+            "source",
+            "source-file",
+        )
 
 
 def test_cc_flow_links_all_frames_with_global_min_cost_flow_deterministically() -> None:

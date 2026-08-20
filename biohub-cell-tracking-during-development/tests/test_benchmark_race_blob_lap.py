@@ -14,6 +14,7 @@ from biohub.benchmark_race.blob_lap import (
     BlobLapConfig,
     CandidateTable,
     EdgeTable,
+    _git_commit,
     detect_blob_candidates,
     link_blob_lap,
     run_blob_lap,
@@ -158,6 +159,47 @@ def test_blob_lap_request_rejects_gt_option_before_inference() -> None:
             expected_device="cpu",
             config={"ground_truth_path": "labels.geff"},
         )
+
+
+def test_blob_lap_source_revision_requires_explicit_environment_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("BIOHUB_BENCHMARK_RACE_SOURCE_REVISION", raising=False)
+    monkeypatch.delenv("BIOHUB_BENCHMARK_RACE_SOURCE_COMMIT", raising=False)
+    assert _git_commit() == "unavailable-in-container"
+
+    monkeypatch.setenv("BIOHUB_BENCHMARK_RACE_SOURCE_COMMIT", "  injected-commit  ")
+    assert _git_commit() == "injected-commit"
+
+    monkeypatch.setenv("BIOHUB_BENCHMARK_RACE_SOURCE_REVISION", "  injected-revision  ")
+    assert _git_commit() == "injected-revision"
+
+
+def test_blob_lap_rejects_image_time_shape_mismatch_before_cache_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    image_path = tmp_path / "synthetic.zarr"
+    root = zarr.open_group(image_path, mode="w")
+    root.create_array("0", data=np.zeros((1, 5, 8, 8), dtype=np.float32), chunks=(1, 5, 8, 8))
+
+    request = RaceRequest(
+        sample=SampleSpec(
+            sample_id="synthetic",
+            image_stem="synthetic.zarr",
+            shape=(2, 5, 8, 8),
+            scale=(2.0, 0.5, 0.5),
+            quantiles={"0.001": 0.0, "0.999": 10.0},
+        ),
+        cache_root=Path("artifacts/cache"),
+        output_root=Path("artifacts/blob_lap"),
+        expected_device="cpu",
+    )
+
+    with pytest.raises(ValueError, match="image shape"):
+        run_blob_lap(request)
+    assert not (tmp_path / "artifacts" / "cache").exists()
 
 
 def test_blob_lap_cli_does_not_expose_ground_truth_option() -> None:

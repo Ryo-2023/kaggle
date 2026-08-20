@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -479,27 +478,14 @@ def _open_image(path: Path) -> Any:
 
 
 def _git_commit() -> str:
-    project_root = Path(__file__).resolve().parents[3]
-    explicit = os.environ.get("BIOHUB_BENCHMARK_RACE_SOURCE_COMMIT")
+    """Return explicitly supplied provenance or an honest container sentinel."""
+
+    explicit = os.environ.get("BIOHUB_BENCHMARK_RACE_SOURCE_REVISION")
+    if explicit is None:
+        explicit = os.environ.get("BIOHUB_BENCHMARK_RACE_SOURCE_COMMIT")
     if explicit and explicit.strip():
         return explicit.strip()
-    roots: list[Path] = [project_root]
-    roots.extend(project_root.parents)
-    roots.extend(Path.cwd().parents)
-    seen: set[Path] = set()
-    for root in roots:
-        if root in seen:
-            continue
-        seen.add(root)
-        result = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    return "unknown"
+    return "unavailable-in-container"
 
 
 def _image_digest(image: Any, *, max_frames: int | None = None) -> str:
@@ -542,6 +528,14 @@ def _sample_path(request: RaceRequest) -> Path:
     return path
 
 
+def _validate_image_shape(image: Any, request: RaceRequest) -> tuple[int, ...]:
+    actual_shape = tuple(int(value) for value in image.shape)
+    expected_shape = tuple(int(value) for value in request.sample.shape)
+    if actual_shape != expected_shape:
+        raise ValueError(f"image shape {actual_shape} disagrees with sample image_shape {expected_shape}")
+    return actual_shape
+
+
 def _save_candidate_cache(
     request: RaceRequest,
     candidates: CandidateTable,
@@ -551,6 +545,7 @@ def _save_candidate_cache(
     source_commit: str,
     source_file_sha256: str,
 ) -> tuple[str, Path]:
+    _validate_image_shape(image, request)
     detector_config = config.as_dict()
     detector_config["max_frames"] = max_frames
     cache_manifest = build_cache_manifest(
@@ -593,8 +588,7 @@ def run_blob_lap(request: RaceRequest) -> PredictionArtifact:
     config = BlobLapConfig.from_mapping(request_config, scale=request.sample.scale)
     image_path = _sample_path(request)
     image = _open_image(image_path)
-    if tuple(image.shape[1:]) != tuple(request.sample.shape[1:]):
-        raise ValueError(f"image spatial shape {image.shape[1:]} disagrees with sample {request.sample.shape[1:]}")
+    image_shape = _validate_image_shape(image, request)
     if max_frames is not None:
         if max_frames > image.shape[0]:
             raise ValueError(f"max_frames {max_frames} exceeds image frame count {image.shape[0]}")
@@ -650,7 +644,7 @@ def run_blob_lap(request: RaceRequest) -> PredictionArtifact:
         "source_file_sha256": source_file_sha256,
         "sample_id": request.sample.sample_id,
         "image_stem": request.sample.image_stem.as_posix(),
-        "image_shape": [max_frames or int(image.shape[0]), *[int(value) for value in image.shape[1:]]],
+        "image_shape": [max_frames or image_shape[0], *image_shape[1:]],
         "config": config.as_dict(),
         "expected_device": request.expected_device,
         "actual_device": "cpu",

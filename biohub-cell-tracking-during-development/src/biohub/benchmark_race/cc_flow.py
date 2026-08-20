@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,6 +37,9 @@ DEFAULT_LINK_COST_PER_UM = 1.0
 DEFAULT_GAP_COST_UM = 8.0
 DEFAULT_SCALE = (1.625, 0.40625, 0.40625)
 _FLOW_COST_SCALE = 1_000_000
+_STREAMING_QUANTILE_CHUNK_DEPTH = 1
+_STREAMING_QUANTILE_MAX_EXACT_VALUES = 1_000_000
+_STREAMING_QUANTILE_HISTOGRAM_BINS = 65_536
 
 
 def _three_values(name: str, value: Sequence[Any], *, cast: type) -> tuple[Any, Any, Any]:
@@ -308,6 +311,153 @@ def _normalise_frame(frame: np.ndarray, low: float, high: float) -> np.ndarray:
     return np.where(finite, normalized, 0.0).astype(np.float32)
 
 
+def _iter_image_chunks(
+    image: Any,
+    *,
+    frame_count: int,
+    chunk_depth: int = _STREAMING_QUANTILE_CHUNK_DEPTH,
+) -> Iterator[np.ndarray]:
+    """Yield one ``(Z, Y, X)`` chunk at a time without materializing a movie."""
+
+    shape = tuple(int(value) for value in image.shape)
+    if len(shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {shape!r}")
+    if isinstance(chunk_depth, bool) or int(chunk_depth) <= 0:
+        raise ValueError("chunk_depth must be a positive integer")
+    depth = int(chunk_depth)
+    for frame_index in range(frame_count):
+        for z_start in range(0, shape[1], depth):
+            z_stop = min(z_start + depth, shape[1])
+            chunk = np.asarray(image[frame_index, z_start:z_stop, :, :], dtype=np.float64)
+            expected_shape = (z_stop - z_start, shape[2], shape[3])
+            if chunk.shape != expected_shape:
+                raise ValueError(
+                    "image chunk has unexpected shape: "
+                    f"got {chunk.shape!r}, expected {expected_shape!r}",
+                )
+            yield chunk
+
+
+def _quantile_from_ordered_counts(values: np.ndarray, counts: np.ndarray, quantile: float, total: int) -> float:
+    rank = quantile * (total - 1)
+    lower_rank = int(np.floor(rank))
+    upper_rank = int(np.ceil(rank))
+    cumulative = np.cumsum(counts, dtype=np.int64)
+
+    def value_at(index: int) -> float:
+        bucket = int(np.searchsorted(cumulative, index + 1, side="left"))
+        return float(values[bucket])
+
+    lower = value_at(lower_rank)
+    upper = value_at(upper_rank)
+    return lower + (upper - lower) * (rank - lower_rank)
+
+
+def stream_image_quantiles(
+    image: Any,
+    quantiles: Sequence[float],
+    *,
+    max_frames: int | None = None,
+    chunk_depth: int = _STREAMING_QUANTILE_CHUNK_DEPTH,
+) -> dict[str, float]:
+    """Compute finite-value quantiles with bounded frame/chunk memory.
+
+    Small inputs use an exact bounded sample.  For larger inputs, integer
+    images use an exact value histogram when their range is manageable and
+    floating-point images use a fixed-size streaming histogram.  In all
+    cases, only one image chunk is read at a time; callers must not rely on a
+    full ``np.asarray(image)`` conversion for Zarr-backed movies.
+    """
+
+    shape = tuple(int(value) for value in image.shape)
+    if len(shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {shape!r}")
+    frame_count = shape[0] if max_frames is None else int(max_frames)
+    if frame_count <= 0 or frame_count > shape[0]:
+        raise ValueError(f"max_frames must be in [1, {shape[0]}]")
+    if isinstance(quantiles, (str, bytes)) or not isinstance(quantiles, Sequence) or not quantiles:
+        raise ValueError("quantiles must be a non-empty sequence")
+
+    requested: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for value in quantiles:
+        quantile = float(value)
+        if not np.isfinite(quantile) or not 0.0 <= quantile <= 1.0:
+            raise ValueError("quantiles must be finite values in [0, 1]")
+        key = str(quantile)
+        if key not in seen:
+            requested.append((key, quantile))
+            seen.add(key)
+
+    image_dtype = np.dtype(getattr(image, "dtype", np.float64))
+    total = 0
+    minimum = np.inf
+    maximum = -np.inf
+    exact_values: list[np.ndarray] = []
+    exact = True
+    for chunk in _iter_image_chunks(image, frame_count=frame_count, chunk_depth=chunk_depth):
+        finite = chunk[np.isfinite(chunk)]
+        if finite.size == 0:
+            continue
+        total += int(finite.size)
+        minimum = min(minimum, float(np.min(finite)))
+        maximum = max(maximum, float(np.max(finite)))
+        if exact:
+            exact_values.append(finite)
+            if total > _STREAMING_QUANTILE_MAX_EXACT_VALUES:
+                exact_values.clear()
+                exact = False
+
+    if total == 0:
+        raise ValueError("image contains no finite voxels; cannot compute quantiles")
+    if exact:
+        values = np.concatenate(exact_values) if len(exact_values) > 1 else exact_values[0]
+        return {key: float(np.quantile(values, quantile)) for key, quantile in requested}
+    if minimum == maximum:
+        return {key: float(minimum) for key, _ in requested}
+
+    integer_span = maximum - minimum
+    if np.issubdtype(image_dtype, np.integer) and integer_span <= _STREAMING_QUANTILE_MAX_EXACT_VALUES:
+        integer_minimum = int(minimum)
+        integer_maximum = int(maximum)
+        counts = np.zeros(integer_maximum - integer_minimum + 1, dtype=np.int64)
+        for chunk in _iter_image_chunks(image, frame_count=frame_count, chunk_depth=chunk_depth):
+            finite = chunk[np.isfinite(chunk)].astype(np.int64, copy=False)
+            if finite.size:
+                counts += np.bincount(finite - integer_minimum, minlength=len(counts))
+        values = np.arange(integer_minimum, integer_maximum + 1, dtype=np.float64)
+        return {
+            key: _quantile_from_ordered_counts(values, counts, quantile, total)
+            for key, quantile in requested
+        }
+
+    edges = np.linspace(minimum, maximum, _STREAMING_QUANTILE_HISTOGRAM_BINS + 1, dtype=np.float64)
+    counts = np.zeros(_STREAMING_QUANTILE_HISTOGRAM_BINS, dtype=np.int64)
+    for chunk in _iter_image_chunks(image, frame_count=frame_count, chunk_depth=chunk_depth):
+        finite = chunk[np.isfinite(chunk)]
+        if finite.size:
+            counts += np.histogram(finite, bins=edges)[0]
+    cumulative = np.cumsum(counts, dtype=np.int64)
+    results: dict[str, float] = {}
+    for key, quantile in requested:
+        if quantile == 0.0:
+            results[key] = float(minimum)
+            continue
+        if quantile == 1.0:
+            results[key] = float(maximum)
+            continue
+        rank = quantile * (total - 1)
+        bucket = min(int(np.searchsorted(cumulative, rank + 1, side="left")), len(counts) - 1)
+        count = int(counts[bucket])
+        if count <= 0:  # pragma: no cover - guarded by the cumulative lookup
+            results[key] = float((edges[bucket] + edges[bucket + 1]) / 2.0)
+            continue
+        before = int(cumulative[bucket] - count)
+        within = (rank - before) / max(count - 1, 1)
+        results[key] = float(edges[bucket] + np.clip(within, 0.0, 1.0) * (edges[bucket + 1] - edges[bucket]))
+    return results
+
+
 def _component_rows(
     frame: np.ndarray,
     frame_index: int,
@@ -395,16 +545,9 @@ def detect_cc_candidates_streaming(
     high_value = quantiles.get(str(config.q_high))
     if low_value is None or high_value is None:
         if config.q_low == 0.0 and config.q_high == 1.0:
-            lows: list[float] = []
-            highs: list[float] = []
-            for frame_index in range(frame_count):
-                frame_values = np.asarray(image[frame_index], dtype=np.float32)
-                finite = frame_values[np.isfinite(frame_values)]
-                if finite.size:
-                    lows.append(float(finite.min()))
-                    highs.append(float(finite.max()))
-            low_value = min(lows, default=0.0)
-            high_value = max(highs, default=0.0)
+            fallback_quantiles = stream_image_quantiles(image, (0.0, 1.0), max_frames=frame_count)
+            low_value = fallback_quantiles["0.0"]
+            high_value = fallback_quantiles["1.0"]
         else:
             raise ValueError("sample quantiles are missing detector quantile bounds")
     low = float(low_value)
@@ -631,6 +774,16 @@ def _open_image(path: Path) -> Any:
     return array
 
 
+def _validate_image_shape(image: Any, expected_shape: Sequence[int]) -> tuple[int, int, int, int]:
+    actual_shape = tuple(int(value) for value in image.shape)
+    expected = tuple(int(value) for value in expected_shape)
+    if len(actual_shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {actual_shape!r}")
+    if actual_shape != expected:
+        raise ValueError(f"image shape {actual_shape!r} disagrees with sample {expected!r}")
+    return actual_shape  # type: ignore[return-value]
+
+
 def _sample_path(request: RaceRequest) -> Path:
     path = Path(request.sample.image_stem)
     if path.suffix.casefold() != ".zarr":
@@ -661,6 +814,8 @@ def _image_digest(image: Any, *, max_frames: int | None = None) -> str:
     digest = hashlib.sha256()
     digest.update(str(image.dtype).encode("ascii"))
     shape = tuple(int(value) for value in image.shape)
+    if len(shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {shape!r}")
     frame_count = shape[0] if max_frames is None else int(max_frames)
     digest.update(repr((frame_count, *shape[1:])).encode("ascii"))
     for frame_index in range(frame_count):
@@ -683,7 +838,9 @@ def _save_candidate_cache(
     config: CCFlowConfig,
     max_frames: int | None,
     source_revision: str,
+    source_file_sha256: str,
 ) -> tuple[str, Path]:
+    _validate_image_shape(image, request.sample.shape)
     detector_config = config.as_dict()
     detector_config["max_frames"] = max_frames
     cache_manifest = build_cache_manifest(
@@ -705,6 +862,7 @@ def _save_candidate_cache(
     )
     detections_digest = hashlib.sha256((cache_dir / "detections.npz").read_bytes()).hexdigest()
     cache_manifest["detections_sha256"] = detections_digest
+    cache_manifest["source_file_sha256"] = source_file_sha256
     (cache_dir / "cache_manifest.json").write_text(json.dumps(cache_manifest, indent=2, sort_keys=True) + "\n")
     return str(cache_manifest["cache_key"]), cache_dir / "cache_manifest.json"
 
@@ -737,11 +895,10 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         )
     image_path = _sample_path(request)
     image = _open_image(image_path)
-    if tuple(image.shape[1:]) != tuple(request.sample.shape[1:]):
-        raise ValueError(f"image spatial shape {image.shape[1:]} disagrees with sample {request.sample.shape[1:]}")
+    image_shape = _validate_image_shape(image, request.sample.shape)
     if max_frames is not None:
-        if max_frames > image.shape[0]:
-            raise ValueError(f"max_frames {max_frames} exceeds image frame count {image.shape[0]}")
+        if max_frames > image_shape[0]:
+            raise ValueError(f"max_frames {max_frames} exceeds image frame count {image_shape[0]}")
     candidates = detect_cc_candidates_streaming(
         image,
         config,
@@ -758,6 +915,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         config,
         max_frames,
         source_revision,
+        source_file_sha256,
     )
 
     output_root = Path(request.output_root).resolve()
@@ -796,7 +954,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         "checkpoint_sha256": None,
         "sample_id": request.sample.sample_id,
         "image_stem": request.sample.image_stem.as_posix(),
-        "image_shape": [max_frames or int(image.shape[0]), *[int(value) for value in image.shape[1:]]],
+        "image_shape": [max_frames or image_shape[0], *image_shape[1:]],
         "config": config.as_dict(),
         "expected_device": request.expected_device,
         "actual_device": "cpu",
@@ -842,4 +1000,5 @@ __all__ = [
     "detect_cc_candidates_streaming",
     "link_cc_flow",
     "run_cc_flow",
+    "stream_image_quantiles",
 ]
