@@ -371,7 +371,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "",
             "- sample: `44b6_0113de3b.zarr`（`(T,Z,Y,X)=(100,64,256,256)`、uint16）。",  # noqa: RUF001
             "- physical scale: `(1.625, 0.40625, 0.40625)` µm、公式 evaluator `max_distance=7.0` µm。",
-            "- GT: `data/train/44b6_0113de3b.geff`。GTは推論入力に渡さず、"
+            "- GT: `../../../data/train/44b6_0113de3b.geff`。GTは推論入力に渡さず、"
             "prediction manifestを検証した後の評価phaseだけで開いた。",
             "- cache/run/prediction receiptの`ground_truth_included`は全laneで`false`。"
             "divisionは初回raceでは無効化した。",
@@ -401,6 +401,18 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "まずconfidence calibration/NMSと、harmonic associationの組合せを優先する。"
             "motion priorは今回のreceipt上の改善根拠がない。",
             "",
+            "## 追加改善実験（blob NMS）",  # noqa: RUF001
+            "",
+            "- 仮説: `blob_lap`のphysical NMS距離を3.0 µmから3.5 µmへ変更し、"
+            "過剰nodeを減らす。その他のdetector/linker設定、sample、metricは固定した。",
+            "- receipt: `artifacts/performance_experiments/blob_lap_nms35/metrics.json`、"
+            "source_commit=`ac2ece5`、CPU、runtime `63.7277883200004` s。",
+            "- 結果: nodes `27393`、edges `25098`、Edge TP/FP/FN `48/2/2`、"
+            "Division TP/FP/FN `0/0/0`、Final Score `0.9172062183593925`。",
+            "- 差分: fixed `blob_lap`（`0.9140773262846648`）比 `+0.0031288920747277`、"  # noqa: RUF001
+            "公式ベースライン比 `+0.0334117348386422`。harmonic v1には `-0.0039138031450204`で、"
+            "単一sampleの改善候補として採用し、複数sample validation後に固定laneへ昇格する。",
+            "",
             "## 失敗・未実施候補",
             "",
             "- HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、"
@@ -418,11 +430,11 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             "",
             "```bash",
             (
-                "docker compose exec -T -w "
+            "docker compose exec -T -w "
                 "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
-                "infer --method blob_lap --image-stem data/train/44b6_0113de3b.zarr "
+                "infer --method blob_lap --image-stem ../../../data/train/44b6_0113de3b.zarr "
                 "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
             ),
             (
@@ -430,7 +442,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
                 "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
-                "infer --method cc_flow --image-stem data/train/44b6_0113de3b.zarr "
+                "infer --method cc_flow --image-stem ../../../data/train/44b6_0113de3b.zarr "
                 "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
             ),
             (
@@ -438,7 +450,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
                 "/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/"
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
-                "infer --method motion_lap --image-stem data/train/44b6_0113de3b.zarr "
+                "infer --method motion_lap --image-stem ../../../data/train/44b6_0113de3b.zarr "
                 "--cache-root artifacts/multi_method_race/cache --output-root artifacts/multi_method_race"
             ),
             (
@@ -447,7 +459,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
                 "biohub-cell-tracking-during-development "
                 "biohub uv run --no-sync python scripts/run_benchmark_race.py "
                 "evaluate --prediction artifacts/multi_method_race/methods/<method>/44b6_0113de3b.geff "
-                "--ground-truth data/train/44b6_0113de3b.geff "
+                "--ground-truth ../../../data/train/44b6_0113de3b.geff "
                 "--metrics artifacts/multi_method_race/evaluation/<method>/metrics.json"
             ),
             (
