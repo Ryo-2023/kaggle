@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import numpy as np
 import tracksdata as td
 import zarr
 
@@ -22,6 +23,36 @@ from biohub.strong_baseline.manifest import (
 )
 
 DEFAULT_METRIC_SCALE = (1.625, 0.40625, 0.40625)
+
+
+def _compact_prediction_inputs(
+    cache: DetectorCache,
+    selected_edges: np.ndarray,
+) -> tuple[np.ndarray, list[tuple[int, int, float, float]]]:
+    """Drop detector nodes that are not present in the solved graph.
+
+    The pinned upstream ILP writer serializes the solver graph, which retains
+    only nodes participating in a selected edge.  The detector cache also
+    contains isolated detections, so remap selected edge IDs before calling
+    the same upstream graph builder to preserve official GEFF semantics.
+    """
+
+    if selected_edges.shape[0] == 0:
+        return np.empty((0, 4), dtype=cache.nodes.tzyx.dtype), []
+    raw_ids = selected_edges[:, :2]
+    if not np.equal(raw_ids, np.floor(raw_ids)).all():
+        raise ValueError("selected edge node IDs must be integer-valued")
+    node_ids = raw_ids.astype(np.int64, copy=False).reshape(-1)
+    if np.any(node_ids < 0) or np.any(node_ids >= cache.nodes.length):
+        raise ValueError("selected edge node IDs must refer to detector cache nodes")
+    used_ids = np.unique(node_ids)
+    remap = {int(old): index for index, old in enumerate(used_ids.tolist())}
+    coords = cache.nodes.tzyx[used_ids].copy()
+    edge_rows = [
+        (remap[int(row[0])], remap[int(row[1])], float(row[2]), float(row[3]))
+        for row in selected_edges.tolist()
+    ]
+    return coords, edge_rows
 
 
 def _load_graph(path: Path) -> td.graph.BaseGraph:
@@ -101,14 +132,11 @@ def write_prediction(
     selected = result.selected_edges
     if selected.ndim != 2 or selected.shape[1] != 4 or not math.isfinite(float(selected.sum())):
         raise ValueError("association selected_edges must be a finite (E, 4) array")
-    edge_rows = [
-        (int(row[0]), int(row[1]), float(row[2]), float(row[3]))
-        for row in selected.tolist()
-    ]
     cache.nodes.validate()
     cache.edges.validate(cache.nodes)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    graph = predictor_module.build_graph(cache.nodes.tzyx.copy(), edge_rows)
+    coords, edge_rows = _compact_prediction_inputs(cache, selected)
+    graph = predictor_module.build_graph(coords, edge_rows)
     predictor_module.save_graph(graph, output_path)
     if not output_path.exists():
         raise RuntimeError(f"predictor_module.save_graph did not create {output_path}")

@@ -40,12 +40,12 @@ def _predictor() -> SimpleNamespace:
 
 def _cache() -> DetectorCache:
     nodes = NodeArrays(
-        node_id=np.array([0, 1], dtype=np.int64),
-        tzyx=np.array([[0, 0, 0, 0], [1, 0, 0, 0]], dtype=np.int32),
-        physical_zyx=np.zeros((2, 3), dtype=np.float32),
-        detector_peak_logit=np.ones(2, dtype=np.float32),
-        detector_peak_probability=np.full(2, 0.75, dtype=np.float32),
-        node_features=np.ones((2, 1), dtype=np.float32),
+        node_id=np.array([0, 1, 2], dtype=np.int64),
+        tzyx=np.array([[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0]], dtype=np.int32),
+        physical_zyx=np.zeros((3, 3), dtype=np.float32),
+        detector_peak_logit=np.ones(3, dtype=np.float32),
+        detector_peak_probability=np.full(3, 0.75, dtype=np.float32),
+        node_features=np.ones((3, 1), dtype=np.float32),
     )
     edges = CandidateEdgeArrays(
         source_node_id=np.array([0], dtype=np.int64),

@@ -394,3 +394,20 @@ docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-
 関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）を `codex/biohub-multi-method-race`へpush済み。
 
 NVIDIAデスクトップ移行用に `docker-compose.nvidia.yml` も追加した。通常Composeは現MacBookのCPU環境を維持し、移行先では公式CUDA wheel indexを `BIOHUB_TORCH_INDEX_URL` に指定して `gpus: all` でbuildする。Dockerfile側はCPU indexを既定にしつつ、override時だけ `uv sync --no-install-package torch` 後に指定indexのPyTorchを導入する。これによりCPU-onlyの現環境を壊さず、移行先では `--device auto` がCUDAを選べる。
+
+## 14. Detector-Fixed Association Race 実データ結果（2026-08-21追記）
+
+development sample `44b6_0113de3b` の100フレームを、公式TemporalUNet3D + SimpleNodeTransformerで一度だけ処理した。GT-free cacheは `artifacts/detector_fixed_race/full_auto/cache/44b6_0113de3b/` に保存され、cache hashは `0bc38739fa40d5dc38db99ec52a7ea5891849a6520d95ecbeed9bc126c6a62a8`、node `26,887`、candidate edge `7,240,938`、detector elapsed `4,841.270636372006 s`、requested/actual deviceは `auto/cpu` だった。
+
+同一cacheから4方式を再生し、prediction GEFF生成後にRoyerLab公式metricで評価した。prediction writerは孤立detector nodeを除外し、既存canonical baselineとGEFF semanticsを一致させた。
+
+| 手法 | prediction nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | Edge Jaccard | Adjusted Edge Jaccard | Final Score | 公式baselineとの差 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `official_ilp` | `25,994 / 23,536` | `46/2/4` | `0/0/0` | `0.8846153846153846` | `0.8837944835207503` | `0.8837944835207503` | `+0` |
+| `harmonic_v1` | `26,301 / 24,205` | `48/2/2` | `0/0/0` | `0.9230769230769231` | `0.9211200215044129` | `0.9211200215044129` | `+0.0373255379836626` |
+| `mutual_confidence` | `25,806 / 22,727` | `43/0/7` | `0/0/0` | `0.86` | `0.859829702970297` | `0.859829702970297` | `-0.0239647805504533` |
+| `motion_gated` | `25,143 / 21,799` | `42/2/8` | `0/0/0` | `0.8076923076923077` | `0.8096115765422697` | `0.8096115765422697` | `-0.0741829069784806` |
+
+4方式のcache-only association、GEFF生成、公式metricのwall timeは `116.29477067900007 s`。Gurobi licenseなしのためILPはSCIP fallbackで、official/harmonicの結果は既存canonical Strong Baseline v1とnode/edge数・metricが一致した。divisionのないsampleのためDivision Jaccardは`null`、公式summarizerはdivision termをdropした。
+
+prediction GEFFは `docs/results/detector_fixed_association_race.md` に一覧化した。validation panelの他4 sampleは画像・GT metadataを固定済みだが、CPU detector cacheと公式metricは未完了である。
