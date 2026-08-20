@@ -122,9 +122,12 @@ def characterise(geff_path: Path, n_frames_total: int | None = None) -> dict:
     track_frame_spans = np.asarray(
         [int(t[c].max() - t[c].min() + 1) for c in tracks], dtype=np.int64
     )
-    # A "gap" = a track whose frame span exceeds its node count (missing frames inside).
+    # A "gap" = a frame inside a track's [t_min, t_max] that carries no node of that
+    # track. Counting distinct frames (not nodes) keeps this correct for components
+    # that branch at a division, where two daughters share a frame.
     track_internal_gaps = np.asarray(
-        [int(span - len(c)) for span, c in zip(track_frame_spans, tracks)], dtype=np.int64
+        [int(span - np.unique(t[c]).size) for span, c in zip(track_frame_spans, tracks)],
+        dtype=np.int64,
     )
     singletons = int((track_node_counts == 1).sum())
 
@@ -204,6 +207,14 @@ def characterise(geff_path: Path, n_frames_total: int | None = None) -> dict:
             "consecutive_frame_edges": int(disp.size),
             "norm": _summary(disp),
             "per_axis_abs": {a: _summary(np.asarray(v)) for a, v in disp_um_per_axis.items()},
+            # DistanceMatching(max_distance=...) in official_metrics.evaluate defaults to
+            # 7.0 µm. GT edges whose own displacement exceeds that radius are cases where
+            # a *correct* successor sits further away than the matcher's tolerance for a
+            # node identity swap -- a direct read on how brittle node matching is here.
+            "n_edges_over_matching_radius_7um": int((disp > 7.0).sum()),
+            "frac_edges_over_half_matching_radius": (
+                float((disp > 3.5).mean()) if disp.size else None
+            ),
         },
         "extent_um": extent_um,
     }
