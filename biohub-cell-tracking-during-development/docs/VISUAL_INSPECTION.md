@@ -23,9 +23,9 @@
 | 緑 | 公式metric上の TP edge |
 | 赤 | 公式metric上の FP edge |
 | 青 | GTに存在するが回収できなかった FN edge |
-| 水色 | sparse GTのため公式metricでTP/FPのどちらにも数えない予測edge |
-| 黄 | ground-truth node |
-| 白 | prediction node |
+| 水色(線) | sparse GTのため公式metricでTP/FPのどちらにも数えない予測edge |
+| 黄(丸) | ground-truth node |
+| 水色(丸) | prediction node |
 
 未評価予測を消さずに水色で残すのは重要である。sparse ground truthでは、GTに無い予測を直ちに誤りとは判断できないため。
 
@@ -48,6 +48,24 @@ http://localhost:8765
 ```
 
 Docker Composeはこのポートを `127.0.0.1` にだけ公開する。LANへ公開しない。
+
+### ブラウザが接続できないとき
+
+`docker compose` の `ports:` はコンテナ作成時にだけ適用される。ビューア追加より前から
+`biohub-dev` が動いていた場合、コンテナにポート公開が無いためコンテナ内では `curl` が通るのに
+Mac側からは接続できない。次で現在の公開状況を確認する。
+
+```bash
+docker port biohub-dev
+```
+
+`8765/tcp -> 127.0.0.1:8765` が出なければ、コンテナを作り直す。
+
+```bash
+docker compose up -d
+```
+
+リポジトリは `..:/workspace` でバインドマウントしているため、作り直しても作業内容は失われない。
 
 ### 入力画像だけを見る
 
@@ -111,3 +129,11 @@ src/biohub/official_metrics/
 - `(T,Z,Y,X)` と `(T,1,Z,Y,X)` を扱う。
 - ブラウザUIはPython標準HTTP serverとCanvasで動き、Gradioやnapariを追加依存にしない。
 - 入力画像は左、出力overlayは右に常に並べるため、前処理や追跡の異常を数値だけでなく目視できる。
+- overlayは画像とは別canvasレイヤーへ描き、点・線の太さを**画面ピクセル基準**で決める。
+  2048px級のフレームはパネル幅へ約1/3に縮小されるため、画像ピクセル基準だと点が約1.4px、
+  線が約0.7pxとなり事実上見えなくなる。画面基準にすることで倍率が変わっても見え方が一定になる。
+- フレーム取得は `image.decode()` ではなく `load` イベントを待つ。`decode()` は文書が hidden の間
+  解決が保留されるため、バックグラウンドタブで開くと空白のまま復帰しない。
+- Playは固定間隔ではなく、前フレームを描き終えてから次へ進む。実サイズのフレームは1枚あたり
+  約1.7MB・約150msかかるため、固定間隔だと描画が積み上がり順序が壊れる。
+- スライダーを速く動かした場合、古いリクエストの応答は破棄して最後の選択だけを描く。

@@ -85,7 +85,7 @@ class ViewerState:
         if not 0 <= t < t_count:
             raise ValueError(f"t must be in [0, {t_count - 1}], got {t}")
         if not 0 <= z < z_count:
-            raise ValueError("z must be in [0, {z_count - 1}], got {z}")
+            raise ValueError(f"z must be in [0, {z_count - 1}], got {z}")
         return t, z
 
     def frame_png(self, *, t: int, z: int) -> bytes:
@@ -241,6 +241,8 @@ def _evaluate_graphs(
     scale: tuple[float, float, float],
     max_distance: float,
 ) -> tuple[list[EdgeRecord], dict[str, int | float | None]]:
+    import tracksdata as td
+
     # These files are vendored byte-for-byte from the official repository.
     from biohub.official_metrics.metrics import _evaluate_matched_graph, evaluate
 
@@ -255,11 +257,12 @@ def _evaluate_graphs(
         }
         for row in _rows(official_frame)
     ]
-    matched_frame = prediction.node_attrs(attr_keys=["node_id", "matched_node_id"])
+    matched_key = td.DEFAULT_ATTR_KEYS.MATCHED_NODE_ID
+    matched_frame = prediction.node_attrs(attr_keys=[td.DEFAULT_ATTR_KEYS.NODE_ID, matched_key])
     pred_to_gt = {
-        int(row["node_id"]): int(row["matched_node_id"])
+        int(row[td.DEFAULT_ATTR_KEYS.NODE_ID]): int(row[matched_key])
         for row in _rows(matched_frame)
-        if row["matched_node_id"] is not None and int(row["matched_node_id"]) >= 0
+        if row[matched_key] is not None and int(row[matched_key]) >= 0
     }
     edge_records = classify_edge_records(
         prediction_edges=_graph_edges(prediction),
