@@ -78,6 +78,19 @@ def main() -> int:
     p.add_argument("--n-boot", type=int, default=200_000)
     p.add_argument("--seed", type=int, default=20260821)
     p.add_argument("--deltas", type=float, nargs="+", default=[0.005, 0.01])
+    p.add_argument(
+        "--tier",
+        action="append",
+        default=[],
+        metavar="NAME=id1,id2",
+        help="Named panel tier to size, e.g. dev=44b6_0c582fdc,44b6_0db75fae",
+    )
+    p.add_argument(
+        "--n-train-movies",
+        type=int,
+        default=None,
+        help="Total movies published by the competition, for the ceiling case.",
+    )
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
 
@@ -165,7 +178,26 @@ def main() -> int:
     if args.gt_char and args.gt_char.exists():
         gt = json.loads(args.gt_char.read_text())
         panels["all_5_local_samples"] = gt["totals"]["gt_edges"]
+        by_id = {r["sample_id"]: r["gt_edges"] for r in gt["samples"]}
+        for spec in args.tier:
+            name, _, ids = spec.partition("=")
+            members = [s for s in ids.split(",") if s]
+            missing = [s for s in members if s not in by_id]
+            if missing:
+                raise SystemExit(f"tier {name!r} references unknown samples: {missing}")
+            panels[f"tier_{name}"] = sum(by_id[s] for s in members)
         per = [r["gt_edges"] for r in gt["samples"]]
+        # Ceiling case: every movie the competition publishes. Edges-per-movie is
+        # extrapolated from the 5 local samples, which are the lexicographically
+        # first 5 and therefore all from the 44b6 domain -- so this is an estimate
+        # with a known selection bias, reported as a mean/median bracket.
+        if args.n_train_movies:
+            panels[f"ALL_{args.n_train_movies}_train_movies_at_local_mean"] = int(
+                round(args.n_train_movies * float(np.mean(per)))
+            )
+            panels[f"ALL_{args.n_train_movies}_train_movies_at_local_median"] = int(
+                round(args.n_train_movies * float(np.median(per)))
+            )
         edges_per_movie = {
             "samples": {r["sample_id"]: r["gt_edges"] for r in gt["samples"]},
             "mean": float(np.mean(per)),
