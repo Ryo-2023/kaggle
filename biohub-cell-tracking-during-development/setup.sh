@@ -99,8 +99,10 @@ import tracksdata
 import zarr
 
 assert torch.__version__
-assert not torch.cuda.is_available(), "MacBook Docker environment must use CPU-only PyTorch"
 print("torch:", torch.__version__)
+print("torch.version.cuda:", torch.version.cuda)
+print("torch.cuda.is_available:", torch.cuda.is_available())
+print("torch.backends.mps.is_available:", getattr(getattr(torch.backends, "mps", None), "is_available", lambda: False)())
 print("numpy:", numpy.__version__)
 print("scipy:", scipy.__version__)
 print("zarr:", zarr.__version__)

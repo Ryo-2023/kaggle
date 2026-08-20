@@ -392,3 +392,5 @@ docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-
 ```
 
 関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）を `codex/biohub-multi-method-race`へpush済み。
+
+NVIDIAデスクトップ移行用に `docker-compose.nvidia.yml` も追加した。通常Composeは現MacBookのCPU環境を維持し、移行先では公式CUDA wheel indexを `BIOHUB_TORCH_INDEX_URL` に指定して `gpus: all` でbuildする。Dockerfile側はCPU indexを既定にしつつ、override時だけ `uv sync --no-install-package torch` 後に指定indexのPyTorchを導入する。これによりCPU-onlyの現環境を壊さず、移行先では `--device auto` がCUDAを選べる。

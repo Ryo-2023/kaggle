@@ -112,6 +112,30 @@ Kaggle CLI
 
 The local MacBook container is intentionally CPU-only. GPU training will use a separate NVIDIA-oriented environment later; the source tree does not need to change.
 
+### NVIDIA GPU environment (optional)
+
+The detector-fixed runner selects `cuda`, then Apple `mps`, then `cpu` when
+`--device auto` is used. The default MacBook Compose file remains CPU-only.
+On an NVIDIA desktop with Docker's NVIDIA runtime installed, build the same
+workspace with the optional override and the official PyTorch CUDA wheel index
+matching the installed driver:
+
+```bash
+export BIOHUB_TORCH_INDEX_URL=https://download.pytorch.org/whl/cuXXX
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml build
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml exec -T biohub python - <<'PY'
+import torch
+print(torch.__version__, torch.version.cuda, torch.cuda.is_available())
+PY
+```
+
+Replace `cuXXX` with the CUDA wheel index supported by the target machine;
+do not use a guessed index. The override passes through `gpus: all` and
+installs that wheel during image build. The existing `--device auto` commands
+then use CUDA without source changes. Graph optimization, GEFF I/O, and the
+official metric remain CPU operations where their libraries require it.
+
 ## Kaggle credentials and data
 
 Kaggle credentials are expected under the host directory:

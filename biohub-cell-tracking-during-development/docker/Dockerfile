@@ -1,5 +1,7 @@
 FROM ubuntu:24.04
 
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -57,6 +59,11 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY tests ./tests
 
-RUN uv sync
+RUN if [ "${TORCH_INDEX_URL}" = "https://download.pytorch.org/whl/cpu" ]; then \
+        uv sync; \
+    else \
+        uv sync --no-install-package torch \
+        && uv pip install --index-url "${TORCH_INDEX_URL}" "torch>=2.9.1"; \
+    fi
 
 CMD ["sleep", "infinity"]

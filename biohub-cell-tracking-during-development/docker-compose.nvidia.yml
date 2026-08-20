@@ -1,0 +1,11 @@
+services:
+  biohub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        TORCH_INDEX_URL: ${BIOHUB_TORCH_INDEX_URL:?Set BIOHUB_TORCH_INDEX_URL to the official CUDA PyTorch wheel index}
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
