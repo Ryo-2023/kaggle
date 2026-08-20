@@ -15,6 +15,9 @@ from biohub.benchmark_race.blob_lap import (
     CandidateTable,
     link_blob_lap,
 )
+from biohub.benchmark_race.blob_lap import (
+    _source_file_digest as blob_source_file_digest,
+)
 from biohub.benchmark_race.cache import build_cache_manifest
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec
 from biohub.benchmark_race.motion import (
@@ -141,6 +144,7 @@ def _write_blob_cache(
         scores=candidates.scores,
     )
     manifest["detections_sha256"] = hashlib.sha256((cache_dir / "detections.npz").read_bytes()).hexdigest()
+    manifest["source_file_sha256"] = blob_source_file_digest()
     (cache_dir / "cache_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return cache_dir
 

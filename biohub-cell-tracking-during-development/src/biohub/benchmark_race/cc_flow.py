@@ -299,6 +299,52 @@ def _normalise_image(image: np.ndarray, config: CCFlowConfig) -> np.ndarray:
     return np.where(finite, normalized, 0.0).astype(np.float32)
 
 
+def _normalise_frame(frame: np.ndarray, low: float, high: float) -> np.ndarray:
+    values = np.asarray(frame, dtype=np.float32)
+    finite = np.isfinite(values)
+    if not np.isfinite(low) or not np.isfinite(high) or high <= low:
+        return np.zeros(values.shape, dtype=np.float32)
+    normalized = np.clip((values - low) / (high - low), 0.0, 1.0)
+    return np.where(finite, normalized, 0.0).astype(np.float32)
+
+
+def _component_rows(
+    frame: np.ndarray,
+    frame_index: int,
+    config: CCFlowConfig,
+) -> list[tuple[int, float, float, float, float, float, float, int]]:
+    structure = generate_binary_structure(rank=3, connectivity=3)
+    foreground = np.isfinite(frame) & (frame >= config.foreground_threshold)
+    labeled, component_count = label(foreground, structure=structure)
+    slices = find_objects(labeled)
+    rows: list[tuple[int, float, float, float, float, float, float, int]] = []
+    for component_id in range(1, component_count + 1):
+        component_slice = slices[component_id - 1]
+        if component_slice is None:
+            continue
+        local_mask = labeled[component_slice] == component_id
+        area = int(np.count_nonzero(local_mask))
+        if area < config.min_component_voxels or area > config.max_component_voxels:
+            continue
+        starts = np.asarray([item.start for item in component_slice], dtype=np.float64)
+        local_coordinates = np.argwhere(local_mask).astype(np.float64) + starts
+        centroid = local_coordinates.mean(axis=0)
+        intensities = frame[component_slice][local_mask].astype(np.float64)
+        rows.append(
+            (
+                frame_index,
+                float(centroid[0]),
+                float(centroid[1]),
+                float(centroid[2]),
+                float(intensities.mean()),
+                float(intensities.max()),
+                float(intensities.mean()),
+                area,
+            ),
+        )
+    return rows
+
+
 def detect_cc_candidates(image: np.ndarray, config: CCFlowConfig | Mapping[str, Any]) -> CandidateTable:
     """Detect 3-D quantile-foreground connected components per frame."""
 
@@ -307,37 +353,66 @@ def detect_cc_candidates(image: np.ndarray, config: CCFlowConfig | Mapping[str, 
     if values.ndim != 4:
         raise ValueError(f"image must have shape (T, Z, Y, X), got {values.shape!r}")
     normalized = _normalise_image(values, config)
-    structure = generate_binary_structure(rank=3, connectivity=3)
     rows: list[tuple[int, float, float, float, float, float, float, int]] = []
     for frame_index in range(normalized.shape[0]):
-        frame = normalized[frame_index]
-        foreground = np.isfinite(frame) & (frame >= config.foreground_threshold)
-        labeled, component_count = label(foreground, structure=structure)
-        slices = find_objects(labeled)
-        for component_id in range(1, component_count + 1):
-            component_slice = slices[component_id - 1]
-            if component_slice is None:
-                continue
-            local_mask = labeled[component_slice] == component_id
-            area = int(np.count_nonzero(local_mask))
-            if area < config.min_component_voxels or area > config.max_component_voxels:
-                continue
-            starts = np.asarray([item.start for item in component_slice], dtype=np.float64)
-            local_coordinates = np.argwhere(local_mask).astype(np.float64) + starts
-            centroid = local_coordinates.mean(axis=0)
-            intensities = frame[component_slice][local_mask].astype(np.float64)
-            rows.append(
-                (
-                    frame_index,
-                    float(centroid[0]),
-                    float(centroid[1]),
-                    float(centroid[2]),
-                    float(intensities.mean()),
-                    float(intensities.max()),
-                    float(intensities.mean()),
-                    area,
-                ),
-            )
+        rows.extend(_component_rows(normalized[frame_index], frame_index, config))
+    rows.sort(key=lambda row: (row[0], row[1], row[2], row[3], -row[6], row[7]))
+    if not rows:
+        return CandidateTable(
+            np.empty((0, 4), dtype=np.float64),
+            np.empty((0, 3), dtype=np.float64),
+            np.empty((0,), dtype=np.int64),
+            np.empty((0,), dtype=np.float64),
+            np.empty((0,), dtype=np.float64),
+            np.empty((0,), dtype=np.float64),
+        )
+    coordinates = np.asarray([[frame, z, y, x] for frame, z, y, x, *_ in rows], dtype=np.float64)
+    physical = voxel_to_physical(coordinates[:, 1:], config.scale)
+    means = np.asarray([row[4] for row in rows], dtype=np.float64)
+    maxima = np.asarray([row[5] for row in rows], dtype=np.float64)
+    scores = np.asarray([row[6] for row in rows], dtype=np.float64)
+    areas = np.asarray([row[7] for row in rows], dtype=np.int64)
+    return CandidateTable(coordinates, physical, areas, means, maxima, scores)
+
+
+def detect_cc_candidates_streaming(
+    image: Any,
+    config: CCFlowConfig | Mapping[str, Any],
+    *,
+    quantiles: Mapping[str, float],
+    max_frames: int | None = None,
+) -> CandidateTable:
+    """Detect connected components one frame at a time from a Zarr array."""
+
+    config = config if isinstance(config, CCFlowConfig) else CCFlowConfig.from_mapping(config)
+    shape = tuple(int(value) for value in image.shape)
+    if len(shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {shape!r}")
+    frame_count = shape[0] if max_frames is None else int(max_frames)
+    if frame_count <= 0 or frame_count > shape[0]:
+        raise ValueError(f"max_frames must be in [1, {shape[0]}]")
+    low_value = quantiles.get(str(config.q_low))
+    high_value = quantiles.get(str(config.q_high))
+    if low_value is None or high_value is None:
+        if config.q_low == 0.0 and config.q_high == 1.0:
+            lows: list[float] = []
+            highs: list[float] = []
+            for frame_index in range(frame_count):
+                frame_values = np.asarray(image[frame_index], dtype=np.float32)
+                finite = frame_values[np.isfinite(frame_values)]
+                if finite.size:
+                    lows.append(float(finite.min()))
+                    highs.append(float(finite.max()))
+            low_value = min(lows, default=0.0)
+            high_value = max(highs, default=0.0)
+        else:
+            raise ValueError("sample quantiles are missing detector quantile bounds")
+    low = float(low_value)
+    high = float(high_value)
+    rows: list[tuple[int, float, float, float, float, float, float, int]] = []
+    for frame_index in range(frame_count):
+        frame = _normalise_frame(np.asarray(image[frame_index]), low, high)
+        rows.extend(_component_rows(frame, frame_index, config))
     rows.sort(key=lambda row: (row[0], row[1], row[2], row[3], -row[6], row[7]))
     if not rows:
         return CandidateTable(
@@ -541,7 +616,7 @@ def build_prediction_graph(
     return graph
 
 
-def _open_image(path: Path) -> np.ndarray:
+def _open_image(path: Path) -> Any:
     import zarr
 
     root = zarr.open(str(path), mode="r")
@@ -551,10 +626,9 @@ def _open_image(path: Path) -> np.ndarray:
         array = root["0"]
     else:
         raise ValueError(f"image Zarr is missing array '0': {path}")
-    values = np.asarray(array)
-    if values.ndim != 4:
-        raise ValueError(f"image must have shape (T, Z, Y, X), got {values.shape!r}")
-    return values
+    if len(array.shape) != 4:
+        raise ValueError(f"image must have shape (T, Z, Y, X), got {array.shape!r}")
+    return array
 
 
 def _sample_path(request: RaceRequest) -> Path:
@@ -583,11 +657,14 @@ def _source_revision() -> str:
     return "unavailable-in-container"
 
 
-def _image_digest(image: np.ndarray) -> str:
+def _image_digest(image: Any, *, max_frames: int | None = None) -> str:
     digest = hashlib.sha256()
     digest.update(str(image.dtype).encode("ascii"))
-    digest.update(repr(tuple(image.shape)).encode("ascii"))
-    digest.update(np.ascontiguousarray(image).tobytes())
+    shape = tuple(int(value) for value in image.shape)
+    frame_count = shape[0] if max_frames is None else int(max_frames)
+    digest.update(repr((frame_count, *shape[1:])).encode("ascii"))
+    for frame_index in range(frame_count):
+        digest.update(np.ascontiguousarray(np.asarray(image[frame_index])).tobytes())
     return digest.hexdigest()
 
 
@@ -602,7 +679,7 @@ def _timestamp() -> str:
 def _save_candidate_cache(
     request: RaceRequest,
     candidates: CandidateTable,
-    image: np.ndarray,
+    image: Any,
     config: CCFlowConfig,
     max_frames: int | None,
     source_revision: str,
@@ -611,7 +688,7 @@ def _save_candidate_cache(
     detector_config["max_frames"] = max_frames
     cache_manifest = build_cache_manifest(
         sample=request.sample,
-        image_digest=_image_digest(image),
+        image_digest=_image_digest(image, max_frames=max_frames),
         detector_config=detector_config,
         source_commit=source_revision,
     )
@@ -626,6 +703,8 @@ def _save_candidate_cache(
         max_intensities=candidates.max_intensities,
         scores=candidates.scores,
     )
+    detections_digest = hashlib.sha256((cache_dir / "detections.npz").read_bytes()).hexdigest()
+    cache_manifest["detections_sha256"] = detections_digest
     (cache_dir / "cache_manifest.json").write_text(json.dumps(cache_manifest, indent=2, sort_keys=True) + "\n")
     return str(cache_manifest["cache_key"]), cache_dir / "cache_manifest.json"
 
@@ -663,8 +742,12 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
     if max_frames is not None:
         if max_frames > image.shape[0]:
             raise ValueError(f"max_frames {max_frames} exceeds image frame count {image.shape[0]}")
-        image = image[:max_frames]
-    candidates = detect_cc_candidates(image, config)
+    candidates = detect_cc_candidates_streaming(
+        image,
+        config,
+        quantiles=request.sample.quantiles,
+        max_frames=max_frames,
+    )
     edges = link_cc_flow(candidates, config)
     source_revision = _source_revision()
     source_file_sha256 = _source_file_digest()
@@ -713,7 +796,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         "checkpoint_sha256": None,
         "sample_id": request.sample.sample_id,
         "image_stem": request.sample.image_stem.as_posix(),
-        "image_shape": list(image.shape),
+        "image_shape": [max_frames or int(image.shape[0]), *[int(value) for value in image.shape[1:]]],
         "config": config.as_dict(),
         "expected_device": request.expected_device,
         "actual_device": "cpu",
@@ -756,6 +839,7 @@ __all__ = [
     "PredictionArtifact",
     "build_prediction_graph",
     "detect_cc_candidates",
+    "detect_cc_candidates_streaming",
     "link_cc_flow",
     "run_cc_flow",
 ]

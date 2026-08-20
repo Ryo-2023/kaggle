@@ -549,6 +549,7 @@ def _save_candidate_cache(
     config: BlobLapConfig,
     max_frames: int | None,
     source_commit: str,
+    source_file_sha256: str,
 ) -> tuple[str, Path]:
     detector_config = config.as_dict()
     detector_config["max_frames"] = max_frames
@@ -567,6 +568,7 @@ def _save_candidate_cache(
         scores=candidates.scores,
     )
     cache_manifest["detections_sha256"] = _file_sha256(cache_dir / "detections.npz")
+    cache_manifest["source_file_sha256"] = source_file_sha256
     (cache_dir / "cache_manifest.json").write_text(json.dumps(cache_manifest, indent=2, sort_keys=True) + "\n")
     return str(cache_manifest["cache_key"]), cache_dir / "cache_manifest.json"
 
@@ -612,6 +614,7 @@ def run_blob_lap(request: RaceRequest) -> PredictionArtifact:
         config,
         max_frames,
         source_commit,
+        source_file_sha256,
     )
 
     output_root = Path(request.output_root).resolve()

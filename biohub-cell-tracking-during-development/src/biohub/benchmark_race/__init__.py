@@ -13,6 +13,7 @@ from .cache import CACHE_SCHEMA_VERSION, build_cache_manifest
 from .cc_flow import (
     CCFlowConfig,
     detect_cc_candidates,
+    detect_cc_candidates_streaming,
     link_cc_flow,
     run_cc_flow,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "build_cache_manifest",
     "detect_blob_candidates",
     "detect_cc_candidates",
+    "detect_cc_candidates_streaming",
     "ensure_blob_cache",
     "estimate_accelerations",
     "estimate_velocities",

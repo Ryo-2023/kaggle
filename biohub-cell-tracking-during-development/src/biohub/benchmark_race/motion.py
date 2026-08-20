@@ -22,10 +22,20 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from biohub.benchmark_race.blob_lap import (
+    BlobLapConfig,
     CandidateTable,
     EdgeTable,
     PredictionArtifact,
     voxel_to_physical,
+)
+from biohub.benchmark_race.blob_lap import (
+    _image_digest as _blob_image_digest,
+)
+from biohub.benchmark_race.blob_lap import (
+    _open_image as _blob_open_image,
+)
+from biohub.benchmark_race.blob_lap import (
+    _source_file_digest as _blob_source_file_digest,
 )
 from biohub.benchmark_race.cache import build_cache_manifest
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec, _contains_ground_truth
@@ -473,6 +483,22 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _sample_image_path(request: RaceRequest) -> Path:
+    path = Path(request.sample.image_stem)
+    return path if path.suffix.casefold() == ".zarr" else path.with_suffix(".zarr")
+
+
+def _current_blob_provenance(request: RaceRequest, max_frames: int | None) -> tuple[str | None, str]:
+    """Return current image/source digests when the image is locally available."""
+
+    source_digest = _blob_source_file_digest()
+    image_path = _sample_image_path(request)
+    if not image_path.exists():
+        return None, source_digest
+    image = _blob_open_image(image_path)
+    return _blob_image_digest(image, max_frames=max_frames), source_digest
+
+
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -584,6 +610,8 @@ def _validate_cache_for_request(
     request: RaceRequest,
     *,
     detections_digest: str,
+    image_digest: str | None,
+    source_file_sha256: str,
 ) -> str:
     if manifest_path is None:
         return "in_memory"
@@ -598,12 +626,20 @@ def _validate_cache_for_request(
         raise ValueError("blob candidate cache shape disagrees with request sample")
     if manifest.get("quantiles") != dict(request.sample.quantiles):
         raise ValueError("blob candidate cache quantiles disagree with request sample")
+    if image_digest is not None and manifest.get("image_digest") != image_digest:
+        raise ValueError("blob candidate cache image digest disagrees with current image")
     scale = manifest.get("scale")
     if not isinstance(scale, Sequence) or len(scale) != 3 or not np.allclose(scale, request.sample.scale):
         raise ValueError("blob candidate cache scale disagrees with request sample")
     detector_config = manifest.get("detector_config")
     if not isinstance(detector_config, Mapping):
         raise ValueError("blob candidate cache manifest must contain detector_config")
+    expected_blob_config = BlobLapConfig(scale=request.sample.scale).as_dict()
+    for key, expected_value in expected_blob_config.items():
+        if key == "division_enabled":
+            continue
+        if detector_config.get(key) != expected_value:
+            raise ValueError(f"blob candidate cache detector config differs at {key}")
     requested_max_frames = request.config.get("max_frames")
     cached_max_frames = detector_config.get("max_frames")
     if requested_max_frames is None:
@@ -646,6 +682,9 @@ def _validate_cache_for_request(
         raise ValueError("blob candidate cache manifest must contain cache_key")
     if cache_key != expected_manifest["cache_key"]:
         raise ValueError("blob candidate cache cache_key does not match manifest contents")
+    recorded_source_file = manifest.get("source_file_sha256")
+    if not isinstance(recorded_source_file, str) or recorded_source_file != source_file_sha256:
+        raise ValueError("blob candidate cache source file digest disagrees with current detector")
     expected_detections_digest = manifest.get("detections_sha256")
     if not isinstance(expected_detections_digest, str) or expected_detections_digest != detections_digest:
         raise ValueError("blob candidate cache detections_sha256 is missing or does not match detections")
@@ -670,6 +709,8 @@ def _find_existing_blob_cache(request: RaceRequest) -> Path | None:
     if not root.exists():
         return None
     requested_max_frames = request.config.get("max_frames")
+    image_digest, source_file_sha256 = _current_blob_provenance(request, requested_max_frames)
+    expected_blob_config = BlobLapConfig(scale=request.sample.scale).as_dict()
     for manifest_path in sorted(root.rglob("cache_manifest.json")):
         try:
             payload = json.loads(manifest_path.read_text())
@@ -682,8 +723,18 @@ def _find_existing_blob_cache(request: RaceRequest) -> Path | None:
         shape = payload.get("shape")
         if not isinstance(shape, Sequence) or list(shape) != list(request.sample.shape):
             continue
+        if image_digest is not None and payload.get("image_digest") != image_digest:
+            continue
+        if payload.get("source_file_sha256") != source_file_sha256:
+            continue
         detector_config = payload.get("detector_config")
         if not isinstance(detector_config, Mapping) or "peak_threshold" not in detector_config:
+            continue
+        if any(
+            detector_config.get(key) != value
+            for key, value in expected_blob_config.items()
+            if key != "division_enabled"
+        ):
             continue
         cached_max_frames = detector_config.get("max_frames")
         if requested_max_frames is None and cached_max_frames is not None:
@@ -761,12 +812,15 @@ def run_motion_lap(
     if manifest_path is None:  # pragma: no cover - persisted cache is required above
         raise RuntimeError("motion_lap requires a persisted candidate cache manifest")
     detections_digest = _file_sha256(manifest_path.parent / "detections.npz")
+    image_digest, source_file_sha256 = _current_blob_provenance(request, max_frames)
     cache_key = _validate_cache_for_request(
         candidates,
         manifest_path,
         manifest,
         request,
         detections_digest=detections_digest,
+        image_digest=image_digest,
+        source_file_sha256=source_file_sha256,
     )
     candidates = _subset_candidates(candidates, max_frames)
     edges = link_motion(candidates, None, config)
