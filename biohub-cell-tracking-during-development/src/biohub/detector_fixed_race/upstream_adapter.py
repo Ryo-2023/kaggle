@@ -25,6 +25,7 @@ import torch
 from biohub.benchmark_race.contracts import SampleSpec, _contains_ground_truth, _normalise_json_value
 from biohub.detector_fixed_race.cache import build_detector_cache_manifest, write_detector_cache
 from biohub.detector_fixed_race.schema import CacheReceipt, CandidateEdgeArrays, NodeArrays
+from biohub.device import resolve_torch_device
 
 PINNED_UPSTREAM_COMMIT = "075fc5f5a52d11077f9dc2b074644618f26939e2"
 UPSTREAM_REPOSITORY = "https://github.com/royerlab/kaggle-cell-tracking-competition.git"
@@ -204,7 +205,7 @@ def _build_node_arrays(
     *,
     scale: tuple[float, float, float],
     downsample: tuple[int, ...],
-) -> tuple[NodeArrays, dict[tuple[int, int, int, int], int]]:
+) -> tuple[NodeArrays, dict[tuple[int, int, int, int], int], int]:
     if not state.nodes_by_t:
         raise ValueError("detector produced no node frames")
     if len(downsample) != 3:
@@ -233,6 +234,7 @@ def _build_node_arrays(
 
     node_features: np.ndarray | None = None
     feature_seen = np.zeros((tzyx.shape[0],), dtype=bool)
+    feature_conflict_observation_count = 0
     for pair in state.pairs:
         if pair.source_t is None:
             raise ValueError("edge pair frame assignment was not resolved")
@@ -247,8 +249,12 @@ def _build_node_arrays(
             if pair.target_features.shape[1] != channels:
                 raise ValueError("source and target node feature widths differ")
             node_features = np.full((tzyx.shape[0], channels), np.nan, dtype=np.float32)
-        _assign_features(node_features, feature_seen, source_ids, pair.source_features)
-        _assign_features(node_features, feature_seen, target_ids, pair.target_features)
+        feature_conflict_observation_count += _assign_features(
+            node_features, feature_seen, source_ids, pair.source_features
+        )
+        feature_conflict_observation_count += _assign_features(
+            node_features, feature_seen, target_ids, pair.target_features
+        )
     if node_features is None or not np.all(feature_seen):
         missing = np.flatnonzero(~feature_seen).tolist()
         raise ValueError(f"node feature capture is incomplete; missing node IDs: {missing[:8]}")
@@ -264,7 +270,7 @@ def _build_node_arrays(
         node_features=node_features.astype(np.float32),
     )
     nodes.validate()
-    return nodes, key_to_id
+    return nodes, key_to_id, feature_conflict_observation_count
 
 
 def _lookup_node_ids(
@@ -290,17 +296,21 @@ def _assign_features(
     seen: np.ndarray,
     node_ids: np.ndarray,
     features: np.ndarray,
-) -> None:
+) -> int:
     values = np.asarray(features, dtype=np.float32)
     if values.ndim != 2 or values.shape[0] != node_ids.shape[0]:
         raise ValueError("captured node feature rows do not match coordinates")
     if not np.isfinite(values).all():
         raise ValueError("captured node features must be finite")
+    conflict_count = 0
     for node_id, row in zip(node_ids.tolist(), values, strict=True):
-        if seen[node_id] and not np.allclose(target[node_id], row, rtol=1e-5, atol=1e-5):
-            raise ValueError(f"node feature changed across windows for node {node_id}")
+        if seen[node_id]:
+            if not np.allclose(target[node_id], row, rtol=1e-5, atol=1e-5):
+                conflict_count += 1
+            continue
         target[node_id] = row
         seen[node_id] = True
+    return conflict_count
 
 
 def _resolve_pair_times(state: _CaptureState, frame_count: int) -> None:
@@ -417,7 +427,7 @@ def materialize_detector_cache(
     output_root: Path,
     sample: SampleSpec,
     config: CaptureConfig,
-    expected_device: str,
+    expected_device: str | torch.device,
     max_frames: int | None = None,
 ) -> CacheReceipt:
     """Run the pinned detector once and publish a GT-free cache."""
@@ -434,9 +444,7 @@ def materialize_detector_cache(
         raise FileNotFoundError(f"checkpoint is missing: {checkpoint}")
     if max_frames is not None and (isinstance(max_frames, bool) or max_frames < 1):
         raise ValueError("max_frames must be positive when supplied")
-    device = torch.device(expected_device)
-    if device.type == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA was requested but torch.cuda.is_available() is false")
+    device = resolve_torch_device(expected_device)
 
     image_sha256 = _sha256_path(image_path)
     checkpoint_sha256 = _sha256_file(checkpoint)
@@ -550,7 +558,9 @@ def materialize_detector_cache(
         state.reverse_edge_calls += 1
         pair.reverse_logits = _without_batch(reverse_native, name="reverse_logits").T.astype(np.float32)
 
-    nodes, key_to_id = _build_node_arrays(state, scale=sample.scale, downsample=downsample)
+    nodes, key_to_id, feature_conflict_observation_count = _build_node_arrays(
+        state, scale=sample.scale, downsample=downsample
+    )
     edges = _build_edge_arrays(state, nodes, key_to_id, edge_activation=config.edge_activation)
     provenance = {
         "detector_id": "TemporalUNet3D+SimpleNodeTransformer",
@@ -558,11 +568,14 @@ def materialize_detector_cache(
         "source_commit": upstream_commit or PINNED_UPSTREAM_COMMIT,
         "checkpoint_uri": checkpoint.name,
         "checkpoint_sha256": checkpoint_sha256,
+        "requested_device": str(expected_device),
         "adapter_source_sha256": _source_hash(),
         "device": str(device),
         "detector_call_count": state.detector_calls,
         "forward_edge_call_count": state.forward_edge_calls,
         "reverse_edge_call_count": state.reverse_edge_calls,
+        "node_feature_policy": "first_observation_per_node",
+        "node_feature_conflict_observation_count": feature_conflict_observation_count,
         "elapsed_seconds": time.monotonic() - started,
     }
     detector_config = _normalise_json_value(

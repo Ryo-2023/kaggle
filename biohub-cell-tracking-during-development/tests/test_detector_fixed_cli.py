@@ -51,3 +51,23 @@ def test_freeze_panel_parser_has_no_metric_option() -> None:
     )
     assert args.command == "freeze-panel"
     assert not hasattr(args, "score")
+
+
+def test_materialize_parser_defaults_to_accelerator_auto_selection() -> None:
+    cli = _load_cli()
+    args = cli._build_parser().parse_args(
+        [
+            "materialize",
+            "--sample",
+            "sample",
+            "--train-root",
+            "train",
+            "--upstream-root",
+            "upstream",
+            "--checkpoint",
+            "checkpoint.pth",
+            "--output",
+            "out",
+        ]
+    )
+    assert args.device == "auto"

@@ -114,7 +114,11 @@ def _build_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--upstream-root", type=Path, required=True)
     materialize.add_argument("--checkpoint", type=Path, required=True)
     materialize.add_argument("--output", type=Path, required=True)
-    materialize.add_argument("--device", default="cpu")
+    materialize.add_argument(
+        "--device",
+        default="auto",
+        help="torch device: auto (CUDA -> MPS -> CPU), cuda, mps, or cpu",
+    )
     materialize.add_argument("--max-frames", type=int)
 
     associate = subparsers.add_parser("associate", help="Replay association methods from an existing detector cache")

@@ -9,7 +9,11 @@ import torch
 
 from biohub.benchmark_race.contracts import SampleSpec
 from biohub.detector_fixed_race.cache import load_detector_cache
-from biohub.detector_fixed_race.upstream_adapter import CaptureConfig, materialize_detector_cache
+from biohub.detector_fixed_race.upstream_adapter import (
+    CaptureConfig,
+    _assign_features,
+    materialize_detector_cache,
+)
 
 
 @pytest.fixture
@@ -149,3 +153,22 @@ def test_materializer_calls_predict_video_once_and_writes_forward_reverse_logits
     assert cache.nodes.length == 4
     assert cache.manifest["ground_truth_included"] is False
     assert cache.manifest["provenance"]["reverse_edge_call_count"] == 1
+
+
+def test_assign_features_keeps_first_contextual_observation_and_counts_conflict() -> None:
+    target = np.full((1, 2), np.nan, dtype=np.float32)
+    seen = np.zeros((1,), dtype=bool)
+
+    assert _assign_features(
+        target,
+        seen,
+        np.array([0], dtype=np.int64),
+        np.array([[1.0, 2.0]], dtype=np.float32),
+    ) == 0
+    assert _assign_features(
+        target,
+        seen,
+        np.array([0], dtype=np.int64),
+        np.array([[1.01, 2.0]], dtype=np.float32),
+    ) == 1
+    np.testing.assert_array_equal(target, np.array([[1.0, 2.0]], dtype=np.float32))
