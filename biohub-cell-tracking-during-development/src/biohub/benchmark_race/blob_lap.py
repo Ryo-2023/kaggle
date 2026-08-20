@@ -471,6 +471,16 @@ def _source_file_digest() -> str:
     return digest.hexdigest()
 
 
+def _file_sha256(path: Path) -> str:
+    """Return the digest of a persisted cache payload."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -508,6 +518,7 @@ def _save_candidate_cache(
         physical_coordinates=candidates.physical_coordinates,
         scores=candidates.scores,
     )
+    cache_manifest["detections_sha256"] = _file_sha256(cache_dir / "detections.npz")
     (cache_dir / "cache_manifest.json").write_text(json.dumps(cache_manifest, indent=2, sort_keys=True) + "\n")
     return str(cache_manifest["cache_key"]), cache_dir / "cache_manifest.json"
 

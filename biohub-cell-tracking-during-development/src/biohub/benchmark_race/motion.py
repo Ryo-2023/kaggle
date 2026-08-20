@@ -27,7 +27,8 @@ from biohub.benchmark_race.blob_lap import (
     PredictionArtifact,
     voxel_to_physical,
 )
-from biohub.benchmark_race.contracts import RaceRequest, _contains_ground_truth
+from biohub.benchmark_race.cache import build_cache_manifest
+from biohub.benchmark_race.contracts import RaceRequest, SampleSpec, _contains_ground_truth
 from biohub.strong_baseline.manifest import prediction_directory_manifest, write_prediction_manifest
 
 DEFAULT_MAX_LINK_DISTANCE_UM = 7.0
@@ -464,6 +465,14 @@ def _source_file_digest() -> str:
     return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -503,11 +512,31 @@ def _candidate_table_from_npz(path: Path) -> CandidateTable:
         )
 
 
+def _candidate_table_digest(candidates: CandidateTable) -> str:
+    """Digest semantic candidate arrays in a stable order."""
+
+    digest = hashlib.sha256()
+    for name, values in (
+        ("coordinates", candidates.coordinates),
+        ("physical_coordinates", candidates.physical_coordinates),
+        ("scores", candidates.scores),
+    ):
+        array = np.ascontiguousarray(values)
+        digest.update(name.encode("ascii"))
+        digest.update(str(array.dtype).encode("ascii"))
+        digest.update(repr(tuple(array.shape)).encode("ascii"))
+        digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
 def _resolve_cache_paths(
     blob_cache: str | Path | PredictionArtifact,
 ) -> tuple[CandidateTable | None, Path | None, dict[str, Any]]:
     if isinstance(blob_cache, CandidateTable):
-        return blob_cache, None, {}
+        raise ValueError(
+            "run_motion_lap requires a persisted blob candidate cache; "
+            "use link_motion for in-memory fixtures",
+        )
     if isinstance(blob_cache, PredictionArtifact):
         manifest_path = Path(blob_cache.cache_manifest_path)
         detections_path = manifest_path.parent / "detections.npz"
@@ -553,6 +582,8 @@ def _validate_cache_for_request(
     manifest_path: Path | None,
     manifest: Mapping[str, Any],
     request: RaceRequest,
+    *,
+    detections_digest: str,
 ) -> str:
     if manifest_path is None:
         return "in_memory"
@@ -563,11 +594,47 @@ def _validate_cache_for_request(
             f"got {image_stem!r}, expected {request.sample.image_stem.as_posix()!r}",
         )
     shape = manifest.get("shape")
-    if not isinstance(shape, Sequence) or len(shape) != 4 or list(shape[1:]) != list(request.sample.shape[1:]):
+    if not isinstance(shape, Sequence) or len(shape) != 4 or list(shape) != list(request.sample.shape):
         raise ValueError("blob candidate cache shape disagrees with request sample")
+    if manifest.get("quantiles") != dict(request.sample.quantiles):
+        raise ValueError("blob candidate cache quantiles disagree with request sample")
     scale = manifest.get("scale")
     if not isinstance(scale, Sequence) or len(scale) != 3 or not np.allclose(scale, request.sample.scale):
         raise ValueError("blob candidate cache scale disagrees with request sample")
+    detector_config = manifest.get("detector_config")
+    if not isinstance(detector_config, Mapping):
+        raise ValueError("blob candidate cache manifest must contain detector_config")
+    requested_max_frames = request.config.get("max_frames")
+    cached_max_frames = detector_config.get("max_frames")
+    if requested_max_frames is None:
+        if cached_max_frames is not None:
+            raise ValueError(
+                "blob candidate cache max_frames disagrees with full request: "
+                f"got {cached_max_frames!r}, expected None",
+            )
+    elif cached_max_frames is None or int(cached_max_frames) != int(requested_max_frames):
+        raise ValueError(
+            "blob candidate cache max_frames disagrees with request: "
+            f"got {cached_max_frames!r}, expected {requested_max_frames!r}",
+        )
+    try:
+        manifest_sample = SampleSpec(
+            sample_id=str(manifest["sample_id"]),
+            image_stem=str(manifest["image_stem"]),
+            shape=tuple(int(value) for value in manifest["shape"]),
+            scale=tuple(float(value) for value in manifest["scale"]),
+            quantiles=manifest["quantiles"],
+        )
+        expected_manifest = build_cache_manifest(
+            sample=manifest_sample,
+            image_digest=str(manifest["image_digest"]),
+            detector_config=detector_config,
+            source_commit=str(manifest["source_commit"]),
+            checkpoint_sha256=manifest.get("checkpoint_sha256"),
+            schema_version=str(manifest["schema_version"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("blob candidate cache manifest is not a valid cache contract") from exc
     if len(candidates):
         if float(np.max(candidates.coordinates[:, 0])) >= request.sample.shape[0]:
             raise ValueError("blob candidate cache contains a frame outside the request sample")
@@ -577,6 +644,11 @@ def _validate_cache_for_request(
     cache_key = manifest.get("cache_key")
     if not isinstance(cache_key, str) or not cache_key:
         raise ValueError("blob candidate cache manifest must contain cache_key")
+    if cache_key != expected_manifest["cache_key"]:
+        raise ValueError("blob candidate cache cache_key does not match manifest contents")
+    expected_detections_digest = manifest.get("detections_sha256")
+    if not isinstance(expected_detections_digest, str) or expected_detections_digest != detections_digest:
+        raise ValueError("blob candidate cache detections_sha256 is missing or does not match detections")
     return cache_key
 
 
@@ -608,16 +680,18 @@ def _find_existing_blob_cache(request: RaceRequest) -> Path | None:
         if payload.get("image_stem") != request.sample.image_stem.as_posix():
             continue
         shape = payload.get("shape")
-        if not isinstance(shape, Sequence) or list(shape[1:]) != list(request.sample.shape[1:]):
+        if not isinstance(shape, Sequence) or list(shape) != list(request.sample.shape):
             continue
         detector_config = payload.get("detector_config")
         if not isinstance(detector_config, Mapping) or "peak_threshold" not in detector_config:
             continue
         cached_max_frames = detector_config.get("max_frames")
-        if requested_max_frames is not None and cached_max_frames not in (None, requested_max_frames):
+        if requested_max_frames is None and cached_max_frames is not None:
+            continue
+        if requested_max_frames is not None and cached_max_frames != requested_max_frames:
             continue
         detections = manifest_path.parent / "detections.npz"
-        if detections.exists():
+        if detections.exists() and payload.get("detections_sha256") == _file_sha256(detections):
             return manifest_path
     return None
 
@@ -684,7 +758,16 @@ def run_motion_lap(
     candidates, manifest_path, manifest = _resolve_cache_paths(blob_cache)
     if candidates is None:  # pragma: no cover - _resolve_cache_paths always returns a table
         raise RuntimeError("blob candidate cache did not produce candidate rows")
-    cache_key = _validate_cache_for_request(candidates, manifest_path, manifest, request)
+    if manifest_path is None:  # pragma: no cover - persisted cache is required above
+        raise RuntimeError("motion_lap requires a persisted candidate cache manifest")
+    detections_digest = _file_sha256(manifest_path.parent / "detections.npz")
+    cache_key = _validate_cache_for_request(
+        candidates,
+        manifest_path,
+        manifest,
+        request,
+        detections_digest=detections_digest,
+    )
     candidates = _subset_candidates(candidates, max_frames)
     edges = link_motion(candidates, None, config)
     source_revision = _source_revision()

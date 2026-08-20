@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -18,6 +19,7 @@ from biohub.benchmark_race.cache import build_cache_manifest
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec
 from biohub.benchmark_race.motion import (
     MotionLapConfig,
+    _find_existing_blob_cache,
     estimate_velocities,
     link_motion,
     motion_cost,
@@ -115,8 +117,15 @@ def test_motion_prior_changes_crossing_choice_relative_to_blob_lap() -> None:
     assert [pair for pair in motion_edges.pairs.tolist() if pair[0] in (2, 3)] == [[2, 4], [3, 5]]
 
 
-def _write_blob_cache(tmp_path: Path, candidates: CandidateTable, sample: SampleSpec) -> Path:
+def _write_blob_cache(
+    tmp_path: Path,
+    candidates: CandidateTable,
+    sample: SampleSpec,
+    *,
+    max_frames: int | None = None,
+) -> Path:
     detector_config = BlobLapConfig(scale=sample.scale).as_dict()
+    detector_config["max_frames"] = max_frames
     manifest = build_cache_manifest(
         sample=sample,
         image_digest="synthetic-image-digest",
@@ -131,8 +140,140 @@ def _write_blob_cache(tmp_path: Path, candidates: CandidateTable, sample: Sample
         physical_coordinates=candidates.physical_coordinates,
         scores=candidates.scores,
     )
+    manifest["detections_sha256"] = hashlib.sha256((cache_dir / "detections.npz").read_bytes()).hexdigest()
     (cache_dir / "cache_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return cache_dir
+
+
+def test_full_request_does_not_reuse_bounded_blob_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    candidates = _crossing_candidates()
+    sample = SampleSpec(
+        sample_id="synthetic",
+        image_stem="synthetic.zarr",
+        shape=(3, 1, 1, 11),
+        scale=(1.0, 1.0, 1.0),
+        quantiles={"0.001": 0.0, "0.999": 1.0},
+    )
+    cache_dir = _write_blob_cache(tmp_path, candidates, sample, max_frames=2)
+    request = RaceRequest(
+        sample=sample,
+        cache_root=Path("cache"),
+        output_root=Path("out"),
+        expected_device="cpu",
+    )
+
+    assert _find_existing_blob_cache(request) is None
+    assert cache_dir.exists()
+
+
+def test_explicit_blob_cache_max_frames_must_match_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    candidates = _crossing_candidates()
+    sample = SampleSpec(
+        sample_id="synthetic",
+        image_stem="synthetic.zarr",
+        shape=(3, 1, 1, 11),
+        scale=(1.0, 1.0, 1.0),
+        quantiles={"0.001": 0.0, "0.999": 1.0},
+    )
+    cache_dir = _write_blob_cache(tmp_path, candidates, sample, max_frames=2)
+    request = RaceRequest(
+        sample=sample,
+        cache_root=Path("cache"),
+        output_root=Path("out"),
+        expected_device="cpu",
+        config={"max_frames": 3},
+    )
+
+    with pytest.raises(ValueError, match="max_frames"):
+        run_motion_lap(request, cache_dir)
+
+
+def test_motion_run_rejects_unpersisted_candidate_table_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    request = RaceRequest(
+        sample=SampleSpec(
+            sample_id="synthetic",
+            image_stem="synthetic.zarr",
+            shape=(3, 1, 1, 11),
+            scale=(1.0, 1.0, 1.0),
+            quantiles={"0.001": 0.0, "0.999": 1.0},
+        ),
+        cache_root=Path("cache"),
+        output_root=Path("out"),
+        expected_device="cpu",
+    )
+
+    with pytest.raises(ValueError, match="persisted"):
+        run_motion_lap(request, _crossing_candidates())
+
+
+def test_motion_cache_rejects_inconsistent_cache_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    candidates = _crossing_candidates()
+    sample = SampleSpec(
+        sample_id="synthetic",
+        image_stem="synthetic.zarr",
+        shape=(3, 1, 1, 11),
+        scale=(1.0, 1.0, 1.0),
+        quantiles={"0.001": 0.0, "0.999": 1.0},
+    )
+    cache_dir = _write_blob_cache(tmp_path, candidates, sample)
+    manifest_path = cache_dir / "cache_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["cache_key"] = "0" * 64
+    manifest_path.write_text(json.dumps(manifest))
+    request = RaceRequest(
+        sample=sample,
+        cache_root=Path("cache"),
+        output_root=Path("out"),
+        expected_device="cpu",
+    )
+
+    with pytest.raises(ValueError, match="cache_key"):
+        run_motion_lap(request, cache_dir)
+
+
+def test_motion_cache_rejects_inconsistent_detections_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    candidates = _crossing_candidates()
+    sample = SampleSpec(
+        sample_id="synthetic",
+        image_stem="synthetic.zarr",
+        shape=(3, 1, 1, 11),
+        scale=(1.0, 1.0, 1.0),
+        quantiles={"0.001": 0.0, "0.999": 1.0},
+    )
+    cache_dir = _write_blob_cache(tmp_path, candidates, sample)
+    manifest_path = cache_dir / "cache_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["detections_sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(manifest))
+    request = RaceRequest(
+        sample=sample,
+        cache_root=Path("cache"),
+        output_root=Path("out"),
+        expected_device="cpu",
+    )
+
+    with pytest.raises(ValueError, match="detections"):
+        run_motion_lap(request, cache_dir)
 
 
 def test_motion_run_reloads_geff_and_writes_method_specific_gt_free_receipt(
