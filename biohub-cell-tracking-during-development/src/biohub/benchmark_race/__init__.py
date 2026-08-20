@@ -17,6 +17,15 @@ from .cc_flow import (
     run_cc_flow,
 )
 from .contracts import MethodSpec, RaceRequest, SampleSpec
+from .motion import (
+    MotionLapConfig,
+    ensure_blob_cache,
+    estimate_accelerations,
+    estimate_velocities,
+    link_motion,
+    motion_cost,
+    run_motion_lap,
+)
 
 __all__ = [
     "CACHE_SCHEMA_VERSION",
@@ -25,14 +34,21 @@ __all__ = [
     "CandidateTable",
     "EdgeTable",
     "MethodSpec",
+    "MotionLapConfig",
     "PredictionArtifact",
     "RaceRequest",
     "SampleSpec",
     "build_cache_manifest",
     "detect_blob_candidates",
     "detect_cc_candidates",
+    "ensure_blob_cache",
+    "estimate_accelerations",
+    "estimate_velocities",
     "link_blob_lap",
     "link_cc_flow",
+    "link_motion",
+    "motion_cost",
     "run_blob_lap",
     "run_cc_flow",
+    "run_motion_lap",
 ]

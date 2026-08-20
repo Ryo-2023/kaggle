@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Narrow image-only entrypoint for the benchmark-race classical lanes.
 
-The script exposes bounded ``smoke`` and ``infer`` commands for ``blob_lap``
-and ``cc_flow``.  Neither command accepts a ground-truth path or opens a GEFF
-input.
+The script exposes bounded ``smoke`` and ``infer`` commands for ``blob_lap``,
+``cc_flow``, and ``motion_lap``.  Neither command accepts a ground-truth path
+or opens a GEFF input.  ``motion_lap`` consumes a fixed ``blob_lap`` candidate
+cache; when one is not supplied, the existing blob adapter creates it once.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ if str(SRC_ROOT) not in sys.path:
 from biohub.benchmark_race.blob_lap import run_blob_lap  # noqa: E402
 from biohub.benchmark_race.cc_flow import run_cc_flow  # noqa: E402
 from biohub.benchmark_race.contracts import RaceRequest, SampleSpec  # noqa: E402
+from biohub.benchmark_race.motion import ensure_blob_cache, run_motion_lap  # noqa: E402
 
 DEFAULT_SCALE = (1.625, 0.40625, 0.40625)
 
@@ -75,7 +77,7 @@ def _build_request(args: argparse.Namespace, *, max_frames: int | None) -> RaceR
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--method",
-        choices=("blob_lap", "cc_flow"),
+        choices=("blob_lap", "cc_flow", "motion_lap"),
         default="blob_lap",
         help="Image-only detector/linker lane (default: blob_lap)",
     )
@@ -83,6 +85,11 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--cache-root", type=Path, default=Path("artifacts/multi_method_race/cache"))
     parser.add_argument("--output-root", type=Path, default=Path("artifacts/multi_method_race"))
     parser.add_argument("--expected-device", default="cpu", choices=("cpu",))
+    parser.add_argument(
+        "--blob-cache",
+        type=Path,
+        help="Fixed blob_lap candidate cache directory/manifest for motion_lap",
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -91,7 +98,7 @@ def _build_parser() -> argparse.ArgumentParser:
     smoke = subparsers.add_parser("smoke", help="Run a bounded two-frame image-only smoke")
     _add_common_arguments(smoke)
     smoke.add_argument("--max-frames", type=int, default=2)
-    infer = subparsers.add_parser("infer", help="Run image-only blob_lap inference")
+    infer = subparsers.add_parser("infer", help="Run image-only benchmark-race inference")
     _add_common_arguments(infer)
     infer.add_argument("--max-frames", type=int)
     return parser
@@ -101,8 +108,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     max_frames = args.max_frames
     request = _build_request(args, max_frames=max_frames)
-    runners = {"blob_lap": run_blob_lap, "cc_flow": run_cc_flow}
-    artifact = runners[args.method](request)
+    if args.method == "motion_lap":
+        blob_cache = args.blob_cache if args.blob_cache is not None else ensure_blob_cache(request)
+        artifact = run_motion_lap(request, blob_cache)
+    else:
+        runners = {"blob_lap": run_blob_lap, "cc_flow": run_cc_flow}
+        artifact = runners[args.method](request)
     print(
         json.dumps(
             {
