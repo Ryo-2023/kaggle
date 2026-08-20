@@ -112,6 +112,33 @@ def test_cc_flow_links_all_frames_with_global_min_cost_flow_deterministically() 
     np.testing.assert_allclose(edges.distances_um, repeat.distances_um)
 
 
+def test_cc_flow_global_birth_death_can_reject_edge_that_frame_local_lap_would_take() -> None:
+    candidates = CandidateTable(
+        coordinates=np.asarray([[0.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 3.0]]),
+        physical_coordinates=np.asarray([[1.0, 1.0, 1.0], [1.0, 1.0, 3.0]]),
+        areas=np.asarray([4, 4]),
+        mean_intensities=np.asarray([0.8, 0.8]),
+        max_intensities=np.asarray([1.0, 1.0]),
+        scores=np.asarray([0.8, 0.8]),
+    )
+    config = _config(scale=(1.0, 1.0, 1.0), link_cost_per_um=3.0, gap_cost_um=4.0)
+
+    edges = link_cc_flow(candidates, config)
+
+    # A frame-local distance-gated LAP would accept this pair (distance 2 <=
+    # max_link_distance_um 3).  The global flow chooses two birth/death paths
+    # instead because 2 * 3.0 > the combined gap cost of 4.0.
+    local_lap_pairs = [
+        [source_id, target_id]
+        for source_id in range(1)
+        for target_id in range(1, 2)
+        if np.linalg.norm(candidates.physical_coordinates[target_id] - candidates.physical_coordinates[source_id])
+        <= config.max_link_distance_um
+    ]
+    assert local_lap_pairs == [[0, 1]]
+    assert edges.pairs.tolist() == []
+
+
 def test_cc_flow_writes_and_reloads_geff_with_features_and_no_gt_receipt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -139,7 +166,7 @@ def test_cc_flow_writes_and_reloads_geff_with_features_and_no_gt_receipt(
             "min_component_voxels": 2,
             "max_component_voxels": 20,
             "max_link_distance_um": 3.0,
-            "link_cost_per_um": 1.0,
+            "link_cost_per_um": 2.5,
             "gap_cost_um": 5.0,
         },
     )
@@ -151,6 +178,9 @@ def test_cc_flow_writes_and_reloads_geff_with_features_and_no_gt_receipt(
     graph = loaded[0] if isinstance(loaded, tuple) else loaded
     assert graph.num_nodes() == 4
     assert graph.num_edges() == 2
+    edge_rows = graph.edge_attrs(attr_keys=["distance_um", "link_cost"]).to_dicts()
+    assert edge_rows
+    assert edge_rows[0]["link_cost"] == pytest.approx(edge_rows[0]["distance_um"] * 2.5)
 
     manifest = json.loads(artifact.prediction_manifest_path.read_text())
     receipt = json.loads(artifact.run_json_path.read_text())
@@ -166,6 +196,32 @@ def test_cc_flow_writes_and_reloads_geff_with_features_and_no_gt_receipt(
     assert receipt["actual_device"] == "cpu"
     assert receipt["candidate_count"] == 4
     assert receipt["edge_count"] == 2
+    assert receipt["config"]["link_cost_per_um"] == pytest.approx(2.5)
+    assert receipt["source_revision"] == "unavailable-in-container"
+    assert receipt["source_commit"] == "unavailable-in-container"
+    cache_manifest = json.loads(artifact.cache_manifest_path.read_text())
+    assert cache_manifest["source_commit"] == "unavailable-in-container"
+    assert len(receipt["source_file_sha256"]) == 64
+
+
+def test_cc_flow_rejects_request_config_scale_that_differs_from_sample_scale() -> None:
+    sample = SampleSpec(
+        sample_id="synthetic",
+        image_stem="synthetic.zarr",
+        shape=(2, 5, 10, 10),
+        scale=(1.625, 0.40625, 0.40625),
+        quantiles={"0.001": 0.0, "0.999": 10.0},
+    )
+    request = RaceRequest(
+        sample=sample,
+        cache_root=Path("artifacts/cache"),
+        output_root=Path("artifacts/cc_flow"),
+        expected_device="cpu",
+        config={"scale": [9.0, 9.0, 9.0]},
+    )
+
+    with pytest.raises(ValueError, match="scale"):
+        run_cc_flow(request)
 
 
 def test_cc_flow_request_rejects_gt_option_before_inference() -> None:

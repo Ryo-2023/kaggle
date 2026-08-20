@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -469,12 +468,19 @@ def link_cc_flow(candidates: CandidateTable, config: CCFlowConfig | Mapping[str,
     )
 
 
-def build_prediction_graph(candidates: CandidateTable, edges: EdgeTable) -> Any:
-    """Build a tracksdata GEFF graph preserving component features."""
+def build_prediction_graph(
+    candidates: CandidateTable,
+    edges: EdgeTable,
+    config: CCFlowConfig | Mapping[str, Any] | None = None,
+) -> Any:
+    """Build a tracksdata GEFF graph preserving component features and costs."""
 
     import polars as pl
     import tracksdata as td
 
+    config = CCFlowConfig() if config is None else (
+        config if isinstance(config, CCFlowConfig) else CCFlowConfig.from_mapping(config)
+    )
     graph = td.graph.IndexedRXGraph()
     for name in (
         "z",
@@ -527,7 +533,10 @@ def build_prediction_graph(candidates: CandidateTable, edges: EdgeTable) -> Any:
         graph.add_edge(
             int(pair[0]),
             int(pair[1]),
-            {"distance_um": distance_value, "link_cost": distance_value},
+            {
+                "distance_um": distance_value,
+                "link_cost": distance_value * config.link_cost_per_um,
+            },
         )
     return graph
 
@@ -557,28 +566,21 @@ def _sample_path(request: RaceRequest) -> Path:
     return path
 
 
-def _git_commit() -> str:
-    project_root = Path(__file__).resolve().parents[3]
-    explicit = os.environ.get("BIOHUB_BENCHMARK_RACE_SOURCE_COMMIT")
+def _source_revision() -> str:
+    """Return explicit provenance or an honest container-local sentinel.
+
+    The container does not expose the host worktree's implementation commit.
+    Resolving a parent repository with ``git rev-parse`` would therefore make
+    a bootstrap commit look like the adapter revision.  A caller may inject a
+    verified revision explicitly; inference otherwise records the sentinel.
+    """
+
+    explicit = os.environ.get("BIOHUB_BENCHMARK_RACE_SOURCE_REVISION")
+    if explicit is None:
+        explicit = os.environ.get("BIOHUB_BENCHMARK_RACE_SOURCE_COMMIT")
     if explicit and explicit.strip():
         return explicit.strip()
-    roots: list[Path] = [project_root]
-    roots.extend(project_root.parents)
-    roots.extend(Path.cwd().parents)
-    seen: set[Path] = set()
-    for root in roots:
-        if root in seen:
-            continue
-        seen.add(root)
-        result = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    return "unknown"
+    return "unavailable-in-container"
 
 
 def _image_digest(image: np.ndarray) -> str:
@@ -603,7 +605,7 @@ def _save_candidate_cache(
     image: np.ndarray,
     config: CCFlowConfig,
     max_frames: int | None,
-    source_commit: str,
+    source_revision: str,
 ) -> tuple[str, Path]:
     detector_config = config.as_dict()
     detector_config["max_frames"] = max_frames
@@ -611,7 +613,7 @@ def _save_candidate_cache(
         sample=request.sample,
         image_digest=_image_digest(image),
         detector_config=detector_config,
-        source_commit=source_commit,
+        source_commit=source_revision,
     )
     cache_dir = Path(request.cache_root).resolve() / cache_manifest["cache_key"]
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -648,6 +650,12 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         if max_frames <= 0:
             raise ValueError("max_frames must be a positive integer")
     config = CCFlowConfig.from_mapping(request_config, scale=request.sample.scale)
+    expected_scale = tuple(float(value) for value in request.sample.scale)
+    if config.scale != expected_scale:
+        raise ValueError(
+            "cc_flow config scale must match request.sample.scale; "
+            f"got {config.scale!r}, expected {expected_scale!r}",
+        )
     image_path = _sample_path(request)
     image = _open_image(image_path)
     if tuple(image.shape[1:]) != tuple(request.sample.shape[1:]):
@@ -658,7 +666,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         image = image[:max_frames]
     candidates = detect_cc_candidates(image, config)
     edges = link_cc_flow(candidates, config)
-    source_commit = _git_commit()
+    source_revision = _source_revision()
     source_file_sha256 = _source_file_digest()
     cache_key, cache_manifest_path = _save_candidate_cache(
         request,
@@ -666,7 +674,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         image,
         config,
         max_frames,
-        source_commit,
+        source_revision,
     )
 
     output_root = Path(request.output_root).resolve()
@@ -674,7 +682,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
     if target.exists():
         raise FileExistsError(f"prediction destination already exists: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
-    graph = build_prediction_graph(candidates, edges)
+    graph = build_prediction_graph(candidates, edges, config=config)
     graph.to_geff(target)
     manifest_payload = prediction_directory_manifest(target)
     manifest_payload.update(
@@ -686,6 +694,7 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
             "ground_truth_included": False,
             "cache_key": cache_key,
             "config": config.as_dict(),
+            "source_revision": source_revision,
             "source_file_sha256": source_file_sha256,
         },
     )
@@ -698,7 +707,8 @@ def run_cc_flow(request: RaceRequest) -> PredictionArtifact:
         "linker_id": "global_min_cost_flow",
         "version": "cc_flow.v1",
         "source_module": "biohub.benchmark_race.cc_flow",
-        "source_commit": source_commit,
+        "source_revision": source_revision,
+        "source_commit": source_revision,
         "source_file_sha256": source_file_sha256,
         "checkpoint_sha256": None,
         "sample_id": request.sample.sample_id,

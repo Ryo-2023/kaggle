@@ -61,6 +61,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "kaggle" },
+    { name = "networkx" },
     { name = "numpy" },
     { name = "polars" },
     { name = "scipy" },
@@ -80,6 +81,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "kaggle", specifier = ">=1.7" },
+    { name = "networkx", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "polars", specifier = ">=1.36" },
     { name = "scipy", specifier = ">=1.13" },
