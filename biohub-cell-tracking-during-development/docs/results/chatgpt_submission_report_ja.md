@@ -343,3 +343,52 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 5. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
 
 現時点での採用判断は、**全体Bestはharmonic v1、race新規Bestはblob_lap、次の性能改善候補はNMS 3.5 µm + harmonic association**である。
+
+## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
+
+### デバイス選択仕様
+
+detector-fixed raceのmaterialize CLIは `--device auto` が既定値であり、次の順にPyTorch deviceを解決する。
+
+```text
+1. torch.cuda.is_available()       -> cuda（NVIDIA GPU）
+2. torch.backends.mps.is_available() -> mps（Apple Silicon GPU）
+3. cpu
+```
+
+明示的に `--device cuda` または `--device mps` を指定した場合、利用不能ならCPUへ黙って変更せずエラーにする。実行receiptには `requested_device` と実際の `device` を保存する。
+
+今回のDocker実測値は次のとおりで、CPU帰着はコードの不具合ではなく、環境がCPU-onlyであることが原因である。
+
+| 項目 | 実測値 |
+|---|---|
+| platform | Linux aarch64 container |
+| PyTorch | `2.13.0+cpu` |
+| `torch.version.cuda` | `None` |
+| `torch.cuda.is_available()` | `False` |
+| CUDA device count | `0` |
+| MPS built / available | `False / False` |
+| `nvidia-smi` | executableなし |
+| CPU threads | `8` |
+
+したがって現在のDockerではGPUを使用できない。CUDA対応PyTorch、NVIDIA Container ToolkitでGPUをコンテナへ公開したLinux環境、またはmacOS上のMPS対応PyTorchへ移行すれば、同じコマンドで自動的にGPUを使用する。`torch`のCPU wheelを使う現Docker定義を無理に置き換えると、現行aarch64環境や再現性を壊すため、環境側のGPU対応構築は別作業として残している。
+
+### GPUが効く範囲と効かない範囲
+
+- TemporalUNet3Dのencode、cell-center detector、Node Transformerのforward/reverse logitsはPyTorch tensorとしてdeviceへ移るため、CUDA/MPS環境ではGPU対象になる。
+- GEFF読込・cacheのNPZ圧縮、公式metric、ILP/SCIP等のgraph optimization、古典association laneは現実装ではCPU処理である。
+- Apple MPSではupstream依存演算の未対応が起きた場合に自動でCPUへ途中切替する設計にはしていない。明示的MPS指定で失敗を見える化し、問題を隠さない。
+
+### 実データ実行状況
+
+feature cacheの最初の全100フレーム実行では、sliding window間で同一nodeのcontextual featureが変わることを検出した。これはTemporalUNetの窓相対時刻・前後frame contextに由来する仕様であり、誤った完全一致検証を修正した。最初の観測をcanonical node featureとして保存し、衝突観測数をprovenanceへ記録する。forward/reverse raw logitsはpair単位で保持するため、association比較の入力は失われない。
+
+修正後の4フレーム実データsmokeはcache公開まで完走し、node `897`、候補edge `151,830`、feature衝突観測 `453`を記録した。2フレーム `auto` smokeでは `requested_device=auto`、実選択 `cpu` を確認した。全100フレームの再実行は、修正済みadapter・auto設定で継続中であり、公式metric数値は完了後に本節へ追記する。
+
+再現コマンド（GPU環境ではautoでGPUを選択）:
+
+```bash
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --train-root /workspace/biohub-cell-tracking-during-development/data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/full_auto'
+```
+
+関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）を `codex/biohub-multi-method-race`へpush済み。
