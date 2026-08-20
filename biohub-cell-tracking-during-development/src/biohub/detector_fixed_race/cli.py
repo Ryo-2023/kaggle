@@ -34,7 +34,10 @@ def _sample_spec(image_path: Path) -> SampleSpec:
     quantiles = panel_api._image_quantiles(attrs)
     return SampleSpec(
         sample_id=image_path.stem,
-        image_stem=image_path,
+        # SampleSpec intentionally keeps image stems relative at the
+        # image-only contract boundary; materialize_detector_cache receives
+        # the separately validated absolute image_path below.
+        image_stem=image_path.name,
         shape=shape,
         scale=scale,
         quantiles=quantiles,
