@@ -63,6 +63,114 @@ def test_race_request_rejects_geff_image() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"path": "/data/gt.json"},
+        {"path": "annotations/labels.json"},
+        {"annotation_file": "labels.json"},
+        {"groundTruthPath": "metadata.json"},
+        {"gtPath": "metadata.json"},
+        {"path": "gtdata.json"},
+        {"path": "groundtruth_v1.json"},
+    ],
+)
+def test_race_request_rejects_generic_ground_truth_config_paths(config: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match=r"ground.?truth|GT|annotation|label"):
+        RaceRequest(
+            sample=_sample(),
+            cache_root=Path("artifacts/cache"),
+            output_root=Path("artifacts/output"),
+            expected_device="cpu",
+            config=config,
+        )
+
+
+def test_sample_spec_rejects_ground_truth_json_image_name() -> None:
+    with pytest.raises(ValueError, match=r"ground.?truth|\.json"):
+        _sample(image_stem="ground-truth.json")
+
+
+def test_cache_manifest_rejects_ground_truth_schema_version() -> None:
+    with pytest.raises(ValueError, match=r"ground.?truth"):
+        build_cache_manifest(
+            sample=_sample(),
+            image_digest="image-sha256",
+            detector_config={},
+            source_commit="source-commit",
+            schema_version="ground-truth",
+        )
+
+
+@pytest.mark.parametrize(
+    "root_name",
+    ["cache.geff/cache", "ground-truth/cache", "groundTruthCache/cache", "gtcache/cache"],
+)
+def test_race_request_rejects_ground_truth_cache_root_components(root_name: str) -> None:
+    with pytest.raises(ValueError, match=r"path|ground.?truth|\.geff"):
+        RaceRequest(
+            sample=_sample(),
+            cache_root=Path(root_name),
+            output_root=Path("artifacts/output"),
+            expected_device="cpu",
+            config={},
+        )
+
+
+@pytest.mark.parametrize("root_name", ["predictions.geff/output", "ground-truth/output"])
+def test_race_request_rejects_ground_truth_output_root_components(root_name: str) -> None:
+    with pytest.raises(ValueError, match=r"path|ground.?truth|\.geff"):
+        RaceRequest(
+            sample=_sample(),
+            cache_root=Path("artifacts/cache"),
+            output_root=Path(root_name),
+            expected_device="cpu",
+            config={},
+        )
+
+
+def test_sample_spec_rejects_absolute_image_stem() -> None:
+    with pytest.raises(ValueError, match=r"absolute|relative|image"):
+        _sample(image_stem=Path("/data/44b6_0113de3b.zarr"))
+
+
+def test_race_request_rejects_absolute_artifact_roots() -> None:
+    with pytest.raises(ValueError, match=r"absolute|relative|path"):
+        RaceRequest(
+            sample=_sample(),
+            cache_root=Path("/tmp/cache"),
+            output_root=Path("artifacts/output"),
+            expected_device="cpu",
+            config={},
+        )
+
+    with pytest.raises(ValueError, match=r"absolute|relative|path"):
+        RaceRequest(
+            sample=_sample(),
+            cache_root=Path("artifacts/cache"),
+            output_root=Path("/tmp/output"),
+            expected_device="cpu",
+            config={},
+        )
+
+
+def test_relative_zarr_image_and_artifact_paths_remain_valid() -> None:
+    request = RaceRequest(
+        sample=_sample(image_stem="images/44b6_0113de3b.zarr"),
+        cache_root=Path("artifacts/cache"),
+        output_root=Path("artifacts/output"),
+        expected_device="cpu",
+        config={"normalization": "config.json"},
+    )
+
+    assert request.sample.image_stem == Path("images/44b6_0113de3b.zarr")
+
+
+def test_cache_manifest_rejects_host_dependent_absolute_image_path() -> None:
+    with pytest.raises(ValueError, match=r"absolute|relative|image"):
+        _sample(image_stem=Path("/host/data/sample.zarr"))
+
+
 def test_method_spec_normalizes_requirements() -> None:
     method = MethodSpec(
         method_id="blob_lap",

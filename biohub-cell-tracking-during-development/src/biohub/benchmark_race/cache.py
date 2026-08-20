@@ -22,8 +22,7 @@ def _require_digest(name: str, value: str | None, *, allow_none: bool = False) -
         return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string")
-    lowered = value.lower()
-    if lowered.endswith(".geff") or "ground_truth" in lowered or "groundtruth" in lowered:
+    if _contains_ground_truth(value):
         raise ValueError(f"{name} must not reference a ground-truth graph")
     return value.strip()
 
@@ -73,6 +72,8 @@ def build_cache_manifest(
     checkpoint_sha256 = _require_digest("checkpoint_sha256", checkpoint_sha256, allow_none=True)
     if not isinstance(schema_version, str) or not schema_version.strip():
         raise ValueError("schema_version must be a non-empty string")
+    if _contains_ground_truth(schema_version):
+        raise ValueError("schema_version must not reference a ground-truth graph")
     if detector_config is None:
         detector_config = {}
     if not isinstance(detector_config, Mapping):

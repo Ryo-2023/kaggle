@@ -12,38 +12,60 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
-_GROUND_TRUTH_KEY_RE = re.compile(
-    r"(?:^|[_\-.])(ground[_\-.]?truth|gt|truth|annotation|annotations|label|labels)(?:$|[_\-.])",
-    re.IGNORECASE,
+_GROUND_TRUTH_COMPONENTS = frozenset(
+    {
+        "annotation",
+        "annotations",
+        "annot",
+        "gt",
+        "groundtruth",
+        "label",
+        "labels",
+        "truth",
+    }
 )
 
 
-def _is_ground_truth_key(key: object) -> bool:
-    if not isinstance(key, str):
+def _normalised_tokens(value: str) -> tuple[str, ...]:
+    expanded = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", value)
+    normalized = re.sub(r"[^a-z0-9]+", "_", expanded.casefold()).strip("_")
+    return tuple(token for token in normalized.split("_") if token)
+
+
+def _component_is_ground_truth(component: str) -> bool:
+    if not component or component in {".", ".."}:
         return False
-    normalized = re.sub(r"[^a-z0-9]+", "_", key.strip().lower()).strip("_")
-    return bool(
-        _GROUND_TRUTH_KEY_RE.search(key)
-        or normalized in {
-            "groundtruth",
-            "ground_truth",
-            "ground_truth_path",
-            "ground_truth_digest",
-            "gt",
-            "gt_path",
-            "gt_digest",
-            "truth",
-            "truth_path",
-            "annotation",
-            "annotation_path",
-            "annotations",
-            "label",
-            "labels",
-        }
+    if component.casefold().endswith(".geff"):
+        return True
+    suffix = Path(component).suffix.casefold()
+    stem = component[: -len(suffix)] if suffix else component
+    tokens = _normalised_tokens(stem)
+    lowered_stem = stem.casefold()
+    return any(token in _GROUND_TRUTH_COMPONENTS for token in tokens) or any(
+        lowered_stem.startswith(marker)
+        for marker in _GROUND_TRUTH_COMPONENTS
     )
+
+
+def _path_components(value: str | Path) -> tuple[str, ...]:
+    text = value.as_posix() if isinstance(value, Path) else str(value)
+    return tuple(part for part in re.split(r"[/\\]+", text) if part)
+
+
+def _path_contains_ground_truth(value: str | Path) -> bool:
+    return any(_component_is_ground_truth(part) for part in _path_components(value))
+
+
+def _path_is_absolute(value: str | Path) -> bool:
+    text = value.as_posix() if isinstance(value, Path) else str(value)
+    return Path(text).is_absolute() or PureWindowsPath(text).is_absolute()
+
+
+def _is_ground_truth_key(key: object) -> bool:
+    return isinstance(key, str) and _path_contains_ground_truth(key)
 
 
 def _contains_ground_truth(value: object, *, key: object | None = None) -> bool:
@@ -56,11 +78,8 @@ def _contains_ground_truth(value: object, *, key: object | None = None) -> bool:
 
     if _is_ground_truth_key(key):
         return True
-    if isinstance(value, Path):
-        return value.suffix.lower() == ".geff" or "ground_truth" in value.as_posix().lower()
-    if isinstance(value, str):
-        lowered = value.lower()
-        return lowered.endswith(".geff") or "ground_truth" in lowered or "groundtruth" in lowered
+    if isinstance(value, (Path, str)):
+        return _path_contains_ground_truth(value)
     if isinstance(value, Mapping):
         return any(_contains_ground_truth(item, key=item_key) for item_key, item in value.items())
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -98,12 +117,23 @@ def _require_nonempty_text(name: str, value: object) -> str:
 
 
 def _validate_image_stem(value: str | Path) -> Path:
+    if _path_is_absolute(value):
+        raise ValueError("image stem must be a relative path; absolute host paths are not allowed")
     image_stem = Path(value)
     if not image_stem.name:
         raise ValueError("image stem must not be empty")
-    if image_stem.suffix.lower() == ".geff" or _contains_ground_truth(image_stem):
+    if _path_contains_ground_truth(image_stem):
         raise ValueError("image stem must identify an image, not a .geff ground-truth graph")
     return image_stem
+
+
+def _validate_relative_artifact_path(name: str, value: str | Path) -> Path:
+    if _path_is_absolute(value):
+        raise ValueError(f"{name} must be a relative path; absolute host paths are not allowed")
+    path = Path(value)
+    if _path_contains_ground_truth(path):
+        raise ValueError(f"{name} must not contain a ground-truth or .geff path component")
+    return path
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +148,7 @@ class SampleSpec:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sample_id", _require_nonempty_text("sample_id", self.sample_id))
-        if self.sample_id.lower().endswith(".geff") or _contains_ground_truth(self.sample_id):
+        if _path_contains_ground_truth(self.sample_id):
             raise ValueError("sample_id must identify an image, not a .geff ground-truth graph")
         object.__setattr__(self, "image_stem", _validate_image_stem(self.image_stem))
 
@@ -170,10 +200,8 @@ class RaceRequest:
     def __post_init__(self) -> None:
         if not isinstance(self.sample, SampleSpec):
             raise TypeError("sample must be a SampleSpec")
-        cache_root = Path(self.cache_root)
-        output_root = Path(self.output_root)
-        if cache_root.suffix.lower() == ".geff" or output_root.suffix.lower() == ".geff":
-            raise ValueError("cache_root and output_root must be directories, not .geff graphs")
+        cache_root = _validate_relative_artifact_path("cache_root", self.cache_root)
+        output_root = _validate_relative_artifact_path("output_root", self.output_root)
         object.__setattr__(self, "cache_root", cache_root)
         object.__setattr__(self, "output_root", output_root)
         object.__setattr__(self, "expected_device", _require_nonempty_text("expected_device", self.expected_device))
