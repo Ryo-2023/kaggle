@@ -11,10 +11,12 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import math
+import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -83,12 +85,15 @@ class _PairCapture:
     target_mask: np.ndarray
     forward_logits: np.ndarray
     reverse_logits: np.ndarray | None = None
+    storage_path: Path | None = None
+    reverse_storage_path: Path | None = None
 
 
 @dataclass(slots=True)
 class _CaptureState:
     nodes_by_t: dict[int, _NodeCapture]
     pairs: list[_PairCapture]
+    pair_store_root: Path | None = None
     detector_calls: int = 0
     forward_edge_calls: int = 0
     reverse_edge_calls: int = 0
@@ -168,6 +173,90 @@ def _without_batch(value: torch.Tensor, *, name: str) -> np.ndarray:
     return array[0]
 
 
+_PAIR_ARRAY_NAMES = (
+    "source_coords",
+    "target_coords",
+    "source_features",
+    "target_features",
+    "source_positions",
+    "target_positions",
+    "source_mask",
+    "target_mask",
+    "forward_logits",
+)
+
+
+def _empty_pair_capture(pair: _PairCapture) -> None:
+    """Drop large in-memory pair payloads after persisting them."""
+
+    empty_coords = np.empty((0, 3), dtype=np.float32)
+    empty_features = np.empty((0, 0), dtype=np.float32)
+    empty_mask = np.empty((0,), dtype=np.bool_)
+    empty_logits = np.empty((0, 0), dtype=np.float32)
+    pair.source_coords = empty_coords
+    pair.target_coords = empty_coords
+    pair.source_features = empty_features
+    pair.target_features = empty_features
+    pair.source_positions = empty_features
+    pair.target_positions = empty_features
+    pair.source_mask = empty_mask
+    pair.target_mask = empty_mask
+    pair.forward_logits = empty_logits
+
+
+def _persist_pair_capture(state: _CaptureState, pair: _PairCapture, index: int) -> None:
+    """Store one pair payload on disk so dense videos do not retain all pairs."""
+
+    if state.pair_store_root is None:
+        return
+    path = state.pair_store_root / f"pair-{index:04d}.npz"
+    np.savez(
+        path,
+        **{name: getattr(pair, name) for name in _PAIR_ARRAY_NAMES},
+    )
+    pair.storage_path = path
+    _empty_pair_capture(pair)
+
+
+@contextmanager
+def _pair_payload(
+    pair: _PairCapture,
+    *,
+    include_forward: bool = True,
+) -> Iterator[dict[str, np.ndarray]]:
+    """Yield one pair's arrays, loading disk-backed payloads one at a time."""
+
+    if pair.storage_path is None:
+        payload = {name: getattr(pair, name) for name in _PAIR_ARRAY_NAMES}
+        if not include_forward:
+            payload["forward_logits"] = np.empty((0, 0), dtype=np.float32)
+        if pair.reverse_logits is not None:
+            payload["reverse_logits"] = pair.reverse_logits
+        else:
+            payload["reverse_logits"] = np.empty((0, 0), dtype=np.float32)
+        yield payload
+        return
+
+    with np.load(pair.storage_path, allow_pickle=False) as loaded:
+        payload = {
+            name: loaded[name]
+            for name in _PAIR_ARRAY_NAMES
+            if include_forward or name != "forward_logits"
+        }
+        if not include_forward:
+            payload["forward_logits"] = np.empty((0, 0), dtype=np.float32)
+        if pair.reverse_storage_path is None:
+            payload["reverse_logits"] = np.empty((0, 0), dtype=np.float32)
+            yield payload
+            return
+        reverse = np.load(pair.reverse_storage_path, mmap_mode="r", allow_pickle=False)
+        payload["reverse_logits"] = reverse
+        try:
+            yield payload
+        finally:
+            del reverse
+
+
 def _peak_logits(det_logits: torch.Tensor, coords: np.ndarray) -> np.ndarray:
     array = det_logits.detach().cpu()
     if array.ndim == 4 and array.shape[0] == 1:
@@ -240,21 +329,24 @@ def _build_node_arrays(
             raise ValueError("edge pair frame assignment was not resolved")
         source_t = pair.source_t
         target_t = source_t + 1
-        source_ids = _lookup_node_ids(key_to_id, source_t, pair.source_coords)
-        target_ids = _lookup_node_ids(key_to_id, target_t, pair.target_coords)
-        if node_features is None:
-            if pair.source_features.ndim != 2 or pair.target_features.ndim != 2:
-                raise ValueError("captured node features must have shape (N,C)")
-            channels = pair.source_features.shape[1]
-            if pair.target_features.shape[1] != channels:
-                raise ValueError("source and target node feature widths differ")
-            node_features = np.full((tzyx.shape[0], channels), np.nan, dtype=np.float32)
-        feature_conflict_observation_count += _assign_features(
-            node_features, feature_seen, source_ids, pair.source_features
-        )
-        feature_conflict_observation_count += _assign_features(
-            node_features, feature_seen, target_ids, pair.target_features
-        )
+        with _pair_payload(pair, include_forward=False) as payload:
+            source_ids = _lookup_node_ids(key_to_id, source_t, payload["source_coords"])
+            target_ids = _lookup_node_ids(key_to_id, target_t, payload["target_coords"])
+            source_features = payload["source_features"]
+            target_features = payload["target_features"]
+            if node_features is None:
+                if source_features.ndim != 2 or target_features.ndim != 2:
+                    raise ValueError("captured node features must have shape (N,C)")
+                channels = source_features.shape[1]
+                if target_features.shape[1] != channels:
+                    raise ValueError("source and target node feature widths differ")
+                node_features = np.full((tzyx.shape[0], channels), np.nan, dtype=np.float32)
+            feature_conflict_observation_count += _assign_features(
+                node_features, feature_seen, source_ids, source_features
+            )
+            feature_conflict_observation_count += _assign_features(
+                node_features, feature_seen, target_ids, target_features
+            )
     if node_features is None or not np.all(feature_seen):
         missing = np.flatnonzero(~feature_seen).tolist()
         raise ValueError(f"node feature capture is incomplete; missing node IDs: {missing[:8]}")
@@ -336,26 +428,29 @@ def _build_edge_arrays(
     *,
     edge_activation: str,
 ) -> CandidateEdgeArrays:
-    source_ids_all: list[np.ndarray] = []
-    target_ids_all: list[np.ndarray] = []
-    forward_all: list[np.ndarray] = []
-    reverse_all: list[np.ndarray] = []
+    # Keep one compact description per frame pair, then fill the final flat
+    # arrays in-place.  The previous concatenate-based implementation held
+    # (a) every pair's repeated IDs/logits and (b) the concatenated copies at
+    # the same time.  On dense samples that transient duplication could push
+    # the CPU container into the OOM killer even though the final cache fit.
+    pair_refs: list[tuple[_PairCapture, np.ndarray, np.ndarray, int]] = []
+    total_length = 0
     for pair in state.pairs:
-        if pair.source_t is None or pair.reverse_logits is None:
+        if pair.source_t is None:
             raise ValueError("edge capture is incomplete")
-        source_ids = _lookup_node_ids(key_to_id, pair.source_t, pair.source_coords)
-        target_ids = _lookup_node_ids(key_to_id, pair.source_t + 1, pair.target_coords)
-        forward = np.asarray(pair.forward_logits, dtype=np.float32)
-        reverse = np.asarray(pair.reverse_logits, dtype=np.float32)
-        if forward.shape != (source_ids.size, target_ids.size):
-            raise ValueError(f"forward logits shape {forward.shape} does not match captured nodes")
-        if reverse.shape != forward.shape:
-            raise ValueError("reverse logits shape does not match forward logits")
-        source_ids_all.append(np.repeat(source_ids, target_ids.size))
-        target_ids_all.append(np.tile(target_ids, source_ids.size))
-        forward_all.append(forward.reshape(-1))
-        reverse_all.append(reverse.reshape(-1))
-    if not source_ids_all:
+        with _pair_payload(pair) as payload:
+            source_ids = _lookup_node_ids(key_to_id, pair.source_t, payload["source_coords"])
+            target_ids = _lookup_node_ids(key_to_id, pair.source_t + 1, payload["target_coords"])
+            forward = np.asarray(payload["forward_logits"], dtype=np.float32)
+            reverse = np.asarray(payload["reverse_logits"], dtype=np.float32)
+            if forward.shape != (source_ids.size, target_ids.size):
+                raise ValueError(f"forward logits shape {forward.shape} does not match captured nodes")
+            if reverse.shape != forward.shape:
+                raise ValueError("reverse logits shape does not match forward logits")
+            count = int(source_ids.size * target_ids.size)
+            pair_refs.append((pair, source_ids, target_ids, count))
+            total_length += count
+    if total_length == 0:
         empty_i64 = np.empty((0,), dtype=np.int64)
         empty_i16 = np.empty((0,), dtype=np.int16)
         empty_f32 = np.empty((0,), dtype=np.float32)
@@ -373,10 +468,21 @@ def _build_edge_arrays(
             forward_probability=empty_f32,
             reverse_probability=empty_f32,
         )
-    source = np.concatenate(source_ids_all)
-    target = np.concatenate(target_ids_all)
-    forward_logits = np.concatenate(forward_all).astype(np.float32)
-    reverse_logits = np.concatenate(reverse_all).astype(np.float32)
+
+    source = np.empty((total_length,), dtype=np.int64)
+    target = np.empty((total_length,), dtype=np.int64)
+    forward_logits = np.empty((total_length,), dtype=np.float32)
+    reverse_logits = np.empty((total_length,), dtype=np.float32)
+    offset = 0
+    for pair, source_ids, target_ids, count in pair_refs:
+        end = offset + count
+        source[offset:end] = np.repeat(source_ids, target_ids.size)
+        target[offset:end] = np.tile(target_ids, source_ids.size)
+        with _pair_payload(pair) as payload:
+            forward_logits[offset:end] = np.asarray(payload["forward_logits"], dtype=np.float32).reshape(-1)
+            reverse_logits[offset:end] = np.asarray(payload["reverse_logits"], dtype=np.float32).reshape(-1)
+        offset = end
+
     source_t = nodes.tzyx[source, 0].astype(np.int16)
     target_t = nodes.tzyx[target, 0].astype(np.int16)
     delta_t = (target_t - source_t).astype(np.int16)
@@ -390,16 +496,14 @@ def _build_edge_arrays(
         forward_probability = np.empty_like(forward_logits)
         reverse_probability = np.empty_like(reverse_logits)
         offset = 0
-        for pair in state.pairs:
-            if pair.source_t is None or pair.reverse_logits is None:
-                raise ValueError("edge pair frame assignment is missing")
-            count = pair.source_coords.shape[0] * pair.target_coords.shape[0]
-            forward_probability[offset : offset + count] = _softmax(
-                pair.forward_logits.astype(np.float32), axis=0
-            ).reshape(-1)
-            reverse_probability[offset : offset + count] = _softmax(
-                pair.reverse_logits.astype(np.float32), axis=0
-            ).reshape(-1)
+        for pair, _source_ids, _target_ids, count in pair_refs:
+            with _pair_payload(pair) as payload:
+                forward_probability[offset : offset + count] = _softmax(
+                    np.asarray(payload["forward_logits"], dtype=np.float32), axis=0
+                ).reshape(-1)
+                reverse_probability[offset : offset + count] = _softmax(
+                    np.asarray(payload["reverse_logits"], dtype=np.float32), axis=0
+                ).reshape(-1)
             offset += count
     elif edge_activation == "sigmoid":
         forward_probability = _sigmoid(forward_logits)
@@ -466,7 +570,11 @@ def materialize_detector_cache(
         "use_ilp": False,
     }
     upstream_config = upstream.PredictConfig(**config_kwargs)
-    state = _CaptureState(nodes_by_t={}, pairs=[])
+    output_root.mkdir(parents=True, exist_ok=True)
+    pair_store_root = output_root / f".{sample.sample_id}.pairs-{time.monotonic_ns()}"
+    shutil.rmtree(pair_store_root, ignore_errors=True)
+    pair_store_root.mkdir(parents=True, exist_ok=False)
+    state = _CaptureState(nodes_by_t={}, pairs=[], pair_store_root=pair_store_root)
     original_detect = upstream._detect_cells_pooled
     original_predict_edges = model.predict_edges
 
@@ -507,20 +615,20 @@ def materialize_detector_cache(
             mask_target,
         )
         state.forward_edge_calls += 1
-        state.pairs.append(
-            _PairCapture(
-                source_t=None,
-                source_coords=_without_batch(coords_source, name="coords_source"),
-                target_coords=_without_batch(coords_target, name="coords_target"),
-                source_features=_without_batch(feat_source, name="feat_source"),
-                target_features=_without_batch(feat_target, name="feat_target"),
-                source_positions=_without_batch(pos_source, name="pos_source"),
-                target_positions=_without_batch(pos_target, name="pos_target"),
-                source_mask=_without_batch(mask_source, name="mask_source"),
-                target_mask=_without_batch(mask_target, name="mask_target"),
-                forward_logits=_without_batch(forward, name="forward_logits"),
-            )
+        pair = _PairCapture(
+            source_t=None,
+            source_coords=_without_batch(coords_source, name="coords_source"),
+            target_coords=_without_batch(coords_target, name="coords_target"),
+            source_features=_without_batch(feat_source, name="feat_source"),
+            target_features=_without_batch(feat_target, name="feat_target"),
+            source_positions=_without_batch(pos_source, name="pos_source"),
+            target_positions=_without_batch(pos_target, name="pos_target"),
+            source_mask=_without_batch(mask_source, name="source_mask"),
+            target_mask=_without_batch(mask_target, name="target_mask"),
+            forward_logits=_without_batch(forward, name="forward_logits"),
         )
+        state.pairs.append(pair)
+        _persist_pair_capture(state, pair, len(state.pairs) - 1)
         return forward
 
     started = time.monotonic()
@@ -543,27 +651,47 @@ def materialize_detector_cache(
 
     frame_count = sample.shape[0] if max_frames is None else min(sample.shape[0], max_frames)
     _resolve_pair_times(state, frame_count)
-    for pair in state.pairs:
+    for pair_index, pair in enumerate(state.pairs):
         if pair.source_t is None:
             raise ValueError("pair frame assignment failed")
-        with torch.no_grad():
+        with _pair_payload(pair, include_forward=False) as payload, torch.no_grad():
             reverse_native = original_predict_edges(
-                torch.from_numpy(pair.target_features).unsqueeze(0).to(device),
-                torch.from_numpy(pair.source_features).unsqueeze(0).to(device),
-                torch.from_numpy(pair.target_coords).unsqueeze(0).to(device),
-                torch.from_numpy(pair.source_coords).unsqueeze(0).to(device),
-                torch.from_numpy(pair.target_positions).unsqueeze(0).to(device),
-                torch.from_numpy(pair.source_positions).unsqueeze(0).to(device),
-                torch.from_numpy(pair.target_mask).unsqueeze(0).to(device),
-                torch.from_numpy(pair.source_mask).unsqueeze(0).to(device),
+                torch.from_numpy(payload["target_features"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["source_features"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["target_coords"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["source_coords"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["target_positions"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["source_positions"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["target_mask"]).unsqueeze(0).to(device),
+                torch.from_numpy(payload["source_mask"]).unsqueeze(0).to(device),
             )
         state.reverse_edge_calls += 1
-        pair.reverse_logits = _without_batch(reverse_native, name="reverse_logits").T.astype(np.float32)
+        reverse_logits = _without_batch(reverse_native, name="reverse_logits").T.astype(np.float32)
+        if pair.storage_path is None:
+            pair.reverse_logits = reverse_logits
+        else:
+            reverse_path = pair_store_root / f"reverse-{pair_index:04d}.npy"
+            np.save(reverse_path, reverse_logits)
+            pair.reverse_storage_path = reverse_path
 
     nodes, key_to_id, feature_conflict_observation_count = _build_node_arrays(
         state, scale=sample.scale, downsample=downsample
     )
+    # Node features/positional tensors are only needed to build the canonical
+    # node table and to compute reverse logits.  Release their per-pair copies
+    # before constructing the dense flat edge arrays; retaining them here
+    # needlessly increases the peak RSS on dense videos.
+    empty_features = np.empty((0, 0), dtype=np.float32)
+    empty_mask = np.empty((0,), dtype=np.bool_)
+    for pair in state.pairs:
+        pair.source_features = empty_features
+        pair.target_features = empty_features
+        pair.source_positions = empty_features
+        pair.target_positions = empty_features
+        pair.source_mask = empty_mask
+        pair.target_mask = empty_mask
     edges = _build_edge_arrays(state, nodes, key_to_id, edge_activation=config.edge_activation)
+    state.pairs.clear()
     provenance = {
         "detector_id": "TemporalUNet3D+SimpleNodeTransformer",
         "source_repo": UPSTREAM_REPOSITORY,
@@ -600,7 +728,9 @@ def materialize_detector_cache(
         node_digest="pending",
         edge_digest="pending",
     )
-    return write_detector_cache(output_root / "cache" / sample.sample_id, manifest, nodes, edges)
+    receipt = write_detector_cache(output_root / "cache" / sample.sample_id, manifest, nodes, edges)
+    shutil.rmtree(pair_store_root, ignore_errors=True)
+    return receipt
 
 
 __all__ = [
