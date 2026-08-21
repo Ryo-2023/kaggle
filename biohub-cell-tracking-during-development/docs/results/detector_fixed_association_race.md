@@ -219,3 +219,9 @@ detectorを再計算せず、同じGT-free cache・同じILP・同じ公式metri
 | `0.30` | `0.7777614914000653` | `-0.0058482810088057` |
 
 `0.10`が3 sample平均では最大だが、改善幅は`4.26e-5`と小さく、0bでは`0.20`が僅かに上回る。したがって公開Strong Baseline v1の既定値は`0.20`のまま保持し、`0.10`を追加性能候補としてdivision sample検証待ちにする。全variantのprediction GEFF・receipt・wall timeは `artifacts/detector_fixed_race/harmonic_sweep/` 以下に保存した。
+
+## 11. 追加panel `44b6_0db75fae` の進行状況（2026-08-21）
+
+0dbは画像・GTを固定済みで、detector cacheのmaterializeを開始した。最新確認時点では実処理PID `959006` が経過 `1,163 s`（約19分23秒）、CPU `636%`、RSS `1,171,864 KiB` で稼働中だった。cacheの`READY`は未生成で、prediction GEFF・公式metricは未取得である。
+
+同時点のcgroup `memory.events` は `oom_kill=7`（開始前から増加なし）。CPU処理は継続しており、現時点で異常終了は確認していない。materialize完了後にedge sidecarを作成し、4方式を個別プロセスで再生して公式metricを取得する。

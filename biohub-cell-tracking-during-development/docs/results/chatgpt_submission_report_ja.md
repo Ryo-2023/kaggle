@@ -3,7 +3,7 @@
 作成日: 2026-08-21（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
-最新push: `origin/codex/biohub-multi-method-race`（直前に確認済み実装commit: `f405c00`、レポート直前commit: `da7768e`）
+最新push: `origin/codex/biohub-multi-method-race`（直前に確認済みレポートcommit: `a07c3be`、実装commit: `f405c00`）
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -498,3 +498,9 @@ detector再計算なしで、3 sampleの同一cache上に`harmonic_v1`の`revers
 | `0.30` | `0.7777614914000653` | `-0.0058482810088057` | 棄却 |
 
 `0.10`はdevelopmentと0cで僅かに改善したが、0bでは`0.20`を僅かに下回った。したがって既定値を変更せず、`0.10`をdivision sample追加後の候補として記録した。variant GEFF・receipt・runtimeは `artifacts/detector_fixed_race/harmonic_sweep/` に保存し、CLIは`--harmonic-reverse-weight`で再現できる。
+
+## 17. 追加panel `44b6_0db75fae` の進行状況（2026-08-21）
+
+0dbは画像・GTを固定済みで、detector cacheのmaterializeを開始した。最新確認時点では実処理PID `959006` が経過 `1,163 s`（約19分23秒）、CPU `636%`、RSS `1,171,864 KiB` で稼働中だった。cacheの`READY`はまだ生成されておらず、prediction GEFFと公式metricは未取得である。
+
+同時点のcgroup `memory.events` は `oom_kill=7`（過去のNPZ全展開失敗を含む開始前の値から増加なし）で、処理を停止する異常兆候は確認していない。0dbの完了スコアを推測で補わず、materialize完了後にsidecar化、各方式の個別再生、GTを評価時だけ開く公式metric計測を行う。
