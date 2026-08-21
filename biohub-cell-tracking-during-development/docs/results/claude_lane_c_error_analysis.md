@@ -313,3 +313,123 @@ Raw outputs: `artifacts/edge_diff_raw_44b6_0c582fdc.json`,
 
 Sample `44b6_0b24845f` (the other newly-finished panel sample) is not yet analyzed — queued,
 see the Lane C report §5.
+
+## 11. The division picture: the one GT division every method misses (`44b6_12dfb391`)
+
+Per the coordinator's 2026-08-21 follow-up: `44b6_12dfb391` holds the dataset's only GT
+division source, and **all four methods score `division_tp=0, division_fn=1`** there;
+`harmonic_v1` additionally emits **3** division false positives on this sample and **1** on
+`44b6_0db75fae` (which has zero GT divisions at all). This is the highest-value remaining
+question because the official score's `0.1 · division_jaccard` term is completely unclaimed
+project-wide, and Lane A separately found the ILP imposes a hard `p>0.9` fork-acceptance
+threshold.
+
+Reproduced with the vendored `biohub.official_metrics.division_metrics.score_divisions` /
+`evaluate_divisions` directly (no reimplementation) against:
+```
+GT    artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff
+pred  artifacts/detector_fixed_race/panel_runs_12df_{official,harmonic,mutual,motion}/
+      44b6_12dfb391/{method}.geff
+```
+Recomputed `edge_tp/fp/fn` and `division_tp/fp/fn` for all four methods match
+`race_receipt.json` exactly (official 668/81/105, harmonic 688/89/85, mutual 648/84/125,
+motion 644/78/129; division_fp = 0/3/0/0 respectively) before trusting the per-node detail.
+
+### 11.1 The missed division, structurally
+
+```
+parent (171000000049, t=65, z44.0 y64.0 x161.0)
+  -> divider (172000000050, t=66, z46.0 y63.0 x160.0)
+       -> child A (173000000051, t=67, z46.0 y74.0 x164.0) -> grandchild (174000000052, t=68)
+       -> child B (173000000050, t=67, z46.0 y51.0 x160.0) -> grandchild (174000000051, t=68)
+```
+The two daughters separate by dy=+11 / dy=-12 voxels (≈4.5-4.9 µm each from the parent,
+individually well inside the 7 µm matching radius) but end up ≈23 voxels / 9.3 µm apart from
+each other - clearly two distinct cells one frame after the divider.
+
+**What every method actually predicts there**: the node matched to the GT divider
+(`172000000050`) is at the *exact right position* in all four methods (official 37074,
+harmonic 37280, mutual 36819, motion 36514 - all four report position `(66, 46.0, 64.0,
+160.0)`, i.e. correct detection, correct node-matching) - but **its out-degree is 0 in every
+single method**. Not "one child accepted, one rejected" and not "wrong child accepted" - the
+node is a dead end in all four predicted graphs. That is a stronger and more specific failure
+mode than "the fork threshold rejects the second branch": it looks like **neither candidate
+successor edge clears whatever bar the ILP requires**, so the track simply stops at the
+divider instead of continuing at all (this is also counted as a portion of each method's
+regular edge_fn, on top of the fixed 1 division_fn). This is consistent with, and sharpens,
+Lane A's `p>0.9` hard-threshold finding: it is not merely making the *second* branch hard to
+accept, it can apparently reject the correct continuation entirely at a genuine division site.
+
+I cannot see the two real candidate edges' `edge_prob` from any method's final GEFF - only
+*selected* edges are retained (§7's caveat, repeated here), and no method selects either real
+daughter edge. Getting those requires the detector cache's retained candidate pool - `BLOCKED`,
+Lane F's territory per Addendum A4.
+
+### 11.2 Image evidence: the division site is visually dim and blurry
+
+Crops (112×112 px, this zarr's own `low=70.0, high=3065.0` quantiles, crosshair on the exact
+GT voxel; saved under `artifacts/`, gitignored):
+
+| file | node | t | what's visible |
+|---|---|---:|---|
+| `div_wide_t66_z46_nomark.png` | (no crosshair - context view) | 66 | a soft, blurry field of several dim, low-contrast blobs; nothing stands out as a clearly-in-focus nucleus |
+| `div_parent_t65_z44_marked.png` | parent 171000000049 | 65 | crosshair on a moderately dim blob, unremarkable versus neighbors |
+| `div_divider_t66_z46_marked.png` | divider 172000000050 | 66 | crosshair sits in a soft, low-contrast area - no sharp nucleus at the exact division moment |
+| `div_child1_t67_z46_marked.png` | child A 173000000051 | 67 | crosshair near a faint, small blob, not clearly separated from noise |
+| `div_child2_t67_z46_marked.png` | child B 173000000050 | 67 | similar - dim, blurry, distinctly lower contrast than a typical single-track detection |
+| `div_grandchild1_t68_z46_marked.png` / `div_grandchild2_t68_z45_marked.png` | grandchildren | 68 | same qualitatively dim/blurry pattern continues |
+
+Every frame of this division event is visibly dimmer and blurrier than the crisp, high-contrast
+single-cell-track crops in §8 and §10. This is a plausible, visually-grounded second cause
+compounding the `p>0.9` threshold problem: **the dividing cell itself may be intrinsically
+harder to detect/associate confidently** (lower signal, less sharply resolved - plausibly
+because chromatin condensation or the mitotic shape briefly changes the fluorescence signature)
+- so even if the threshold were relaxed, the raw edge evidence at this specific site may
+legitimately be weaker than at a typical non-dividing hop. This is a qualitative, visual
+observation only, not a measured signal-to-noise comparison.
+
+### 11.3 The 3 wrong forks: confidently wrong, not merely below-threshold-but-forced
+
+`harmonic_v1`'s 3 division false positives on this sample, plus its 1 on `44b6_0db75fae`
+(which has zero GT divisions - this FP has no possible TP anywhere), all show the **same
+signature**: both branch edges out of the fork node score **very high** `edge_prob`
+(0.95-0.9995), clearly past the presumed 0.9 threshold on both sides - this directly answers
+the coordinator's question of whether the fork threshold is "merely too strict" or the
+underlying probabilities are "simply wrong": here, **the probabilities are high and the fork
+still fires wrong**, so the threshold is not the limiting factor for these particular forks.
+
+| fork (t, z,y,x) | matched GT | branch 1: pos, matched GT, `edge_dist`/`edge_prob` | branch 2: pos, matched GT, `edge_dist`/`edge_prob` |
+|---|---|---|---|
+| (55, 33.0,140.0,136.0) | 161000000072 | (56, 33.0,136.0,136.0), matched `162000000072`, 1.625 / **0.9976** | (56, 32.0,144.0,128.0), unmatched, 3.980 / 0.9811 |
+| (14, 46.0,104.0,144.0) | 120000000056 | (15, 47.0,104.0,144.0), unmatched, 1.625 / 0.9994 | (15, 43.0,104.0,144.0), unmatched, 4.875 / 0.9908 |
+| (46, 48.0,76.0,164.0) | 152000000054 | (47, 51.0,76.0,168.0), unmatched, 5.139 / 0.9662 | (47, 48.0,76.0,164.0), matched `153000000054`, 0.0 / **0.9995** |
+| `44b6_0db75fae` fork (72, 48.0,132.0,188.0) | 113000000030 | (73, 51.0,132.0,192.0), matched `114000000030`, 5.139 / 0.9529 | (73, 48.0,132.0,196.0), unmatched, 3.25 / 0.9502 |
+
+In every one of these 4 forks, **one branch matches a real GT node that has a legitimate
+single-parent GT edge** (i.e. the fork's parent correctly continues the track through one
+branch), while the *other* branch is the spurious one - so each of these is really "one correct
+continuation edge, plus one extra high-confidence edge to a nearby cell that should not be
+attached here," rather than two wrong branches. Image evidence for the third fork (chosen as
+the highest-confidence example, both branches 0.966/0.9995 - crops
+`fp_fork3_t46_z48_marked.png`, `fp_fork3_child_t47_z51_marked.png`,
+`fp_fork3_child_exact_t47_z48_marked.png`): unlike the true division site, this neighborhood is
+**visibly brighter and sharper**, with multiple distinct, well-resolved nuclei close together.
+This is a genuine crowding/proximity case - two real, clearly-imaged cells sitting close enough
+at t+1 that the model confidently (and wrongly) links both to the same t-frame parent, rather
+than a probability-calibration failure in a vacuum.
+
+**Answer to the coordinator's two questions**:
+1. *Is the fork threshold merely too strict, or are probabilities simply wrong?* Both, in
+   different places. At the one true division site, no candidate reaches whatever bar is
+   needed (out-degree 0 everywhere) - consistent with a too-strict threshold on real,
+   possibly-genuinely-weaker evidence (§11.2). At harmonic's false forks, the opposite problem:
+   probabilities are confidently high (>0.95) on both branches, so the threshold is not the
+   limiting factor there - it is a real local crowding ambiguity between correct track
+   continuation and a nearby, brightly-imaged distractor cell.
+2. *What does the missed division look like?* A visually dim, blurry, low-contrast few frames
+   around an otherwise-correctly-detected/matched node that simply stops (zero successors) in
+   every method's solved graph - not a case of picking the wrong daughter.
+
+Scripts + raw JSON: `artifacts/division_analysis.py` (+ output
+`artifacts/division_analysis_44b6_12dfb391.json`), `artifacts/division_0db.py`,
+`artifacts/render_division_crops.py` (all gitignored, kept for reproducibility).
