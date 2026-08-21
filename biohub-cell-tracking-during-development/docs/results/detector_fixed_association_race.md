@@ -3,6 +3,10 @@
 作成日: 2026-08-21（JST）  
 ブランチ: `codex/biohub-multi-method-race`
 
+## 0. 結論
+
+同一detector出力を固定したassociation比較として、development・0b・0cの3 sampleで4方式の公式metricを取得した。0db75faeとdivisionを含む12dfb391は未完了であり、数値を推測しない。GT-free実行契約は `ground_truth_included=false` で、cache生成・candidate生成・association選択ではGTを開かず、公式metric評価時だけ参照する。machine-readableな選定・実行成果物は `artifacts/detector_fixed_race/panel.json`、各runの `race_receipt.json`、`prediction_manifest.json` を参照する。
+
 ## 1. 目的と比較条件
 
 同一の公式 detector 出力を固定し、association だけを交換して比較する。画像、cell-center、node feature、forward/reverse raw edge logitsは一度だけ取得し、後段はcacheのみを読む。GTはcache生成・candidate生成・association選択に渡さず、公式metric評価時だけ開く。
@@ -225,3 +229,13 @@ detectorを再計算せず、同じGT-free cache・同じILP・同じ公式metri
 0dbは画像・GTを固定済みで、detector cacheのmaterializeを開始した。最新確認時点では実処理PID `959006` が経過 `1,163 s`（約19分23秒）、CPU `636%`、RSS `1,171,864 KiB` で稼働中だった。cacheの`READY`は未生成で、prediction GEFF・公式metricは未取得である。
 
 同時点のcgroup `memory.events` は `oom_kill=7`（開始前から増加なし）。CPU処理は継続しており、現時点で異常終了は確認していない。materialize完了後にedge sidecarを作成し、4方式を個別プロセスで再生して公式metricを取得する。
+
+## 12. 独立 blob NMS 比較（detector-fixed lane ではない）
+
+これは同一detector出力を固定したassociation raceとは別の、独立したblob NMS実験であり、detector-fixed lane ではない。NMSの半径変更だけを比較し、結果は次のとおりである。
+
+- NMS 3.0 Final Score: 0.9140773262846648
+- NMS 3.5 Final Score: 0.9172062183593925
+- Delta: +0.0031288920747277
+
+測定値のartifactは `artifacts/performance_experiments/blob_lap_nms35/metrics.json` に保存する。
