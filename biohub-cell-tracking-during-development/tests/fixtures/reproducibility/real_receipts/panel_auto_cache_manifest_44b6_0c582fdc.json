@@ -1,0 +1,181 @@
+{
+  "array_schema": {
+    "candidate_edges": {
+      "delta_t": {
+        "dtype": "int16",
+        "shape": [
+          "E"
+        ]
+      },
+      "forward_logit": {
+        "dtype": "float32",
+        "shape": [
+          "E"
+        ]
+      },
+      "forward_probability": {
+        "dtype": "float32",
+        "shape": [
+          "E"
+        ]
+      },
+      "physical_delta": {
+        "axes": "z,y,x",
+        "dtype": "float32",
+        "shape": [
+          "E",
+          3
+        ]
+      },
+      "physical_distance": {
+        "dtype": "float32",
+        "shape": [
+          "E"
+        ]
+      },
+      "reverse_logit": {
+        "dtype": "float32",
+        "shape": [
+          "E"
+        ]
+      },
+      "reverse_probability": {
+        "dtype": "float32",
+        "shape": [
+          "E"
+        ]
+      },
+      "source_node_id": {
+        "dtype": "int64",
+        "shape": [
+          "E"
+        ]
+      },
+      "target_node_id": {
+        "dtype": "int64",
+        "shape": [
+          "E"
+        ]
+      },
+      "voxel_delta": {
+        "axes": "z,y,x",
+        "dtype": "float32",
+        "shape": [
+          "E",
+          3
+        ]
+      },
+      "voxel_distance": {
+        "dtype": "float32",
+        "shape": [
+          "E"
+        ]
+      }
+    },
+    "nodes": {
+      "detector_peak_logit": {
+        "dtype": "float32",
+        "shape": [
+          "N"
+        ]
+      },
+      "detector_peak_probability": {
+        "dtype": "float32",
+        "shape": [
+          "N"
+        ]
+      },
+      "node_features": {
+        "dtype": "float32",
+        "shape": [
+          "N",
+          "C"
+        ]
+      },
+      "node_id": {
+        "dtype": "int64",
+        "shape": [
+          "N"
+        ]
+      },
+      "physical_zyx": {
+        "axes": "z,y,x",
+        "dtype": "float32",
+        "shape": [
+          "N",
+          3
+        ]
+      },
+      "tzyx": {
+        "axes": "t,z,y,x",
+        "dtype": "int16|int32",
+        "shape": [
+          "N",
+          4
+        ]
+      }
+    }
+  },
+  "artifact_digests": {
+    "candidate_edges.npz": "e632b78dd77ee62859f95b56e055adb950b459f964f3930f9069f2b595de1ac5",
+    "nodes.npz": "b061becb6326a07584c4ca21843266339da8c54e43cf33e955b185f58542d128"
+  },
+  "cache_hash": "2bd90bee3abf0afb07abdc971bfb45235a33bb931feaf6bfb3b884759682f748",
+  "candidate_edges_file": "candidate_edges.npz",
+  "checkpoint_sha256": "347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235",
+  "checkpoint_uri": "edge_predictor_best.pth",
+  "detector_config": {
+    "det_threshold": 0.99,
+    "det_tta": true,
+    "downsample": [
+      1,
+      4,
+      4
+    ],
+    "edge_activation": "softmax",
+    "edge_threshold": 0.5,
+    "max_frames": null,
+    "pool_kernel_um": 3.0,
+    "window_size": 2
+  },
+  "detector_id": "TemporalUNet3D+SimpleNodeTransformer",
+  "edge_count": 12459009,
+  "edge_digest": "e632b78dd77ee62859f95b56e055adb950b459f964f3930f9069f2b595de1ac5",
+  "ground_truth_included": false,
+  "image_sha256": "8143958530532e2701edc7e9c12b296167eeae1d672d709c495e0fdf137fb2d3",
+  "image_stem": "44b6_0c582fdc.zarr",
+  "node_count": 34910,
+  "node_digest": "b061becb6326a07584c4ca21843266339da8c54e43cf33e955b185f58542d128",
+  "nodes_file": "nodes.npz",
+  "provenance": {
+    "adapter_source_sha256": "e914af35a2b68f2509027429efaa6ab29670be822212ae7c8628985f42a4ac72",
+    "checkpoint_sha256": "347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235",
+    "checkpoint_uri": "edge_predictor_best.pth",
+    "detector_call_count": 100,
+    "detector_id": "TemporalUNet3D+SimpleNodeTransformer",
+    "device": "cpu",
+    "elapsed_seconds": 5447.649957480986,
+    "forward_edge_call_count": 99,
+    "node_feature_conflict_observation_count": 34236,
+    "node_feature_policy": "first_observation_per_node",
+    "requested_device": "auto",
+    "reverse_edge_call_count": 99,
+    "source_commit": "075fc5f5a52d11077f9dc2b074644618f26939e2",
+    "source_repo": "https://github.com/royerlab/kaggle-cell-tracking-competition.git"
+  },
+  "sample_id": "44b6_0c582fdc",
+  "scale": [
+    1.625,
+    0.40625,
+    0.40625
+  ],
+  "schema_version": "detector_fixed.cache.v1",
+  "shape": [
+    100,
+    64,
+    256,
+    256
+  ],
+  "source_commit": "075fc5f5a52d11077f9dc2b074644618f26939e2",
+  "source_repo": "https://github.com/royerlab/kaggle-cell-tracking-competition.git"
+}

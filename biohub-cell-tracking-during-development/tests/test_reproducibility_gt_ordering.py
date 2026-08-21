@@ -15,6 +15,7 @@ never used in place of a measurement (AGENTS.md §8).  No detector, no checkpoin
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ from biohub.reproducibility.gt_guard import (
     PredictionPersistedToken,
     mint_prediction_token,
     open_ground_truth,
+    ordering_holds,
     prediction_manifest_path,
     require_token,
     resolve_prediction_manifest,
@@ -63,6 +65,7 @@ def write_manifest(prediction: Path, *, path: Path | None = None, **overrides: A
         "files": report["files"],
         "total_bytes": report["total_bytes"],
         "ground_truth_included": False,
+        "manifest_created_at": datetime.now(UTC).isoformat(),
         "synthetic_fixture": True,
     }
     payload.update(overrides)
@@ -109,6 +112,7 @@ def test_forged_token_is_rejected(tmp_path: Path) -> None:
         directory_sha256=directory_digest_report(prediction)["directory_sha256"],
         files=3,
         total_bytes=1,
+        manifest_created_at="2026-08-21T00:00:00+00:00",
         minted_at="2026-08-21T00:00:00+00:00",
         authority=object(),
     )
@@ -296,3 +300,69 @@ def test_require_token_rejects_every_non_token_object(tmp_path: Path) -> None:
     for candidate in (None, True, "token", 1, {"directory_sha256": "0" * 64}, object()):
         with pytest.raises(GroundTruthOrderingError):
             require_token(candidate)
+
+
+# --------------------------------------------------------------------------------------
+# Timestamp ordering: the receipt must prove the sequence to a reader who was not there.
+# --------------------------------------------------------------------------------------
+
+
+def test_ordering_holds_compares_creation_against_validation() -> None:
+    earlier = datetime(2026, 8, 21, 10, 0, tzinfo=UTC)
+    later = earlier + timedelta(seconds=5)
+
+    assert ordering_holds(earlier.isoformat(), later.isoformat()) is True
+    assert ordering_holds(later.isoformat(), earlier.isoformat()) is False
+    assert ordering_holds(earlier.isoformat(), earlier.isoformat()) is False
+
+
+@pytest.mark.parametrize(
+    "created,validated",
+    [
+        (None, "2026-08-21T10:00:00+00:00"),
+        ("", "2026-08-21T10:00:00+00:00"),
+        ("not-a-timestamp", "2026-08-21T10:00:00+00:00"),
+        # Naive timestamps cannot be ordered against UTC ones.
+        ("2026-08-21T10:00:00", "2026-08-21T10:00:05+00:00"),
+        ("2026-08-21T10:00:00+00:00", None),
+    ],
+)
+def test_ordering_check_refuses_unusable_timestamps(created: object, validated: object) -> None:
+    with pytest.raises(GroundTruthOrderingError):
+        ordering_holds(created, validated)
+
+
+def test_manifest_written_in_the_future_is_rejected(tmp_path: Path) -> None:
+    """A manifest cannot have been persisted after the moment we are reading it."""
+
+    prediction = synthetic_prediction_dir(tmp_path, "time_traveller")
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    write_manifest(prediction, manifest_created_at=future)
+
+    with pytest.raises(GroundTruthOrderingError, match="written in the future"):
+        mint_prediction_token(prediction)
+
+
+def test_manifest_without_a_creation_time_is_rejected(tmp_path: Path) -> None:
+    """A receipt with no creation time cannot be audited retrospectively at all."""
+
+    prediction = synthetic_prediction_dir(tmp_path, "undated")
+    manifest = write_manifest(prediction)
+    payload = json.loads(manifest.read_text())
+    del payload["manifest_created_at"]
+    manifest.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+    with pytest.raises(GroundTruthOrderingError, match="missing manifest_created_at"):
+        mint_prediction_token(prediction)
+
+
+def test_receipt_carries_creation_time_so_a_reader_can_recheck_the_order(tmp_path: Path) -> None:
+    prediction = synthetic_prediction_dir(tmp_path, "auditable")
+    gt = synthetic_ground_truth(tmp_path)
+    write_manifest(prediction)
+
+    _, receipt = open_ground_truth(gt, mint_prediction_token(prediction), RecordingOpener())
+
+    # Everything needed to re-derive the ordering claim is inside the receipt itself.
+    assert ordering_holds(receipt["prediction_manifest_created_at"], receipt["ground_truth_opened_at"]) is True
+    assert ordering_holds(receipt["prediction_manifest_created_at"], receipt["prediction_persisted_at"]) is True

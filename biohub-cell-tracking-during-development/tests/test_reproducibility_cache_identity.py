@@ -206,25 +206,54 @@ def test_content_input_digest_moves_when_the_device_changes(before: dict[str, An
 # --------------------------------------------------------------------------------------
 
 
+PANEL_CACHES = (
+    "full_auto_cache_manifest.json",  # 44b6_0113de3b, the development sample
+    "panel_auto_cache_manifest_44b6_0b24845f.json",
+    "panel_auto_cache_manifest_44b6_0c582fdc.json",
+)
+
+
 def test_panel_samples_were_detected_by_different_capture_implementations() -> None:
     """Records the live defect: one panel, two detector code versions.
 
-    ``44b6_0113de3b`` was captured with adapter ``24ac2cb6…`` (commit ``b31dd76``) and
-    ``44b6_0b24845f`` with adapter ``e914af35…`` (commit ``8b03cd6``).  Panel-level
-    aggregation treats them as one fixed detector.  Any per-sample content-input digest
-    is identical in structure, so nothing in the current machinery objects.
+    ``44b6_0113de3b`` was captured with adapter ``24ac2cb6…`` (commit ``b31dd76``);
+    ``44b6_0b24845f`` and ``44b6_0c582fdc`` with ``e914af35…`` (commit ``8b03cd6``).
+    Panel-level aggregation treats all three as one fixed detector.  The detector
+    *settings* are identical, which is exactly what makes the code difference invisible.
     """
 
-    development = load("full_auto_cache_manifest.json")
-    second = load("panel_auto_cache_manifest_44b6_0b24845f.json")
+    manifests = [load(name) for name in PANEL_CACHES]
+    adapters = {m["sample_id"]: m["provenance"]["adapter_source_sha256"] for m in manifests}
 
-    assert development["sample_id"] != second["sample_id"]
-    assert (
-        development["provenance"]["adapter_source_sha256"] != second["provenance"]["adapter_source_sha256"]
-    ), "panel samples now share a capture implementation; delete this test and the finding"
-    # The detector settings are the same, which is what makes the code difference invisible.
-    assert development["detector_config"] == second["detector_config"]
-    assert development["checkpoint_sha256"] == second["checkpoint_sha256"]
+    assert len(adapters) == 3
+    assert len(set(adapters.values())) > 1, (
+        f"panel samples now share a capture implementation; delete this test and the finding: {adapters}"
+    )
+    assert adapters["44b6_0b24845f"] == adapters["44b6_0c582fdc"]
+    assert adapters["44b6_0113de3b"] != adapters["44b6_0b24845f"]
+
+    reference = manifests[0]
+    for manifest in manifests[1:]:
+        assert manifest["detector_config"] == reference["detector_config"]
+        assert manifest["checkpoint_sha256"] == reference["checkpoint_sha256"]
+        assert manifest["source_commit"] == reference["source_commit"]
+
+
+def test_different_samples_are_never_confused_for_one_another() -> None:
+    """Distinct images must never collide on the content-input digest."""
+
+    digests = {load(name)["sample_id"]: content_input_digest(load(name)) for name in PANEL_CACHES}
+
+    assert len(set(digests.values())) == len(digests), digests
+
+
+def test_a_panel_sample_cache_is_self_consistent() -> None:
+    for name in PANEL_CACHES:
+        manifest = load(name)
+        assert recompute_cache_hash(manifest) == manifest["cache_hash"], name
+        assert manifest["ground_truth_included"] is False, name
+        assert manifest["artifact_digests"][manifest["nodes_file"]] == manifest["node_digest"], name
+        assert manifest["artifact_digests"][manifest["candidate_edges_file"]] == manifest["edge_digest"], name
 
 
 def test_capture_implementations_used_by_persisted_caches_are_enumerable() -> None:
@@ -239,6 +268,6 @@ def test_capture_implementations_used_by_persisted_caches_are_enumerable() -> No
         assert isinstance(adapter, str) and len(adapter) == 64, path.name
         adapters[path.name] = adapter
 
-    # Five persisted caches, five distinct capture implementations. Recorded, but never
-    # constrained: nothing requires two caches in one comparison to share one.
-    assert len(set(adapters.values())) == len(adapters), adapters
+    # The capture implementation is recorded but never constrained: nothing requires
+    # two caches that feed one comparison to have been built by the same code.
+    assert len(set(adapters.values())) > 1, adapters

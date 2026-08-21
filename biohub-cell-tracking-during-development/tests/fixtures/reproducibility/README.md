@@ -15,6 +15,15 @@ the pipeline really wrote, not against a hand-written idealisation of it.
 | `dev_full_auto_compact_timed_prediction_manifest.json` | `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/prediction_manifest.json` |
 | `full_auto_cache_manifest.json` | `artifacts/detector_fixed_race/full_auto/cache/44b6_0113de3b/manifest.json` |
 | `full_auto_cache_READY` | `artifacts/detector_fixed_race/full_auto/cache/44b6_0113de3b/READY` |
+| `panel_auto_cache_manifest_44b6_0b24845f.json` | `artifacts/detector_fixed_race/panel_auto/cache/44b6_0b24845f/manifest.json` |
+| `panel_auto_cache_manifest_44b6_0c582fdc.json` | `artifacts/detector_fixed_race/panel_auto/cache/44b6_0c582fdc/manifest.json` |
+| `smoke_{auto,fix,disk}_cache_manifest_44b6_0113de3b.json` | `artifacts/detector_fixed_race/smoke_{auto,fix,disk}/cache/44b6_0113de3b/manifest.json` |
+| `panel_runs_0c_harmonic_race_receipt.json` | `artifacts/detector_fixed_race/panel_runs_0c_harmonic/44b6_0c582fdc/race_receipt.json` |
+
+`smoke_fix` and `smoke_disk` are the load-bearing pair: same sample, same four frames,
+same image bytes, different capture implementation (the latter is commit `19feb13`).
+They are the only before/after evidence in the tree that a cache rewrite preserved the
+detector output, so do not delete or regenerate them.
 | `strong_baseline_v1_*_run.json` / `_metrics.json` / `_prediction_manifest.json` / `_source_receipt.json` | `artifacts/strong_baseline_v1/{official_ilp,harmonic_ilp}/` |
 
 `strong_baseline_v1_official_ilp_source_receipt.json` is absent because the run never

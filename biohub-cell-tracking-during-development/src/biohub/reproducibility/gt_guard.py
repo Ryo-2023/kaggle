@@ -58,6 +58,7 @@ class PredictionPersistedToken:
     directory_sha256: str
     files: int
     total_bytes: int
+    manifest_created_at: str
     minted_at: str
     authority: object
 
@@ -92,6 +93,38 @@ def _same_prediction(recorded: str, prediction_path: Path) -> bool:
         return False
     depth = min(len(recorded_parts), len(actual_parts))
     return recorded_parts[-depth:] == actual_parts[-depth:]
+
+
+def parse_timestamp(value: object, *, field: str) -> datetime:
+    """Parse a required ISO-8601 timestamp, rejecting missing or naive values.
+
+    A naive timestamp cannot be ordered against a UTC one, so accepting it would
+    reintroduce exactly the ambiguity this guard exists to remove.
+    """
+
+    if not isinstance(value, str) or not value.strip():
+        raise GroundTruthOrderingError(f"prediction manifest is missing {field}")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise GroundTruthOrderingError(f"{field} is not an ISO-8601 timestamp: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise GroundTruthOrderingError(f"{field} must carry a timezone offset: {value!r}")
+    return parsed.astimezone(UTC)
+
+
+def ordering_holds(manifest_created_at: object, validated_at: object) -> bool:
+    """Return whether a persisted receipt's own timestamps prove the ordering.
+
+    This is the check that ``prediction_manifest_validated_before_gt`` should have
+    been.  It can be applied retrospectively to any saved ``metrics.json`` — but only
+    when the metric carries ``prediction_manifest_created_at``, which none of them do
+    today.
+    """
+
+    created = parse_timestamp(manifest_created_at, field="manifest_created_at")
+    validated = parse_timestamp(validated_at, field="prediction_manifest_validated_at")
+    return created < validated
 
 
 def _read_manifest(manifest_path: Path) -> Mapping[str, Any]:
@@ -162,13 +195,22 @@ def mint_prediction_token(prediction_path: Path) -> PredictionPersistedToken:
                 f"manifest {payload.get(key)!r}, bytes {report[key]!r}",
             )
 
+    created_at = parse_timestamp(payload.get("manifest_created_at"), field="manifest_created_at")
+    minted = datetime.now(UTC)
+    if created_at > minted:
+        raise GroundTruthOrderingError(
+            f"prediction manifest claims to have been written in the future: "
+            f"manifest_created_at {created_at.isoformat()}, now {minted.isoformat()}",
+        )
+
     return PredictionPersistedToken(
         prediction_path=prediction_path,
         manifest_path=manifest_path,
         directory_sha256=str(report["directory_sha256"]),
         files=int(report["files"]),
         total_bytes=int(report["total_bytes"]),
-        minted_at=datetime.now(UTC).isoformat(),
+        manifest_created_at=created_at.isoformat(),
+        minted_at=minted.isoformat(),
         authority=_MINT_AUTHORITY,
     )
 
@@ -211,21 +253,31 @@ def open_ground_truth(
     if Path(verified.prediction_path).resolve() == gt_path.resolve():
         raise GroundTruthOrderingError("prediction path and ground-truth path must differ")
     opened = opener(gt_path)
+    opened_at = datetime.now(UTC)
     receipt = {
         "prediction_path": str(verified.prediction_path),
         "prediction_manifest_path": str(verified.manifest_path),
         "prediction_directory_sha256": verified.directory_sha256,
         "prediction_files": verified.files,
         "prediction_total_bytes": verified.total_bytes,
+        "prediction_manifest_created_at": verified.manifest_created_at,
         "prediction_persisted_at": verified.minted_at,
         "ground_truth_path": str(gt_path),
-        "ground_truth_opened_at": datetime.now(UTC).isoformat(),
+        "ground_truth_opened_at": opened_at.isoformat(),
         "ordering_enforced_by": "biohub.reproducibility.gt_guard.open_ground_truth",
         "ordering_evidence": (
             "prediction bytes re-hashed to prediction_directory_sha256 immediately "
             "before this ground-truth open"
         ),
     }
+    # The receipt must be self-checking: a reader with only this dict can confirm the
+    # ordering without trusting the process that wrote it.
+    if not ordering_holds(receipt["prediction_manifest_created_at"], receipt["ground_truth_opened_at"]):
+        raise GroundTruthOrderingError(
+            "prediction manifest was not written before ground truth was opened: "
+            f"created {receipt['prediction_manifest_created_at']}, "
+            f"opened {receipt['ground_truth_opened_at']}",
+        )
     return opened, receipt
 
 
@@ -236,6 +288,8 @@ __all__ = [
     "PredictionPersistedToken",
     "mint_prediction_token",
     "open_ground_truth",
+    "ordering_holds",
+    "parse_timestamp",
     "prediction_manifest_path",
     "require_token",
     "resolve_prediction_manifest",
