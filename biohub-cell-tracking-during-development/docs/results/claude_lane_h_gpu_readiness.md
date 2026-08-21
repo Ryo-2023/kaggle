@@ -295,19 +295,44 @@ coordinator before this file could be considered done.
 All numbers in this section are either (a) real measurements with a cited
 source, or (b) explicitly labeled estimates with the reasoning shown — none
 are fabricated. Per BRIEF ADDENDUM, the authoritative CPU baseline is the
-**detector-fixed** run, not the earlier `strong_baseline_v1` number:
+**detector-fixed** run — and as of this update there are **three**
+completed detector-fixed cache runs, not one, each read directly from its
+`manifest.json`/`provenance` block:
 
-| Stage | Time | Device | Source |
-|---|---:|---|---|
-| Detector materialize (TemporalUNet3D encode × TTA + transformer edge scoring), 100 frames, 1 movie | **4,841.27 s** (~80.7 min) | `auto`→`cpu` | ADDENDUM A3; `docs/results/chatgpt_submission_report_ja.md` §14 ("detector elapsed `4,841.270636372006 s`") |
-| Cache-only association × 4 methods + GEFF write + official metric, same movie, same cache | **116.29 s** total (~29 s/method) | cpu (no model involved at all) | ADDENDUM A4 |
-| **One full race (detect once, score 4 methods)** | **4,957.56 s** (82.6 min) | — | sum of the above |
+| Sample | Nodes (raw cache) | Candidate edges | Detector elapsed | requested→actual device |
+|---|---:|---:|---:|---|
+| `44b6_0113de3b` (dev sample) | 26,887 | 7,240,938 | **4,841.27 s** (80.7 min) | `auto`→`cpu` |
+| `44b6_0c582fdc` | 34,910 | 12,459,009 | 5,447.65 s (90.8 min) | `auto`→`cpu` |
+| `44b6_0b24845f` (**worst observed**) | 66,845 | **45,354,474** | 5,476.42 s (91.3 min) | `auto`→`cpu` |
 
-The detector is **97.7%** of one movie's wall time; association + GEFF +
-metric is **2.3%**. A corroborating, independent prior measurement
+(Sources: `artifacts/detector_fixed_race/{full_auto,panel_auto}/cache/<sample>/manifest.json`,
+`node_count`/`edge_count`/`provenance.elapsed_seconds`/`provenance.requested_device`/`provenance.device`
+fields, read directly from the live Codex worktree.) All three receipts
+independently confirm `requested_device=auto` resolving to `device=cpu` on
+this hardware — consistent with §1's audit, not a fluke of the one sample
+originally cited.
+
+**The workload is far less uniform than the dev sample alone suggested.**
+Node count varies 2.5× and candidate-edge count varies **6.3×** across
+these three samples, yet detector elapsed time varies only ~13%
+(4,841–5,476 s). That's not a coincidence: the detector stage runs a fixed
+99 sliding windows per 100-frame movie regardless of cell density (§4
+speedup section below), so its cost is close to sample-invariant — but
+candidate-edge generation and caching (numpy, host-RAM-bound, downstream of
+the model) scales with node count, and did so far enough on
+`44b6_0b24845f` to be the run the coordinator identified as pushing the
+container to 5.6 GiB. **Lab-box RAM/disk sizing must use the worst observed
+sample (`44b6_0b24845f`, 45.35M candidate edges), not the dev sample** — see
+the memory subsection below.
+
+Cache-only association (4 methods) + GEFF write + official metric, replayed
+off the dev sample's cache, measured **116.29 s** total (~29 s/method,
+ADDENDUM A4) — no model involved at all. One full race on the dev sample
+(detect once, score 4 methods) is **4,957.56 s** (82.6 min); the detector is
+**97.7%** of that wall time. A corroborating, independent prior measurement
 (`strong_baseline_v1`, older single-method in-process runner, ~4,459.7 s)
-lands in the same 74–81 minute band — two pipeline generations agree the
-detector forward pass, not association, is what costs an hour-plus per
+lands in the same band — two pipeline generations and three samples agree
+the detector forward pass, not association, is what costs an hour-plus per
 movie on this CPU container.
 
 ### What will NOT speed up on GPU at all (confirmed at the code level, §1 row 8-9, not just by timing)
@@ -342,8 +367,13 @@ per movie, plus a much smaller `SimpleNodeTransformer` edge-scoring cost
 this container's `torch 2.13.0+cpu` wheel does bundle it) is at its worst
 disadvantage relative to GPU cuDNN kernels — a 10-30x range is a
 defensible order-of-magnitude band for a model this size (8 MB checkpoint,
-so not huge) on a modern lab RTX-class card. Applying that band only to the
-detector time, keeping the 116.29 s floor fixed:
+so not huge) on a modern lab RTX-class card. This band is applied to a
+quantity now corroborated across three samples rather than one: detector
+elapsed time is ~4,841-5,476 s regardless of a 2.5-6.3× swing in node/edge
+counts (table above), i.e. it tracks the fixed 99-window UNet workload, not
+per-sample cell density — a sturdier basis for a device-bound estimate than
+a single run would be. Applying that band only to the detector time,
+keeping the 116.29 s floor fixed:
 
 | Assumed detector speedup | Detector time | + fixed floor | Total pipeline time | **Overall speedup** |
 |---:|---:|---:|---:|---:|
@@ -371,20 +401,28 @@ are for.
 
 ### Memory: host RAM and VRAM, not just CUDA availability
 
-Per the coordinator's 13:20 JST update, the CPU pipeline is **already**
-memory-constrained on this 7.651 GiB container — Codex just landed two
+The CPU pipeline is **already** memory-constrained on this 7.651 GiB
+container, and worse on some samples than others. Codex landed two
 memory-driven commits (`19feb13` "Stream detector pair captures to disk",
 `8b03cd6` "Use chunked memmap edge cache validation") plus
-`scripts/build_detector_cache_mmap.py`, specifically because one movie's
-candidate edge set (7,240,938 edges / 198 MB compressed) would otherwise
-risk exceeding the container's RAM budget alongside the ~4-5.6 GiB Codex's
-own job has been observed holding. **This bottleneck is entirely
-host-RAM-side and independent of which device the model runs on** —
-moving the model to CUDA does not touch it, and the lab box should keep
-the streaming/memmap architecture regardless of device, with system RAM
-comfortably above the current container's 7.651 GiB ceiling (a real
-target should be set once the lab box is known — this doc does not assert
-one, since none is measured yet).
+`scripts/build_detector_cache_mmap.py` specifically because candidate-edge
+volume varies a lot by sample and pushed the container as high as 5.6 GiB
+of 7.651 GiB — directly traced above to `44b6_0b24845f`'s 45,354,474
+candidate edges (6.3× the dev sample's 7,240,938), not the dev sample this
+document originally sized against. **This bottleneck is entirely
+host-RAM-side and independent of which device the model runs on** — moving
+the model to CUDA does not touch it, and the lab box should keep the
+streaming/memmap architecture regardless of device. Sizing implication:
+size lab-box system RAM against the *worst* observed sample, not the first
+one measured, and expect real test-set movies to plausibly exceed even
+`44b6_0b24845f`'s candidate-edge volume — node/edge counts have varied 2.5×
+and 6.3× respectively across just three samples so far, and candidate-edge
+count grows faster than node count (closer to quadratic than linear, since
+candidates are generated within per-window node pairs), so the tail risk on
+unseen data is real. This doc does not assert a specific RAM figure for the
+lab box, since none is measured yet — comfortably above 7.651 GiB, sized to
+the worst-case growth trend above rather than to the dev sample alone, is
+the only defensible statement today.
 
 VRAM has no direct measurement (nobody has run this model on a GPU) — the
 sliding-window architecture processes exactly one `(B=1, T=2)`-frame
