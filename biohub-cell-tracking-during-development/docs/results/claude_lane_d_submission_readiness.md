@@ -130,6 +130,12 @@ Consequences:
    movie.** Any threshold or hyper-parameter chosen against that movie's GT is tuned on
    the public leaderboard, not validated against it. Per `BRIEF` §0.4 this is exactly the
    leakage path that must stay closed.
+4. **Two of the five fixed validation-panel samples are public test movies.** Verified
+   from `<CODEX>/artifacts/detector_fixed_race/panel.json`, whose samples are
+   `44b6_0113de3b`, `44b6_0b24845f`, `44b6_0c582fdc`, `44b6_0db75fae`, `44b6_12dfb391` —
+   the first two are in `test/`. Only 3 of 5 panel samples are honest held-out data.
+   195 of the 199 train movies are untouched by the public test split and could be used
+   instead.
 
 ### 2.2 Shape, verified from the file layout
 
