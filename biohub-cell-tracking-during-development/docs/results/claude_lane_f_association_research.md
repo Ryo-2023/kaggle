@@ -375,3 +375,33 @@ on the wrong ones. On `44b6_12dfb391` (the only sample with a GT division),
 `division_jaccard` is `0.0` in both cases, so the 0.1 division term of the
 official score contributes exactly nothing, for every method measured.
 
+### 7.7 `division_weight = 0.6` — my pre-registered prediction is FALSIFIED
+
+Section 6 predicted that lowering the ILP division cost from 1.0 to 0.6 would
+admit a second fork edge at the same 0.5 posterior already accepted for a
+first child, and that this was "the largest untested lever in the project".
+Measured on `44b6_12dfb391`, the only sample with a GT division, with
+`forward_only` so that only the ILP cost changes:
+
+| division_weight | edge TP/FP/FN | division TP/FP/FN | division Jaccard | final score |
+|---:|---|---|---:|---:|
+| 1.0 (pinned) | 668/81/105 | 0/0/1 | 0.0 | 0.7809215555664836 |
+| 0.6 | 668/**117**/105 | 0/**35**/1 | 0.0 | **0.7488002699448160** |
+
+The mechanism prediction was right and the value prediction was wrong.
+Lowering the price does exactly what the algebra said — divisions go from 0 to
+35 — but **all 35 are false, the one true division is still missed, and edge
+FP rises by 36**. The score falls by 0.032, roughly the size of the entire
+harmonic gain, in the wrong direction.
+
+The correct conclusion is the opposite of the one I pre-registered:
+**division is not an ILP pricing problem.** The `p₂ > 0.9` bar was never what
+kept the true division out; the edge model simply does not place high parent
+posterior on the correct second child. Lowering the bar buys noise, and buys
+it at a rate of 35 false positives per zero true positives. Recommendation 2
+in the report is withdrawn on this evidence.
+
+This also reframes the 0.1 division term: it is not "unclaimed headroom
+reachable by a cost change". Reaching it requires a detector or edge model
+that can actually see a fork, which is outside the association-only scope of
+this lane.
