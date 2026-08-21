@@ -413,3 +413,32 @@ This also reframes the 0.1 division term: it is not "unclaimed headroom
 reachable by a cost change". Reaching it requires a detector or edge model
 that can actually see a fork, which is outside the association-only scope of
 this lane.
+
+### 7.8 The crudest possible version: just square the forward column
+
+`fixed_temperature` is `s = norm_col(p**2)`. No reverse pass, no entropy, no
+per-column adaptation, no fitted constant — the exponent 2.0 is simply the
+upper end of the clamp the published method already applies.
+
+| sample | harmonic | `entropy_temperature` | `fixed_temperature` | fixed final score |
+|---|---|---|---|---:|
+| `44b6_0113de3b` | 48/2/2 | 48/2/2 | 48/2/2 | 0.9205322342188971 |
+| `44b6_0b24845f` | 40/10/9 | 42/11/7 | 42/11/7 | 0.6402774813233724 |
+| `44b6_0c582fdc` | 62/6/8 | 62/7/8 | 62/7/8 | 0.7903656040647242 |
+| `44b6_0db75fae` | 134/8/17 | 139/12/12 | 139/12/12 | 0.8333254654235369 |
+
+`fixed_temperature` matches `entropy_temperature` on edge TP/FP/FN **exactly**
+on every sample run; the scores differ only in the fifth decimal, through
+`total_node_ratio`. The entropy adaptation contributes nothing, because the
+clamp at 2.0 already binds for most columns.
+
+So the finding reduces to its simplest possible form: **squaring the forward
+softmax reproduces harmonic's edge recovery, and exceeds it on `0db75fae`
+(139 vs 134) and `0b24845f`.** Whatever `harmonic_v1` is doing for recall, one
+line of arithmetic on the forward logits does as well or better, and the
+second detector pass is not part of it.
+
+The precision caveat from section 7.4 applies unchanged: this family buys TP
+with FP and does not win on pooled edge Jaccard. It is a mechanism result, not
+a recommended method.
+
