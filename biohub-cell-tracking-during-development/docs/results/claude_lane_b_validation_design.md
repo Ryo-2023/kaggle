@@ -580,6 +580,177 @@ P2 exists precisely for this.
 
 ---
 
+### 4.8 FIVE-SAMPLE PANEL — final grading (1,093 GT edges)
+
+Added 2026-08-21 once Codex completed all five samples. §4.6 remains unedited; §4.7 was the
+three-sample interim. Counts read from the receipts (`panel_runs_0db_*`, `panel_runs_12df_*`
+and the earlier directories), never transcribed.
+
+| sample | GT edges | official | harmonic | mutual | motion |
+|---|---:|---|---|---|---|
+| `44b6_0113de3b` | 50 | 46/2/4 → 0.88379 | 48/2/2 → 0.92112 | 43/0/7 → 0.85983 | 42/2/8 → 0.80961 |
+| `44b6_0b24845f` | 49 | 39/9/10 → 0.62622 | 40/10/9 → 0.62747 | 37/8/12 → 0.60938 | 35/8/14 → 0.58141 |
+| `44b6_0c582fdc` | 70 | 57/6/13 → 0.73850 | 62/6/8 → 0.80224 | 55/5/15 → 0.72368 | 50/6/20 → 0.65057 |
+| `44b6_0db75fae` | 151 | 133/9/18 → 0.81504 | 134/8/17 → 0.82496 | 124/4/27 → 0.78545 | 125/4/26 → 0.79509 |
+| `44b6_12dfb391` | 773 | 668/81/105 → 0.78092 | 688/89/85 → 0.79629 | 648/84/125 → 0.75553 | 644/78/129 → 0.75683 |
+
+#### Pre-registration: final grade
+
+| sample | sign agreements of 6 | ranking matches sample 1 | harmonic − official |
+|---|---:|:---:|---:|
+| `44b6_0b24845f` | 6/6 | yes | +1 |
+| `44b6_0c582fdc` | 6/6 | yes | +5 |
+| `44b6_0db75fae` | **5/6** | **no** | +1 |
+| `44b6_12dfb391` | 6/6 | yes | +20 |
+
+Mean **5.75 of 6**, against a pre-registered H0 of **2.60** and H1 of 4.85–5.42. The observed
+value exceeds even the H1/comonotone prediction. **H0 is decisively rejected**; the single
+break is `44b6_0db75fae`, and it is exactly the mutual-vs-motion pair discussed below.
+
+#### 1. harmonic_v1 over official_ilp is ESTABLISHED
+
+Pooled edge gains **+2, +1, +5, +1, +20** → **b = 29, c = 0**, exact McNemar
+**p = 3.725 × 10⁻⁹**.
+
+Unlike the three-sample interim, this verdict is now robust:
+
+- **Reversal sensitivity:** survives **at least 15** reversed edges out of 1,093
+  (b=44, c=15 still clears Bonferroni). At three samples a *single* reversal broke it.
+- **Leave-one-sample-out:** worst case is dropping the dominant `44b6_12dfb391`, leaving
+  b = 9, c = 0, **p = 0.0039** — still clears α = 0.00833. The result does not depend on the
+  one big movie.
+- **Paired bootstrap on score:** CI95 **[+0.0099, +0.0271]**, excludes zero.
+
+**Confidence: high, with one residual caveat.** The nested-TP assumption is still optimistic
+in principle, but it no longer carries the verdict: b would have to be wrong by 15+ edges,
+and the leave-one-out check removes the single-movie dependence. Report it as established.
+The matched-edge mask is still worth having, but it is no longer load-bearing for this pair.
+
+**Note the effect size shrank with evidence:** harmonic − official was +0.0373 on the dev
+movie, +0.0360 pooled over three samples, and **+0.0178 pooled over five**. The early
+single-movie estimate was inflated by ~2×. This is the ordinary behaviour of an effect
+estimated on a tiny panel, and it is why §6 P3 exists.
+
+#### 2. mutual_confidence vs motion_gated — NOT separable in any way worth acting on
+
+This is the pair that flips, and it flips differently depending on what you measure.
+
+| sample | edge gain (motion − mutual) | TP winner | score gain (motion − mutual) | score winner |
+|---|---:|---|---:|---|
+| `44b6_0113de3b` | −1 | mutual | −0.0502 | mutual |
+| `44b6_0b24845f` | −2 | mutual | −0.0280 | mutual |
+| `44b6_0c582fdc` | −5 | mutual | −0.0731 | mutual |
+| `44b6_0db75fae` | **+1** | **motion** | **+0.0096** | **motion** |
+| `44b6_12dfb391` | −4 | mutual | **+0.0013** | **motion** |
+
+**TP and score disagree on `44b6_12dfb391`**: mutual recovers 4 more GT edges, yet motion
+scores higher — because motion carries 6 fewer false positives (78 vs 84) and a better node
+ratio (−0.001 vs +0.008). The metric reverses the edge-level ordering.
+
+Verdicts:
+
+- **Edge level:** b = 1, c = 12, p = 0.003418 — nominally clears Bonferroni. But it
+  **fails leave-one-out**: drop `44b6_0c582fdc` and it becomes b = 1, c = 7, p = 0.0703,
+  failing even α = 0.05. It also fails at just **2 reversed edges** (p = 0.0127).
+- **Score level:** pooled size-weighted gap is **0.0059**, well under the panel's 0.0195
+  noise floor. The paired CI is [−0.0120, −0.0006] — technically excluding zero, but by
+  0.0006, which is a third of the metric's own one-edge quantum.
+
+**Conclusion: not separated.** These two methods should be reported as tied. This is the one
+pair where the five-sample panel still cannot decide, and it is precisely the pair whose
+ordering depends on which averaging you pick.
+
+##### Does the flip track a characterisation axis?
+
+The two samples where motion wins by score are `44b6_0db75fae` and `44b6_12dfb391` — the two
+densest (1.76 and 7.88 annotated nodes per frame, against 1.00–1.27 for the other three),
+with the most tracks (6 and 15, against 1–2) and the most GT edges (151 and 773, against
+49–70). Median displacement does *not* split them (2.33 µm for `0db75fae` sits inside the
+mutual-winning range 2.07–2.88).
+
+**But this is a hypothesis, not a finding, and it must not be reported as one.** Density,
+track count and edge count rise together across this panel (§3.3) — they are one confounded
+axis, not three independent confirmations. With five samples and a 3/2 split, the chance that
+any given axis separates them cleanly is 1/C(5,2) = **0.10** one-sided. A 10% coincidence is
+not evidence. Testing it needs samples that break the density/size confound — which no
+locally available movie does.
+
+#### 3. Micro vs macro vs size-weighted, and what the official summariser uses
+
+| method | micro edge Jaccard | size-weighted adj (**official**) | macro (unweighted mean) |
+|---|---:|---:|---:|
+| `harmonic_v1` | 0.804636 | **0.797563** | 0.794414 |
+| `official_ilp` | 0.785833 | **0.779765** | 0.768896 |
+| `mutual_confidence` | 0.759631 | **0.754804** | 0.746774 |
+| `motion_gated` | 0.752309 | **0.748935** | 0.718701 |
+
+`official_metrics.summarise()` computes `edge_jaccard` **micro** (TP/FP/FN summed, then
+Jaccard) but builds the reported `score` from `adj_edge_jaccard`, which is a **size-weighted
+mean with weights wᵢ = TPᵢ + FPᵢ + FNᵢ**. Macro is not used anywhere.
+
+Weight share under that size weighting:
+
+| sample | share of the official score |
+|---|---:|
+| `44b6_0113de3b` | 4.3% |
+| `44b6_0b24845f` | 4.8% |
+| `44b6_0c582fdc` | 6.3% |
+| `44b6_0db75fae` | 13.3% |
+| `44b6_12dfb391` | **71.2%** |
+
+**The official score for this panel is 71% one movie.** The consequence is visible in the
+mutual−motion gap, which is +0.0073 micro, +0.0059 size-weighted, and **+0.0281 macro** —
+4.8× larger unweighted, because macro gives the three small samples where mutual wins
+decisively the same voice as the one big sample where it does not.
+
+**What the team should do:** report **per-sample, then micro, then macro, then the official
+size-weighted score** — four numbers, always. Micro and the official score answer "how will
+this do on a leaderboard weighted like this panel"; macro answers "does this help on a
+typical movie". A change that moves macro but not the weighted score is helping small movies
+only, and vice versa. Reporting one number hides which.
+
+#### 4. Divisions — measurable at last, and the largest untapped lever in the project
+
+`44b6_12dfb391` holds exactly one GT division, so the term is finally live: `summarise()` no
+longer drops it.
+
+| method | div TP | div FP | div FN | division_jaccard | contribution (0.1·J) |
+|---|---:|---:|---:|---:|---:|
+| `official_ilp` | 0 | 0 | 1 | 0.0 | 0.0000 |
+| `harmonic_v1` | 0 | **4** | 1 | 0.0 | 0.0000 |
+| `mutual_confidence` | 0 | 0 | 1 | 0.0 | 0.0000 |
+| `motion_gated` | 0 | 0 | 1 | 0.0 | 0.0000 |
+
+harmonic's 4 false divisions are 1 on `44b6_0db75fae` (which has no GT division at all) and
+3 on `44b6_12dfb391`.
+
+Three consequences, in order of importance:
+
+1. **Every method scores zero on 10% of the official metric.** Detecting the single division
+   would be worth **+0.100** of score. The entire four-method association spread is
+   **0.0486**. Division detection is worth **2.05× more than every association improvement
+   in this project combined**, and nobody is working on it.
+2. **harmonic carries a latent liability worth more than its entire edge advantage.** Its 4
+   division FPs are free today only because TP = 0 makes the Jaccard 0 either way. The moment
+   a method detects that division, harmonic's FPs cost real score: TP=1, FP=4 gives
+   J = 0.200 → +0.020, against TP=1, FP=0 giving J = 1.000 → **+0.100**. That 0.080 gap
+   dwarfs harmonic's established +0.0178 edge advantage. **Whoever works on divisions must
+   fix harmonic's false-division rate first, or the association win will be spent paying for it.**
+3. **One division is not a measurement.** `division_jaccard` on n=1 has no resolution
+   whatsoever — it can only be 0 or 1. Everything above is arithmetic about what the term
+   *would* pay, not an estimate of any method's division ability. P8 still applies: this
+   panel cannot test division handling, it can only price it.
+
+#### 5. Updated noise floor
+
+1,093 GT edges, mean pairwise discordance 0.0406, dJ/dr = 1.6328 →
+**δ resolvable ≥ 0.0195**. Compare the panel's history: 0.1356 (one movie) → 0.0672 (three
+samples) → **0.0195** (five samples). The panel improved 7× and is now within reach of the
+δ = 0.01 target set in §4.4 — that would need roughly 4× more GT edges again, i.e. the
+~43-movie panel of §7 item 3.
+
+---
+
 ## 5. The split
 
 Two tiers. Assignment is driven by §2.1 first (leaderboard contamination), then by the

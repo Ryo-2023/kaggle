@@ -49,6 +49,8 @@ SAMPLE_GLOBS = {
     "44b6_0b24845f": ["panel_runs_0b_*/44b6_0b24845f/race_receipt.json",
                       "panel_runs/44b6_0b24845f/race_receipt.json"],
     "44b6_0c582fdc": ["panel_runs_0c_*/44b6_0c582fdc/race_receipt.json"],
+    "44b6_0db75fae": ["panel_runs_0db_*/44b6_0db75fae/race_receipt.json"],
+    "44b6_12dfb391": ["panel_runs_12df_*/44b6_12dfb391/race_receipt.json"],
 }
 
 
@@ -321,8 +323,75 @@ def main() -> int:
             "score_lost_to_node_penalty": raw - weighted[m]["weighted_adj_edge_jaccard"],
         }
 
+    # ---- divisions: finally measurable once 44b6_12dfb391 is in the panel ----------
+    div = {}
+    for m in METHODS:
+        dtp = sum(int(samples[s][m]["division_tp"]) for s in sample_ids)
+        dfp = sum(int(samples[s][m]["division_fp"]) for s in sample_ids)
+        dfn = sum(int(samples[s][m]["division_fn"]) for s in sample_ids)
+        tot = dtp + dfp + dfn
+        dj = (dtp / tot) if tot > 0 else None
+        div[m] = {
+            "division_tp": dtp, "division_fp": dfp, "division_fn": dfn,
+            "division_jaccard": dj,
+            "division_term_contribution": (0.1 * dj) if dj is not None else 0.0,
+            "per_sample_fp": {s: int(samples[s][m]["division_fp"]) for s in sample_ids},
+            "term_is_live": tot > 0,
+        }
+
+    # ---- macro (unweighted mean of per-sample score) vs micro vs size-weighted ------
+    averaging = {}
+    for m in METHODS:
+        w = [tp[s][m] + fp[s][m] + fn[s][m] for s in sample_ids]
+        averaging[m] = {
+            "micro_edge_jaccard": micro[m]["micro_edge_jaccard"],
+            "size_weighted_adj": weighted[m]["weighted_adj_edge_jaccard"],
+            "macro_unweighted_adj": sum(score[s][m] for s in sample_ids) / len(sample_ids),
+            "per_sample_weight_share": {
+                s: wi / sum(w) for wi, s in zip(w, sample_ids)
+            },
+        }
+
+    # ---- leave-one-out robustness of each pooled McNemar verdict -------------------
+    loo = []
+    for pr in pairwise:
+        rows = []
+        for drop in sample_ids:
+            bb = sum(max(d["edge_gain_b_over_a"], 0)
+                     for d in pr["per_sample"] if d["sample_id"] != drop)
+            cc = sum(max(-d["edge_gain_b_over_a"], 0)
+                     for d in pr["per_sample"] if d["sample_id"] != drop)
+            pv = mcnemar_exact(bb, cc)
+            rows.append({"dropped": drop, "b": bb, "c": cc, "p": pv,
+                         "sig_bonferroni": pv < alpha_b})
+        loo.append({"a": pr["a"], "b": pr["b"], "leave_one_out": rows,
+                    "robust_to_any_single_drop": all(r["sig_bonferroni"] for r in rows)})
+
+    # ---- does the mutual/motion flip track any characterisation axis? --------------
+    flip = None
+    mm = next(pr for pr in pairwise
+              if pr["a"] == "mutual_confidence" and pr["b"] == "motion_gated")
+    by_tp = {d["sample_id"]: d["edge_gain_b_over_a"] for d in mm["per_sample"]}
+    by_score = {s: score[s]["motion_gated"] - score[s]["mutual_confidence"] for s in sample_ids}
+    flip = {
+        "motion_minus_mutual_edges": by_tp,
+        "motion_minus_mutual_score": by_score,
+        "tp_winner": {s: ("motion_gated" if v > 0 else "mutual_confidence" if v < 0 else "tie")
+                      for s, v in by_tp.items()},
+        "score_winner": {s: ("motion_gated" if v > 0 else "mutual_confidence" if v < 0 else "tie")
+                         for s, v in by_score.items()},
+        "tp_and_score_disagree_on": [
+            s for s in sample_ids
+            if (by_tp[s] > 0) != (by_score[s] > 0)
+        ],
+    }
+
     out = {
-        "schema_version": "claude.lane_b.pooled_three_sample.v1",
+        "schema_version": "claude.lane_b.pooled_panel.v2",
+        "divisions": div,
+        "averaging": averaging,
+        "leave_one_out": loo,
+        "mutual_vs_motion_flip": flip,
         "node_penalty": node_penalty,
         "samples": {
             s: {
@@ -418,6 +487,51 @@ def main() -> int:
             for m in METHODS
         )
         print(f"    {s_id}: {row}")
+    print()
+    print("=" * 78)
+    print("4. DIVISIONS (live now that 44b6_12dfb391 is in the panel)")
+    print("=" * 78)
+    print(f"  {'method':<20}{'dTP':>5}{'dFP':>5}{'dFN':>5}{'div_jaccard':>13}{'0.1*J':>8}  FP by sample")
+    for m in METHODS:
+        d = div[m]
+        fps = ",".join(f"{s[5:9]}:{v}" for s, v in d["per_sample_fp"].items() if v)
+        print(f"  {m:<20}{d['division_tp']:>5}{d['division_fp']:>5}{d['division_fn']:>5}"
+              f"{str(d['division_jaccard']):>13}{d['division_term_contribution']:>8.4f}  {fps or '-'}")
+
+    print()
+    print("=" * 78)
+    print("5. MICRO vs SIZE-WEIGHTED vs MACRO")
+    print("=" * 78)
+    print(f"  {'method':<20}{'micro J':>10}{'weighted adj':>14}{'macro adj':>12}")
+    for m in METHODS:
+        a = averaging[m]
+        print(f"  {m:<20}{a['micro_edge_jaccard']:>10.6f}"
+              f"{a['size_weighted_adj']:>14.6f}{a['macro_unweighted_adj']:>12.6f}")
+    share = averaging[METHODS[0]]["per_sample_weight_share"]
+    print("\n  official_ilp weight share per sample (what summarise() actually uses):")
+    for s_id, v in share.items():
+        print(f"    {s_id}: {v:6.1%}")
+
+    print()
+    print("=" * 78)
+    print("6. LEAVE-ONE-SAMPLE-OUT ROBUSTNESS")
+    print("=" * 78)
+    for row in loo:
+        worst = max(row["leave_one_out"], key=lambda r: r["p"])
+        print(f"  {row['a'][:12]:<13}vs {row['b'][:12]:<13} robust={str(row['robust_to_any_single_drop']):<6}"
+              f" worst case: drop {worst['dropped']} -> b={worst['b']},c={worst['c']}, p={worst['p']:.2e}")
+
+    print()
+    print("=" * 78)
+    print("7. mutual_confidence vs motion_gated -- the flip")
+    print("=" * 78)
+    print(f"  {'sample':<16}{'edge gain':>11}{'TP winner':>20}{'score gain':>12}{'score winner':>20}")
+    for s_id in sample_ids:
+        print(f"  {s_id:<16}{flip['motion_minus_mutual_edges'][s_id]:>+11d}"
+              f"{flip['tp_winner'][s_id]:>20}{flip['motion_minus_mutual_score'][s_id]:>+12.4f}"
+              f"{flip['score_winner'][s_id]:>20}")
+    print(f"  TP and score disagree on: {flip['tp_and_score_disagree_on'] or 'none'}")
+
     print(f"\nwrote {args.out}")
     return 0
 
