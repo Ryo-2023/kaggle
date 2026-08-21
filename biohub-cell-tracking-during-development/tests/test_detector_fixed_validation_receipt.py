@@ -38,6 +38,7 @@ def _write_evidence(tmp_path: Path) -> tuple[Path, list[Path], dict[tuple[str, s
         for method_index, method_id in enumerate(METHODS):
             manifest_path = tmp_path / sample_id / method_id / "prediction_manifest.json"
             prediction_path = manifest_path.parent / f"{method_id}.geff"
+            prediction_path.mkdir(parents=True, exist_ok=True)
             _write_json(
                 manifest_path,
                 {
@@ -76,11 +77,13 @@ def test_aggregate_validation_receipts_is_deterministic_and_summarizes_methods(t
         panel_path=panel_path,
         receipt_paths=list(reversed(receipt_paths)),
         methods=METHODS,
+        evidence_root=tmp_path,
     )
     second = panel_api.aggregate_validation_receipts(
         panel_path=panel_path,
         receipt_paths=receipt_paths,
         methods=METHODS,
+        evidence_root=tmp_path,
     )
 
     assert first == second
@@ -123,6 +126,7 @@ def test_aggregate_validation_receipts_rejects_missing_or_duplicate_pair(
             panel_path=panel_path,
             receipt_paths=receipt_paths,
             methods=METHODS,
+            evidence_root=tmp_path,
         )
 
 
@@ -145,6 +149,7 @@ def test_aggregate_validation_receipts_rejects_per_sample_cache_hash_mismatch(tm
             panel_path=panel_path,
             receipt_paths=receipt_paths,
             methods=METHODS,
+            evidence_root=tmp_path,
         )
 
 
@@ -173,6 +178,7 @@ def test_aggregate_validation_receipts_rejects_gt_contaminated_evidence(
             panel_path=panel_path,
             receipt_paths=receipt_paths,
             methods=METHODS,
+            evidence_root=tmp_path,
         )
 
 
@@ -191,12 +197,13 @@ def test_aggregate_accepts_actual_shape_legacy_manifest_without_sample_id(tmp_pa
         panel_path=panel_path,
         receipt_paths=receipt_paths,
         methods=METHODS,
+        evidence_root=tmp_path,
     )
 
     assert result["records"][0]["sample_id"] == SAMPLES[0]
 
 
-@pytest.mark.parametrize("path_case", ("manifest_missing", "record_missing", "mismatch"))
+@pytest.mark.parametrize("path_case", ("manifest_missing", "record_missing", "prediction_missing", "mismatch"))
 def test_aggregate_validation_receipts_requires_matching_prediction_path(
     tmp_path: Path,
     path_case: str,
@@ -207,11 +214,15 @@ def test_aggregate_validation_receipts_requires_matching_prediction_path(
     manifest = json.loads(manifest_path.read_text())
     if path_case == "manifest_missing":
         manifest.pop("prediction_path")
+    elif path_case == "prediction_missing":
+        manifest["prediction_path"] = str(tmp_path / "missing" / "official_ilp.geff")
     elif path_case == "mismatch":
         manifest["prediction_path"] = str(tmp_path / "wrong" / "official_ilp.geff")
     manifest_path.write_text(json.dumps(manifest))
     if path_case == "record_missing":
         record.pop("prediction_path")
+    elif path_case == "prediction_missing":
+        record["prediction_path"] = str(tmp_path / "missing" / "official_ilp.geff")
     elif path_case == "mismatch":
         record["prediction_path"] = str(tmp_path / "another" / "official_ilp.geff")
     receipt_records = json.loads(receipt_paths[0].read_text())
@@ -223,6 +234,7 @@ def test_aggregate_validation_receipts_requires_matching_prediction_path(
             panel_path=panel_path,
             receipt_paths=receipt_paths,
             methods=METHODS,
+            evidence_root=tmp_path,
         )
 
 
@@ -239,7 +251,73 @@ def test_aggregate_validation_receipts_requires_official_control(tmp_path: Path)
             panel_path=panel_path,
             receipt_paths=receipt_paths,
             methods=("harmonic_v1",),
+            evidence_root=tmp_path,
         )
+
+
+@pytest.mark.parametrize("field", ("sample_id", "method_id"))
+def test_aggregate_validation_receipts_rejects_unhashable_pair_identifier(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    panel_path, receipt_paths, _records_by_pair = _write_evidence(tmp_path)
+    receipt_records = json.loads(receipt_paths[0].read_text())
+    receipt_records[0][field] = {"invalid": "identifier"}
+    receipt_paths[0].write_text(json.dumps(receipt_records))
+
+    with pytest.raises(ValueError, match=field):
+        panel_api.aggregate_validation_receipts(
+            panel_path=panel_path,
+            receipt_paths=receipt_paths,
+            methods=METHODS,
+            evidence_root=tmp_path,
+        )
+
+
+def test_aggregate_resolves_relative_evidence_against_root_not_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel_path, receipt_paths, _records_by_pair = _write_evidence(tmp_path)
+    relative_manifest = "sample-a/official_ilp/prediction_manifest.json"
+    relative_prediction = "sample-a/official_ilp/official_ilp.geff"
+    for receipt_path in receipt_paths:
+        records = json.loads(receipt_path.read_text())
+        for record in records:
+            manifest_path = Path(record["prediction_manifest_path"])
+            manifest = json.loads(manifest_path.read_text())
+            record["prediction_manifest_path"] = str(
+                manifest_path.relative_to(tmp_path).as_posix()
+            )
+            record["prediction_path"] = str(
+                Path(record["prediction_path"]).relative_to(tmp_path).as_posix()
+            )
+            record["metrics"]["prediction_manifest_path"] = record["prediction_manifest_path"]
+            manifest["prediction_path"] = record["prediction_path"]
+            manifest_path.write_text(json.dumps(manifest))
+        receipt_path.write_text(json.dumps(records))
+
+    shadow_manifest = tmp_path / "shadow" / relative_manifest
+    _write_json(
+        shadow_manifest,
+        {
+            "sample_id": "sample-a",
+            "method_id": "official_ilp",
+            "cache_hash": "f" * 64,
+            "ground_truth_included": True,
+            "prediction_path": relative_prediction,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "shadow")
+
+    result = panel_api.aggregate_validation_receipts(
+        panel_path=panel_path,
+        receipt_paths=receipt_paths,
+        methods=METHODS,
+        evidence_root=tmp_path,
+    )
+
+    assert result["records"][0]["sample_id"] == "sample-a"
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "run_detector_fixed_race.py"
@@ -260,6 +338,8 @@ def test_aggregate_panel_receipts_parser_accepts_repeated_receipts() -> None:
             "aggregate-panel-receipts",
             "--panel",
             "panel.json",
+            "--evidence-root",
+            "repo",
             "--receipt",
             "sample-a.json",
             "--receipt",
@@ -271,14 +351,16 @@ def test_aggregate_panel_receipts_parser_accepts_repeated_receipts() -> None:
         ]
     )
     assert args.receipt == [Path("sample-a.json"), Path("sample-b.json")]
+    assert args.evidence_root == Path("repo")
     assert args.methods == METHODS
 
 
-@pytest.mark.parametrize("missing", ("--panel", "--receipt", "--methods", "--output"))
+@pytest.mark.parametrize("missing", ("--panel", "--evidence-root", "--receipt", "--methods", "--output"))
 def test_aggregate_panel_receipts_parser_requires_fields(missing: str) -> None:
     cli = _load_cli()
     values = {
         "--panel": "panel.json",
+        "--evidence-root": "repo",
         "--receipt": "receipt.json",
         "--methods": "official_ilp",
         "--output": "aggregate.json",

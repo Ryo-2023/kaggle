@@ -313,12 +313,20 @@ def _receipt_json(path: Path, kind: str) -> tuple[bytes, Any]:
     return raw, payload
 
 
-def _receipt_evidence_path(value: str, receipt_path: Path) -> Path:
-    path = Path(value)
-    if path.is_absolute() or path.is_file():
-        return path
-    relative_to_receipt = receipt_path.parent / path
-    return relative_to_receipt if relative_to_receipt.is_file() else path
+def _receipt_evidence_path(value: str | Path, evidence_root: Path) -> Path:
+    try:
+        path = Path(value)
+    except TypeError as exc:
+        raise ValueError(f"evidence path must be path-like: {value!r}") from exc
+    if path.is_absolute():
+        return path.resolve()
+    root = evidence_root.resolve()
+    resolved = (root / path).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"relative evidence path escapes evidence_root: {value!r}") from exc
+    return resolved
 
 
 def _require_cache_hash(value: Any, *, sample_id: str, method_id: str) -> str:
@@ -334,10 +342,14 @@ def aggregate_validation_receipts(
     panel_path: Path,
     receipt_paths: Sequence[Path],
     methods: Sequence[str],
+    evidence_root: Path,
 ) -> dict[str, Any]:
     """Aggregate persisted detector-fixed race receipts without opening GT or images."""
 
-    panel_path = Path(panel_path)
+    evidence_root = Path(evidence_root).resolve()
+    if not evidence_root.is_dir():
+        raise ValueError(f"evidence_root must be an existing directory: {evidence_root}")
+    panel_path = _receipt_evidence_path(panel_path, evidence_root)
     panel_raw, panel = _receipt_json(panel_path, "validation panel")
     if not isinstance(panel, Mapping) or panel.get("schema_version") != PANEL_SCHEMA_VERSION:
         raise ValueError("validation panel schema must be detector_fixed.panel.v1")
@@ -367,7 +379,7 @@ def aggregate_validation_receipts(
     expected_pairs = {(sample_id, method_id) for sample_id in sample_ids for method_id in method_ids}
     records_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
     receipt_metadata: dict[tuple[str, str], tuple[Path, str]] = {}
-    receipt_paths = tuple(Path(path) for path in receipt_paths)
+    receipt_paths = tuple(_receipt_evidence_path(path, evidence_root) for path in receipt_paths)
     if not receipt_paths:
         raise ValueError("receipt_paths must not be empty")
     for receipt_path in receipt_paths:
@@ -381,9 +393,9 @@ def aggregate_validation_receipts(
             record = dict(record_value)
             sample_id = record.get("sample_id")
             method_id = record.get("method_id")
-            pair = (sample_id, method_id)
             if not isinstance(sample_id, str) or not isinstance(method_id, str):
                 raise ValueError(f"race receipt record {index} is missing sample_id or method_id")
+            pair = (sample_id, method_id)
             if pair not in expected_pairs:
                 raise ValueError(f"unexpected sample/method pair: {pair!r}")
             if pair in records_by_pair:
@@ -418,7 +430,7 @@ def aggregate_validation_receipts(
             manifest_value = record.get("prediction_manifest_path")
             if not isinstance(manifest_value, str) or not manifest_value.strip():
                 raise ValueError(f"record {pair!r} is missing prediction_manifest_path")
-            manifest_path = _receipt_evidence_path(manifest_value, receipt_path)
+            manifest_path = _receipt_evidence_path(manifest_value, evidence_root)
             manifest_raw, manifest = _receipt_json(manifest_path, "prediction manifest")
             del manifest_raw
             if not isinstance(manifest, Mapping):
@@ -433,8 +445,15 @@ def aggregate_validation_receipts(
             record_prediction_value = record.get("prediction_path")
             if not isinstance(record_prediction_value, str) or not record_prediction_value.strip():
                 raise ValueError(f"record {pair!r} is missing prediction_path")
-            manifest_prediction_path = _receipt_evidence_path(manifest_prediction_value, receipt_path)
-            record_prediction_path = _receipt_evidence_path(record_prediction_value, receipt_path)
+            manifest_prediction_path = _receipt_evidence_path(manifest_prediction_value, evidence_root)
+            record_prediction_path = _receipt_evidence_path(record_prediction_value, evidence_root)
+            if not manifest_prediction_path.is_dir():
+                raise ValueError(
+                    "prediction manifest prediction_path is not an existing GEFF directory: "
+                    f"{manifest_prediction_path}"
+                )
+            if not record_prediction_path.is_dir():
+                raise ValueError(f"record prediction_path is not an existing GEFF directory: {record_prediction_path}")
             if manifest_prediction_path.resolve() != record_prediction_path.resolve():
                 raise ValueError(f"prediction_path mismatch for {pair!r}")
             if "sample_id" in manifest:
@@ -464,7 +483,7 @@ def aggregate_validation_receipts(
             metrics_manifest_value = metrics.get("prediction_manifest_path")
             if not isinstance(metrics_manifest_value, str) or not metrics_manifest_value.strip():
                 raise ValueError(f"metrics are missing prediction_manifest_path: {pair!r}")
-            metrics_manifest_path = _receipt_evidence_path(metrics_manifest_value, receipt_path)
+            metrics_manifest_path = _receipt_evidence_path(metrics_manifest_value, evidence_root)
             if metrics_manifest_path.resolve() != manifest_path.resolve():
                 raise ValueError(f"metrics prediction manifest path mismatch: {pair!r}")
             try:

@@ -162,6 +162,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Aggregate persisted detector-fixed race receipts without rerunning inference",
     )
     aggregate.add_argument("--panel", type=Path, required=True)
+    aggregate.add_argument("--evidence-root", type=Path, required=True)
     aggregate.add_argument("--receipt", type=Path, action="append", required=True)
     aggregate.add_argument("--methods", type=_methods, required=True)
     aggregate.add_argument("--output", type=Path, required=True)
@@ -252,6 +253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             panel_path=args.panel,
             receipt_paths=args.receipt,
             methods=args.methods,
+            evidence_root=args.evidence_root,
         )
         _write_json(args.output, result)
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
