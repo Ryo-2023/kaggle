@@ -56,6 +56,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sidecar-root", type=Path, help="where per-column .npy sidecars live")
     parser.add_argument("--max-distance", type=float, default=7.0)
     parser.add_argument(
+        "--division-weight",
+        type=float,
+        help=(
+            "override the ILP division cost (pinned default 1.0).  The second fork "
+            "edge is admitted when p2 > division_weight - appearance_weight, so 0.6 "
+            "is the value that accepts a second child at the same 0.5 posterior the "
+            "pipeline already accepts for a first child."
+        ),
+    )
+    parser.add_argument(
         "--score-only",
         action="store_true",
         help="score the cache and report candidate counts without building a graph or solving",
@@ -95,6 +105,27 @@ def main(argv: list[str] | None = None) -> int:
 
     predictor = _load_upstream_predictor(Path(args.upstream_root))
     graph_builder, ilp_solver = _association_components(predictor)
+    if args.division_weight is not None:
+        import tracksdata as td
+
+        from biohub.detector_fixed_race.association import OFFICIAL_ILP_CONFIG
+
+        ilp_config = dict(OFFICIAL_ILP_CONFIG)
+        ilp_config["division_weight"] = float(args.division_weight)
+
+        def ilp_solver(graph):  # noqa: ANN001, ANN202
+            if graph.num_edges() <= 0:
+                return graph
+            solver = td.solvers.ILPSolver(
+                edge_weight=ilp_config["edge_weight"] * td.EdgeAttr("edge_prob"),
+                appearance_weight=ilp_config["appearance_weight"],
+                disappearance_weight=ilp_config["disappearance_weight"],
+                division_weight=ilp_config["division_weight"],
+            )
+            solved = solver.solve(graph)
+            if solved is None:
+                raise RuntimeError("tracksdata ILP solver returned None")
+            return solved
     result, receipt = associate_research_rule(
         cache,
         args.rule,
@@ -102,12 +133,17 @@ def main(argv: list[str] | None = None) -> int:
         ilp_solver=ilp_solver,
     )
 
-    prediction_path = Path(args.output) / sample_id / f"{args.rule}.geff"
+    variant = args.rule
+    if args.division_weight is not None:
+        variant = f"{args.rule}_dw{args.division_weight:g}".replace(".", "p")
+    prediction_path = Path(args.output) / sample_id / f"{variant}.geff"
     write_research_prediction(cache, result, predictor, prediction_path)
 
     record = {
         "sample_id": sample_id,
         "rule_id": args.rule,
+        "variant_id": variant,
+        "division_weight": args.division_weight,
         "cache_hash": cache.cache_hash,
         "cache_root": str(args.cache),
         "prediction_path": str(prediction_path),
@@ -133,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     record["peak_rss_gib"] = _peak_rss_gib()
     record["total_seconds"] = time.monotonic() - started
 
-    receipt_path = prediction_path.parent / f"{args.rule}_receipt.json"
+    receipt_path = prediction_path.parent / f"{variant}_receipt.json"
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     print(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True))
