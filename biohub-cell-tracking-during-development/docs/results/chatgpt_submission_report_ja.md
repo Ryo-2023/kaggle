@@ -3,7 +3,7 @@
 作成日: 2026-08-21（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
-最新push: `origin/codex/biohub-multi-method-race`（直前に確認済みレポートcommit: `da7768e`、実装commit: `eb6e472`）
+最新push: `origin/codex/biohub-multi-method-race`（直前に確認済み実装commit: `f405c00`、レポート直前commit: `da7768e`）
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -316,8 +316,8 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 実測結果:
 
-- full pytest: `148 passed, 1 warning in 196.99s`（`eb6e472`以前の記録。追加されたdetector-fixed関連テストを含む最新full pytestは0c完了後も未実行）
-- `eb6e472`後のdetector-fixed関連確認: `11 passed in 4.74s`、Ruff `All checks passed!`
+- full pytest: `174 passed, 2 warnings in 39.26s`（harmonic sweep CLI追加後に再実行）
+- detector-fixed関連確認: `12 passed in 3.83s`、対象Ruff `All checks passed!`
 - race対象Ruff: `All checks passed!`
 - report対象pytest: `4 passed`
 - full repository Ruff: 24件の既存問題（`src/biohub/official_metrics/metrics.py`、`src/biohub/visualizer/*`）が残る。今回の変更対象外のため修正していない。
@@ -328,7 +328,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - race branch: `codex/biohub-multi-method-race`
-- race latest implementation commit: `eb6e472`、直前レポートcommit: `da7768e`
+- race latest implementation commit: `f405c00`、直前レポートcommit: `da7768e`
 - remote: `origin/codex/biohub-multi-method-race`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
 
@@ -361,6 +361,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - `artifacts/detector_fixed_race/panel_runs_0c_harmonic/44b6_0c582fdc/`
 - `artifacts/detector_fixed_race/panel_runs_0c_mutual/44b6_0c582fdc/`
 - `artifacts/detector_fixed_race/panel_runs_0c_motion/44b6_0c582fdc/`
+- `artifacts/detector_fixed_race/harmonic_sweep/`（3 sample × reverse_weight 0.10/0.20/0.30）
 
 Kaggleへの外部提出は実施していない。prediction生成・local official evaluationまでであり、ユーザー承認なしのKaggle submissionは行っていない。
 
@@ -380,7 +381,7 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 ### 次の一手
 
 1. 0db75faeとdivisionを含む`12dfb391`へdetector-fixed panelを拡張する（必要な計算時間と容量を見積もってから実行）。
-2. 0b・0cでharmonicがofficialを上回った仮説を、divisionありsampleを含む追加panelで検証する。
+2. `reverse_weight=0.10`候補をdivisionありsampleで検証し、既定値変更の可否を判断する。
 3. NMS 3.5 µm候補は旧blob laneとして、detector-fixed panelとは別条件で評価する。
 4. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
 
@@ -485,3 +486,15 @@ prediction GEFF、GT、receipt、cache sidecarは `docs/results/detector_fixed_a
 ## 15. 2026-08-21 panel完了状況
 
 `44b6_0c582fdc`のGT-free materialize、edge memmap化、official/harmonic/mutual/motionのGEFF生成・公式metric評価が完了した。これにより、事前固定panelのdevelopment＋0b＋0cの3 sampleを完走した。0db75faeとdivisionを含む12dfb391は未実行である。0c実行中も`oom_kill`は開始前の7から増加せず、GPU fallback設定は`auto→cpu`としてreceiptへ保存された。
+
+## 16. Harmonic reverse weight性能改善
+
+detector再計算なしで、3 sampleの同一cache上に`harmonic_v1`の`reverse_weight=0.10/0.20/0.30`を個別再生した。3 sample平均Final Scoreは次のとおり。
+
+| reverse_weight | 平均Final Score | `0.20`との差 | 判定 |
+|---:|---:|---:|---|
+| `0.10` | `0.7836523346441413` | `+0.0000425622352703` | 現時点の平均Best。ただし差は極小、division未評価 |
+| `0.20` | `0.7836097724088710` | `+0` | 公開Strong Baseline v1の既定値として維持 |
+| `0.30` | `0.7777614914000653` | `-0.0058482810088057` | 棄却 |
+
+`0.10`はdevelopmentと0cで僅かに改善したが、0bでは`0.20`を僅かに下回った。したがって既定値を変更せず、`0.10`をdivision sample追加後の候補として記録した。variant GEFF・receipt・runtimeは `artifacts/detector_fixed_race/harmonic_sweep/` に保存し、CLIは`--harmonic-reverse-weight`で再現できる。

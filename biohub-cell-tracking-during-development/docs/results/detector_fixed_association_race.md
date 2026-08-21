@@ -179,6 +179,12 @@ docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0c582fdc --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_0c582fdc --output artifacts/detector_fixed_race/panel_runs_0c_motion --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_0c582fdc.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods motion_gated'
 ```
 
+harmonic weight sweepは、上記の`--cache`を固定し、出力rootをvariantごとに変えて次の引数を追加する。`--harmonic-reverse-weight 0.10`（または`0.20`、`0.30`）を指定すると、prediction名は`harmonic_v1_rw_0p10.geff`等になる。
+
+```bash
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0c582fdc --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_0c582fdc --output artifacts/detector_fixed_race/harmonic_sweep/44b6_0c582fdc_rw_0p10 --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_0c582fdc.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods harmonic_v1 --harmonic-reverse-weight 0.10'
+```
+
 ## 8. 既知の問題
 
 - 現行MacBook DockerはCPU-onlyであり、GPU実測値はまだない。
@@ -189,3 +195,27 @@ docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-
 ## 9. panel実験の完了状況
 
 `44b6_0c582fdc`は0bと同じGT-free detector materializeを完了し、cache hash `2bd90bee3abf0afb07abdc971bfb45235a33bb931feaf6bfb3b884759682f748`、nodes `34,910`、candidate edges `12,459,009`、detector elapsed `5,447.649957480986 s`、`auto/cpu`を記録した。sidecar作成後、official/harmonic/mutual/motionのprediction GEFFと公式metricを取得した。development＋0b＋0cの3 sampleで4方式比較が完了し、最小panel条件を満たした。0db75faeとdivisionを含む12dfb391は未実行である。
+
+## 10. Harmonic reverse weight性能実験
+
+detectorを再計算せず、同じGT-free cache・同じILP・同じ公式metricで`harmonic_v1`の`reverse_weight`だけを`0.10 / 0.20 / 0.30`へ変更した。各runは別プロセス・別output rootで実行し、0bの45M候補edgeでもOOMを再発させていない。`0.20`は既存harmonic v1の再現値である。CLI引数とvariant命名は`f405c00`で追加し、全pytest `174 passed, 2 warnings`、対象Ruff `All checks passed!`を確認した。
+
+| sample | weight | Final Score | Edge TP/FP/FN | wall time [s] |
+|---|---:|---:|---:|---:|
+| `44b6_0113de3b` | `0.10` | `0.9212347117064648` | `48/2/2` | `33.001343` |
+| `44b6_0113de3b` | `0.20` | `0.9211200215044129` | `48/2/2` | `31.805268` |
+| `44b6_0113de3b` | `0.30` | `0.9210734286098294` | `48/2/2` | `32.610888` |
+| `44b6_0b24845f` | `0.10` | `0.627410648067993` | `40/10/9` | `170.736890` |
+| `44b6_0b24845f` | `0.20` | `0.6274705993317501` | `40/10/9` | `166.122310` |
+| `44b6_0b24845f` | `0.30` | `0.622819815888671` | `39/9/10` | `172.885813` |
+| `44b6_0c582fdc` | `0.10` | `0.8023116441579663` | `62/6/8` | `60.830931` |
+| `44b6_0c582fdc` | `0.20` | `0.8022386963904503` | `62/6/8` | `58.467485` |
+| `44b6_0c582fdc` | `0.30` | `0.7893912297016954` | `61/6/9` | `58.315125` |
+
+| weight | 3 sample平均 Final Score | 0.20との差 |
+|---:|---:|---:|
+| `0.10` | `0.7836523346441413` | `+0.0000425622352703` |
+| `0.20` | `0.7836097724088710` | `+0` |
+| `0.30` | `0.7777614914000653` | `-0.0058482810088057` |
+
+`0.10`が3 sample平均では最大だが、改善幅は`4.26e-5`と小さく、0bでは`0.20`が僅かに上回る。したがって公開Strong Baseline v1の既定値は`0.20`のまま保持し、`0.10`を追加性能候補としてdivision sample検証待ちにする。全variantのprediction GEFF・receipt・wall timeは `artifacts/detector_fixed_race/harmonic_sweep/` 以下に保存した。
