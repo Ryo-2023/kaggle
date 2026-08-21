@@ -8,6 +8,7 @@ from biohub.detector_fixed_race.association import (
     AssociationSpec,
     associate_from_cache,
 )
+from biohub.detector_fixed_race.panel import _association_spec, _prediction_filename
 from biohub.detector_fixed_race.schema import CandidateEdgeArrays, DetectorCache, NodeArrays
 
 
@@ -143,3 +144,10 @@ def test_motion_gated_excludes_long_edges_and_applies_decay(
     assert (1, 4) not in rows
     assert rows[(0, 2)] == pytest.approx(0.9)
     assert rows[(1, 3)] == pytest.approx(0.8)
+
+
+def test_harmonic_variant_weight_is_explicit_and_uses_unique_prediction_name() -> None:
+    spec = _association_spec("harmonic_v1", harmonic_reverse_weight=0.30)
+    assert spec.reverse_weight == pytest.approx(0.30)
+    assert _prediction_filename("harmonic_v1", harmonic_reverse_weight=0.30) == "harmonic_v1_rw_0p30.geff"
+    assert _prediction_filename("harmonic_v1", harmonic_reverse_weight=0.20) == "harmonic_v1.geff"

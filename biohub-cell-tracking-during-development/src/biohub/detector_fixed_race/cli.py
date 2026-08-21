@@ -141,6 +141,12 @@ def _build_parser() -> argparse.ArgumentParser:
     dev.add_argument("--ground-truth", type=Path, required=True)
     dev.add_argument("--upstream-root", type=Path, required=True)
     dev.add_argument("--methods", type=_methods, default=ASSOCIATION_METHODS)
+    dev.add_argument(
+        "--harmonic-reverse-weight",
+        type=float,
+        default=panel_api.DEFAULT_HARMONIC_REVERSE_WEIGHT,
+        help="harmonic_v1 reverse-logit weight (0, 0.35]; default 0.20",
+    )
 
     panel = subparsers.add_parser("panel", help="Run all methods over a frozen panel")
     panel.add_argument("--panel", type=Path, required=True)
@@ -215,6 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             methods=args.methods,
             gt_path=args.ground_truth,
             predictor_module=predictor,
+            harmonic_reverse_weight=args.harmonic_reverse_weight,
         )
         print(json.dumps(records, ensure_ascii=False, indent=2, sort_keys=True))
         return 0

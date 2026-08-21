@@ -71,3 +71,27 @@ def test_materialize_parser_defaults_to_accelerator_auto_selection() -> None:
         ]
     )
     assert args.device == "auto"
+
+
+def test_dev_race_parser_accepts_harmonic_reverse_weight() -> None:
+    cli = _load_cli()
+    args = cli._build_parser().parse_args(
+        [
+            "dev-race",
+            "--sample",
+            "sample",
+            "--cache",
+            "cache",
+            "--output",
+            "out",
+            "--ground-truth",
+            "truth.geff",
+            "--upstream-root",
+            "upstream",
+            "--methods",
+            "harmonic_v1",
+            "--harmonic-reverse-weight",
+            "0.30",
+        ]
+    )
+    assert args.harmonic_reverse_weight == pytest.approx(0.30)

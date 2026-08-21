@@ -24,6 +24,27 @@ from biohub.detector_fixed_race.prediction import evaluate_prediction, write_pre
 
 PANEL_SCHEMA_VERSION = "detector_fixed.panel.v1"
 DEFAULT_PANEL_METHODS = ASSOCIATION_METHODS
+DEFAULT_HARMONIC_REVERSE_WEIGHT = 0.20
+
+
+def _association_spec(method_id: str, *, harmonic_reverse_weight: float) -> AssociationSpec:
+    """Build one association spec while exposing harmonic tuning explicitly."""
+
+    reverse_weight = (
+        harmonic_reverse_weight
+        if method_id == "harmonic_v1"
+        else DEFAULT_HARMONIC_REVERSE_WEIGHT
+    )
+    return AssociationSpec(method_id, reverse_weight=reverse_weight)
+
+
+def _prediction_filename(method_id: str, *, harmonic_reverse_weight: float) -> str:
+    """Keep canonical filenames at the default and isolate custom variants."""
+
+    if method_id != "harmonic_v1" or float(harmonic_reverse_weight) == DEFAULT_HARMONIC_REVERSE_WEIGHT:
+        return f"{method_id}.geff"
+    tag = f"{float(harmonic_reverse_weight):.2f}".replace(".", "p")
+    return f"harmonic_v1_rw_{tag}.geff"
 
 
 def _array_and_attrs(image_path: Path) -> tuple[Any, Mapping[str, Any]]:
@@ -193,12 +214,16 @@ def run_dev_race(
     methods: Sequence[str],
     gt_path: Path,
     predictor_module: ModuleType,
+    harmonic_reverse_weight: float = DEFAULT_HARMONIC_REVERSE_WEIGHT,
 ) -> list[dict[str, Any]]:
     """Replay all association methods from one detector cache and score them."""
 
     unknown = set(methods) - set(ASSOCIATION_METHODS)
     if unknown:
         raise ValueError(f"unknown association methods: {sorted(unknown)}")
+    # Validate even when a caller requests only non-harmonic methods so an
+    # invalid sweep setting cannot be silently accepted.
+    AssociationSpec("harmonic_v1", reverse_weight=harmonic_reverse_weight)
     cache = load_detector_cache(_cache_path(Path(cache_root), sample_id))
     graph_builder, ilp_solver = _association_components(predictor_module)
     output_root = Path(output_root)
@@ -207,11 +232,17 @@ def run_dev_race(
     for method_id in methods:
         association = associate_from_cache(
             cache,
-            AssociationSpec(method_id),
+            _association_spec(
+                method_id,
+                harmonic_reverse_weight=harmonic_reverse_weight,
+            ),
             graph_builder=graph_builder,
             ilp_solver=ilp_solver,
         )
-        prediction_path = output_root / sample_id / f"{method_id}.geff"
+        prediction_path = output_root / sample_id / _prediction_filename(
+            method_id,
+            harmonic_reverse_weight=harmonic_reverse_weight,
+        )
         write_prediction(cache, association, predictor_module, prediction_path)
         metrics = evaluate_prediction(
             prediction_path,
