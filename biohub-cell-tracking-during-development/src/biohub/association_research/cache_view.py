@@ -138,7 +138,9 @@ def _materialise_columns(
         with np.load(Path(root) / edges_file, allow_pickle=False) as payload:
             for name in missing:
                 array = payload[name]
-                temporary = destination / f".{name}.npy.tmp"
+                # np.save appends ".npy" unless the name already ends with it,
+                # so the temporary must carry the suffix itself.
+                temporary = destination / f".{name}.tmp.npy"
                 np.save(temporary, array)
                 temporary.replace(destination / f"{name}.npy")
                 del array

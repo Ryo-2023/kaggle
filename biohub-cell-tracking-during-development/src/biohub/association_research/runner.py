@@ -161,7 +161,10 @@ def build_candidate_rows(
     threshold_total = 0
     gate_only_total = 0
     scored_total = 0
-    argmax_admitted = 0
+    target_total = 0
+    targets_with_candidate = 0
+    contested_sources = 0
+    recoverable_targets = 0
     for pair_slice in iter_pair_slices(cache):
         pair_count += 1
         inputs = pair_slice.inputs
@@ -170,9 +173,20 @@ def build_candidate_rows(
         above_threshold = scores32 > np.float32(rule.threshold)
         accepted = accepted & np.isfinite(scores)
         scored_total += int(scores.size)
+        target_total += int(scores.shape[1])
         threshold_total += int(above_threshold.sum())
         gate_only_total += int((accepted & ~above_threshold).sum())
-        argmax_admitted += int(accepted.sum(axis=0).clip(max=1).sum())
+        per_target = accepted.sum(axis=0)
+        targets_with_candidate += int((per_target > 0).sum())
+        # Sources claimed by two or more targets are the only decision the ILP
+        # actually has to make; it prices the second child at division_weight.
+        contested_sources += int((accepted.sum(axis=1) >= 2).sum())
+        # Targets whose winner is unambiguous but sits under the fixed cut and
+        # above the ILP's own break-even probability: the recoverable losses.
+        column_best = scores.max(axis=0) if scores.size else np.zeros(0)
+        recoverable_targets += int(
+            ((column_best <= float(rule.threshold)) & (column_best >= 0.2)).sum()
+        )
         flat = np.flatnonzero(accepted.ravel())
         if flat.size == 0:
             continue
@@ -195,10 +209,14 @@ def build_candidate_rows(
     diagnostics = {
         "frame_pair_count": pair_count,
         "scored_candidate_count": scored_total,
+        "target_node_count": target_total,
         "candidate_edge_count": accepted_total,
         "threshold_admitted_count": threshold_total,
         "gate_only_admitted_count": gate_only_total,
-        "targets_with_a_candidate": argmax_admitted,
+        "targets_with_a_candidate": targets_with_candidate,
+        "targets_without_a_candidate": target_total - targets_with_candidate,
+        "contested_source_count": contested_sources,
+        "recoverable_target_count": recoverable_targets,
     }
     return rows, diagnostics
 
