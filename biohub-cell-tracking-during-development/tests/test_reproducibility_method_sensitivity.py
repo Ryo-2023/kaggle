@@ -32,11 +32,11 @@ from biohub.reproducibility.receipts import method_sensitivity_report
 
 pytest.importorskip("torch", reason="association scoring uses torch softmax; no model is loaded")
 
-from biohub.detector_fixed_race.association import (  # noqa: E402
+from biohub.detector_fixed_race.association import (
     AssociationSpec,
     associate_from_cache,
 )
-from biohub.detector_fixed_race.schema import (  # noqa: E402
+from biohub.detector_fixed_race.schema import (
     CandidateEdgeArrays,
     DetectorCache,
     NodeArrays,
