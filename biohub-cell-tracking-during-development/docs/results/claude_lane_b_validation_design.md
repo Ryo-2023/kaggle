@@ -300,6 +300,87 @@ is visible rather than absorbed.
 
 ---
 
+## 4.6 PRE-REGISTRATION — what sample 2 must show
+
+Written **before** the second sample's numbers existed. Codex is running the four-method
+race on `44b6_0b24845f` (51 GT nodes / **49 GT edges**) now. A prediction recorded after
+seeing the result is worth nothing, so this is fixed here and must not be edited once the
+numbers land — only compared against.
+
+Produced by `scripts/preregister_sample2.py`, 200,000 simulations, seed 20260821.
+
+**Hypotheses.** `H0`: the sample-1 differences are noise; all four methods share the pooled
+sample-1 recall (179/200 = 0.895). `H1`: the sample-1 differences are real; each method's
+true recall is its sample-1 rate (harmonic 0.96, official 0.92, mutual 0.86, motion 0.84).
+
+Simulated under two correlation regimes that bracket reality. `independent` — each method
+draws its own `Binomial(49, p_m)`; the methods share a detector cache so this understates
+their coupling and *overstates* ranking churn. `comonotone` — one shared per-edge
+difficulty ranks all methods identically; the maximum-coupling extreme, which *overstates*
+ranking stability. Note `H0/comonotone` is degenerate: identical recalls plus perfect
+coupling predicts all four methods return **exactly equal** TP counts. That is itself a
+falsifiable prediction, and its near-certain falsification is why the meaningful H0 is the
+independent column.
+
+| statistic on sample 2 | H0 (noise) | H1 (real), independent | H1 (real), comonotone |
+|---|---:|---:|---:|
+| P(sample-1 ranking reproduced exactly) | **0.053** | 0.371 | 0.865 |
+| P(`harmonic_v1` ranks first) | **0.266** | 0.724 | 0.865 |
+| P(all 6 pairwise signs agree with sample 1) | **0.017** | 0.243 | 0.514 |
+| mean pairwise sign agreements, of 6 | **2.60** | 4.85 | 5.42 |
+| `harmonic_v1 − official_ilp` edge gain, mean | **0.00** | +1.97 | +1.96 |
+| P(that gain > 0) | **0.434** | 0.735 | 0.865 |
+
+Predicted TP counts on 49 GT edges (95% intervals):
+
+| method | H0 | H1 |
+|---|---|---|
+| `official_ilp` | 39–48 | 41–48 |
+| `harmonic_v1` | 39–48 | **44–49** |
+| `mutual_confidence` | 39–48 | 37–47 |
+| `motion_gated` | 39–48 | 36–46 |
+
+**The discriminating statistic is the count of pairwise sign agreements (of 6): H0 predicts
+≈2.6, H1 predicts ≈4.9–5.4.** Report that number. The H0 and H1 TP intervals overlap almost
+completely, so no individual method's TP count on sample 2 can settle anything by itself.
+
+### What a two-sample result does and does not license
+
+Pooling samples 1 and 2 gives **99 GT edges**, resolvable δ = **0.0964** — still 2.6× larger
+than the 0.0373 claim. Pooled exact McNemar, assuming harmonic's TP set nests official's on
+each sample (again the assumption most favourable to harmonic):
+
+| harmonic's edge gain per sample | samples agreeing | pooled b (c=0) | exact p | p<0.05 | survives Bonferroni |
+|---:|---:|---:|---:|:---:|:---:|
+| +1 | 2 | 2 | 0.5000 | no | no |
+| +2 | 1 | 2 | 0.5000 | no | no |
+| **+2** | **2** | **4** | **0.1250** | **no** | **no** |
+| +2 | 3 | 6 | 0.0312 | yes | no |
+| +2 | 4 | 8 | 0.0078 | yes | **yes** |
+| +3 | 2 | 6 | 0.0312 | yes | no |
+| +3 | 3 | 9 | 0.0039 | yes | **yes** |
+
+**Licensed conclusions, fixed in advance:**
+
+- **Agreement (harmonic first again, +2 edges) does NOT license "confirmed".** Pooled
+  p = 0.125. The correct wording is *"consistent across two samples, still not separated
+  (pooled McNemar p = 0.125; two samples resolve δ ≥ 0.0964)."* Under H1 this outcome was
+  expected 72–87% of the time, but under H0 it still happens 43% of the time — agreement on
+  a second sample is weak evidence, not confirmation.
+- **Disagreement (official ties or beats harmonic) is strong evidence for H0.** H1 gives
+  this only 13.5–26.5% of the time. Two disagreeing samples should stop any move to adopt
+  harmonic as default.
+- **A sign-agreement count near 2–3 of 6 is an H0 signature**; near 5–6 favours H1. This is
+  the number to look at first.
+- **The earliest point the harmonic claim can survive multiplicity correction is 4 samples
+  at +2 edges each** (pooled b=8, p=0.0078), or 3 samples at +3. Nothing before that
+  licenses "harmonic is better"; sample 2 cannot get there arithmetically.
+- **`motion_gated` can be rejected sooner.** Its gap to harmonic is 6 edges on sample 1; a
+  repeat on sample 2 gives pooled b=12, p=0.0005, which survives Bonferroni. Expect the
+  first defensible conclusion of this whole programme to be a *rejection*, not a promotion.
+
+---
+
 ## 5. The split
 
 Two tiers. Assignment is driven by §2.1 first (leaderboard contamination), then by the
@@ -440,3 +521,10 @@ PYTHONPATH=scripts python scripts/validation_power_multi.py \
 `<CODEX>` = `scratch/strong-baseline-v1/biohub-cell-tracking-during-development`
 (read-only). `artifacts/` is gitignored, hence the tables above are inlined here.
 Total container cost of steps 2–4: a few seconds and well under 200 MB RSS.
+
+```bash
+# 5. pre-registration for sample 2 (run BEFORE its results exist)
+PYTHONPATH=scripts python scripts/preregister_sample2.py \
+  --receipt <CODEX>/artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/race_receipt.json \
+  --n2 49 --out artifacts/validation_design/prereg_sample2.json
+```
