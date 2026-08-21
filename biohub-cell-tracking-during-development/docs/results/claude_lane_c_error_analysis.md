@@ -189,10 +189,33 @@ in this worktree. Raw outputs: `artifacts/edge_diff_raw.json`, `artifacts/edge_d
 
 ## 8. Image evidence
 
-QUEUED / in progress — single-`(t,z)`-plane crops (not a full-volume read) around the four
-node positions in §4 plus the unanimous-FN pair in §5, using the visualizer's own
-`normalize_to_uint8` / `encode_grayscale_png`. Will be added under `artifacts/*.png` with a
-short visual description here once rendered and reviewed.
+Rendered as single-`(t,z)`-plane crops (96×96 px windows, not a full-volume read — the same
+lazy `arr[t, z, :, :]` access pattern the visualizer's own `frame_png` uses) around the GT
+positions in §4 and §5, using the visualizer's own `normalize_to_uint8` /
+`encode_grayscale_png` with the volume's global 0.1%/99.9% intensity quantiles
+(`low=26.22, high=2145.0`, from the zarr's `image_statistics` attrs) so every crop uses
+identical, comparable contrast. A crosshair marks the exact annotated `(y, x)` voxel.
+Saved under `artifacts/*_marked.png` (gitignored; unmarked originals alongside as
+`artifacts/*.png` without the `_marked` suffix):
+
+| file | GT node | t | z | what's visible |
+|---|---|---:|---:|---|
+| `edge1_src_t39_z18_marked.png` | 50000000003 | 39 | 18 | crosshair sits on a **dim, low-contrast** blob at the edge of a faint patch; 2-3 visibly **brighter** nuclei sit within ~10 px (~4 µm) |
+| `edge1_tgt_t40_z19_marked.png` | 51000000003 | 40 | 19 | same pattern one frame later: dim target blob, brighter neighbors nearby |
+| `edge2_src_t45_z26_marked.png` | 56000000003 | 45 | 26 | crosshair on a moderate-brightness blob with a similarly-bright neighbor immediately to its right — a close, ambiguous distractor |
+| `edge2_tgt_t46_z29_marked.png` | 57000000003 | 46 | 29 | crosshair in a comparatively dim area between two brighter blobs |
+| `unanimousFN_src_t29_z5_marked.png` | 40000000003 | 29 | 5 | crosshair on a dim region; a distinctly brighter blob sits just up/right — this is also the node `motion_gated` fails to node-match at all (§5) |
+| `unanimousFN_tgt_t30_z7_marked.png` | 41000000003 | 30 | 7 | same pattern: dim target, brighter neighbor offset nearby |
+
+**Reading**: across all six crops (three consecutive hops of the one hard lineage), the
+annotated cell is consistently the **dimmer** of several visually similar, closely-packed
+nuclei, never the single obviously-brightest blob in its neighborhood. This is a plausible,
+visually-grounded explanation for why this specific lineage — and not the trivial 2-edge
+track — is the one every method struggles with: a low-SNR nucleus in a crowded field is
+exactly where small differences in edge-scoring (forward-only vs. harmonic's forward+reverse
+fusion) can plausibly tip the ILP's choice, and where a purely motion-gated heuristic can lose
+the node entirely (§5). This reading is descriptive, not quantitative — I did not measure
+neighbor brightness numerically, only inspected the rendered crops.
 
 ## 9. Caveats
 
