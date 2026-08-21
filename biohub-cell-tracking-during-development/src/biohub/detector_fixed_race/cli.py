@@ -156,6 +156,15 @@ def _build_parser() -> argparse.ArgumentParser:
     panel.add_argument("--output", type=Path, required=True)
     panel.add_argument("--upstream-root", type=Path, required=True)
     panel.add_argument("--methods", type=_methods, default=ASSOCIATION_METHODS)
+
+    aggregate = subparsers.add_parser(
+        "aggregate-panel-receipts",
+        help="Aggregate persisted detector-fixed race receipts without rerunning inference",
+    )
+    aggregate.add_argument("--panel", type=Path, required=True)
+    aggregate.add_argument("--receipt", type=Path, action="append", required=True)
+    aggregate.add_argument("--methods", type=_methods, required=True)
+    aggregate.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -236,6 +245,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             cache_root=args.cache_root,
             predictor_module=predictor,
         )
+        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    if args.command == "aggregate-panel-receipts":
+        result = panel_api.aggregate_validation_receipts(
+            panel_path=args.panel,
+            receipt_paths=args.receipt,
+            methods=args.methods,
+        )
+        _write_json(args.output, result)
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     raise AssertionError(f"unknown command: {args.command}")

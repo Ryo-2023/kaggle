@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
+import re
 import statistics
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -23,8 +26,10 @@ from biohub.detector_fixed_race.cache import load_detector_cache
 from biohub.detector_fixed_race.prediction import evaluate_prediction, write_prediction
 
 PANEL_SCHEMA_VERSION = "detector_fixed.panel.v1"
+VALIDATION_RECEIPT_SCHEMA_VERSION = "detector_fixed.validation_receipt.v1"
 DEFAULT_PANEL_METHODS = ASSOCIATION_METHODS
 DEFAULT_HARMONIC_REVERSE_WEIGHT = 0.20
+_CACHE_HASH_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def _association_spec(method_id: str, *, harmonic_reverse_weight: float) -> AssociationSpec:
@@ -296,6 +301,176 @@ def _aggregate_panel(records: list[dict[str, Any]], methods: Sequence[str]) -> d
     return summary
 
 
+def _receipt_json(path: Path, kind: str) -> tuple[bytes, Any]:
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"{kind} is unreadable: {path}") from exc
+    try:
+        payload = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{kind} is malformed JSON: {path}") from exc
+    return raw, payload
+
+
+def _receipt_evidence_path(value: str, receipt_path: Path) -> Path:
+    path = Path(value)
+    if path.is_absolute() or path.is_file():
+        return path
+    relative_to_receipt = receipt_path.parent / path
+    return relative_to_receipt if relative_to_receipt.is_file() else path
+
+
+def _require_cache_hash(value: Any, *, sample_id: str, method_id: str) -> str:
+    if not isinstance(value, str) or _CACHE_HASH_PATTERN.fullmatch(value) is None:
+        raise ValueError(
+            f"cache_hash for ({sample_id}, {method_id}) must be a 64-character lowercase hex string"
+        )
+    return value
+
+
+def aggregate_validation_receipts(
+    *,
+    panel_path: Path,
+    receipt_paths: Sequence[Path],
+    methods: Sequence[str],
+) -> dict[str, Any]:
+    """Aggregate persisted detector-fixed race receipts without opening GT or images."""
+
+    panel_path = Path(panel_path)
+    panel_raw, panel = _receipt_json(panel_path, "validation panel")
+    if not isinstance(panel, Mapping) or panel.get("schema_version") != PANEL_SCHEMA_VERSION:
+        raise ValueError("validation panel schema must be detector_fixed.panel.v1")
+
+    sample_entries = panel.get("samples")
+    if not isinstance(sample_entries, list) or not sample_entries:
+        raise ValueError("validation panel samples must be a non-empty list")
+    sample_ids: list[str] = []
+    for entry in sample_entries:
+        if not isinstance(entry, Mapping):
+            raise ValueError("validation panel samples must be objects")
+        sample_id = entry.get("sample_id")
+        if not isinstance(sample_id, str) or not sample_id.strip():
+            raise ValueError("validation panel sample IDs must be non-empty strings")
+        if sample_id in sample_ids:
+            raise ValueError(f"validation panel sample IDs must be unique: {sample_id}")
+        sample_ids.append(sample_id)
+
+    method_ids = tuple(methods)
+    if not method_ids or any(not isinstance(method, str) or not method.strip() for method in method_ids):
+        raise ValueError("methods must be a non-empty sequence of non-empty strings")
+    if len(set(method_ids)) != len(method_ids):
+        raise ValueError("methods must be unique")
+
+    expected_pairs = {(sample_id, method_id) for sample_id in sample_ids for method_id in method_ids}
+    records_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
+    receipt_metadata: dict[tuple[str, str], tuple[Path, str]] = {}
+    receipt_paths = tuple(Path(path) for path in receipt_paths)
+    if not receipt_paths:
+        raise ValueError("receipt_paths must not be empty")
+    for receipt_path in receipt_paths:
+        receipt_raw, receipt_payload = _receipt_json(receipt_path, "race receipt")
+        if not isinstance(receipt_payload, list):
+            raise ValueError(f"race receipt must contain a list: {receipt_path}")
+        receipt_hash = hashlib.sha256(receipt_raw).hexdigest()
+        for index, record_value in enumerate(receipt_payload):
+            if not isinstance(record_value, Mapping):
+                raise ValueError(f"race receipt record {index} must be an object: {receipt_path}")
+            record = dict(record_value)
+            sample_id = record.get("sample_id")
+            method_id = record.get("method_id")
+            pair = (sample_id, method_id)
+            if not isinstance(sample_id, str) or not isinstance(method_id, str):
+                raise ValueError(f"race receipt record {index} is missing sample_id or method_id")
+            if pair not in expected_pairs:
+                raise ValueError(f"unexpected sample/method pair: {pair!r}")
+            if pair in records_by_pair:
+                raise ValueError(f"duplicate sample/method pair: {pair!r}")
+            _require_cache_hash(record.get("cache_hash"), sample_id=sample_id, method_id=method_id)
+            records_by_pair[pair] = record
+            receipt_metadata[pair] = (receipt_path, receipt_hash)
+
+    missing_pairs = expected_pairs - records_by_pair.keys()
+    if missing_pairs:
+        ordered_missing = [
+            (sample_id, method_id)
+            for sample_id in sample_ids
+            for method_id in method_ids
+            if (sample_id, method_id) in missing_pairs
+        ]
+        raise ValueError(f"missing expected sample/method pair(s): {ordered_missing!r}")
+
+    for sample_id in sample_ids:
+        sample_hashes = {
+            records_by_pair[(sample_id, method_id)]["cache_hash"] for method_id in method_ids
+        }
+        if len(sample_hashes) != 1:
+            raise ValueError(f"cache_hash mismatch across methods for sample {sample_id}")
+
+    normalized_records: list[dict[str, Any]] = []
+    for sample_id in sample_ids:
+        for method_id in method_ids:
+            pair = (sample_id, method_id)
+            record = records_by_pair[pair]
+            receipt_path, receipt_hash = receipt_metadata[pair]
+            manifest_value = record.get("prediction_manifest_path")
+            if not isinstance(manifest_value, str) or not manifest_value.strip():
+                raise ValueError(f"record {pair!r} is missing prediction_manifest_path")
+            manifest_path = _receipt_evidence_path(manifest_value, receipt_path)
+            manifest_raw, manifest = _receipt_json(manifest_path, "prediction manifest")
+            del manifest_raw
+            if not isinstance(manifest, Mapping):
+                raise ValueError(f"prediction manifest must contain an object: {manifest_path}")
+            if manifest.get("ground_truth_included") is not False:
+                raise ValueError(
+                    f"prediction manifest ground_truth_included must be false: {manifest_path}"
+                )
+            for field, expected in (
+                ("sample_id", sample_id),
+                ("method_id", method_id),
+                ("cache_hash", record["cache_hash"]),
+            ):
+                if manifest.get(field) != expected:
+                    raise ValueError(f"prediction manifest {field} mismatch: {manifest_path}")
+
+            metrics = record.get("metrics")
+            if not isinstance(metrics, Mapping):
+                raise ValueError(f"record {pair!r} is missing metrics")
+            if metrics.get("prediction_manifest_validated_before_gt") is not True:
+                raise ValueError(
+                    f"metrics prediction_manifest_validated_before_gt must be true: {pair!r}"
+                )
+            metrics_manifest_value = metrics.get("prediction_manifest_path")
+            if not isinstance(metrics_manifest_value, str) or not metrics_manifest_value.strip():
+                raise ValueError(f"metrics are missing prediction_manifest_path: {pair!r}")
+            metrics_manifest_path = _receipt_evidence_path(metrics_manifest_value, receipt_path)
+            if metrics_manifest_path.resolve() != manifest_path.resolve():
+                raise ValueError(f"metrics prediction manifest path mismatch: {pair!r}")
+            try:
+                score = float(metrics["final_score"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"metrics final_score is missing or non-numeric: {pair!r}") from exc
+            if not math.isfinite(score):
+                raise ValueError(f"metrics final_score must be finite: {pair!r}")
+
+            normalized_record = dict(record)
+            normalized_record["race_receipt_path"] = str(receipt_path)
+            normalized_record["race_receipt_sha256"] = receipt_hash
+            normalized_records.append(normalized_record)
+
+    return {
+        "schema_version": VALIDATION_RECEIPT_SCHEMA_VERSION,
+        "panel_path": str(panel_path),
+        "panel_sha256": hashlib.sha256(panel_raw).hexdigest(),
+        "samples": sample_ids,
+        "methods": list(method_ids),
+        "records": normalized_records,
+        "summary": _aggregate_panel(normalized_records, method_ids),
+        "failed_samples": [],
+        "ground_truth_usage": "official metric evaluation only",
+    }
+
+
 def run_panel(
     *,
     panel_path: Path,
@@ -353,6 +528,8 @@ def run_panel(
 __all__ = [
     "DEFAULT_PANEL_METHODS",
     "PANEL_SCHEMA_VERSION",
+    "VALIDATION_RECEIPT_SCHEMA_VERSION",
+    "aggregate_validation_receipts",
     "freeze_validation_panel",
     "run_dev_race",
     "run_panel",
