@@ -263,5 +263,69 @@ value. None has been measured; all are stated as predictions.
 
 ## 7. Measured results
 
-Filled in only from real runs. See the report at `reports/F.md` for the
-current state.
+Real runs only, all from Codex's own READY caches, same ILP config, same
+official metric, same `max_distance = 7.0` and per-sample scale.
+
+### 7.1 Harness validity (criterion C1) — PASSED
+
+`forward_only` reproduces `official_ilp` to the last digit on four different
+caches, and `published_harmonic` reproduces `harmonic_v1` on the dev cache
+including node and edge counts.
+
+| cache | rule | measured | published reference |
+|---|---|---|---|
+| `44b6_0113de3b` | `forward_only` | 46/2/4  0.8837944835207503 | 46/2/4  0.8837944835 |
+| `44b6_0113de3b` | `published_harmonic` | 48/2/2  0.9211200215044129 | 48/2/2  0.9211200215 |
+| `44b6_0b24845f` | `forward_only` | 39/9/10  0.6262213541803576 | 39/9/10  0.6262213542 |
+| `44b6_0c582fdc` | `forward_only` | 57/6/13  0.738499713856499 | 57/6/13  0.7384997139 |
+| `44b6_12dfb391` | `forward_only` | 668/81/105  0.7809215555664836 | 668/81/105  0.7809215556 |
+
+### 7.2 The mechanism ablation, dev sample
+
+| rule | reverse pass used | TP/FP/FN | final score | candidates |
+|---|---|---|---:|---:|
+| `forward_only` | no | 46/2/4 | 0.8837944835207503 | 24,183 |
+| `published_harmonic` | yes | 48/2/2 | 0.9211200215044129 | 25,023 |
+| `published_harmonic_no_temperature` | yes | 48/2/2 | 0.9213458178397025 | 24,791 |
+| `forward_published_temperature` | only to set γ | 48/2/2 | 0.9216253752072040 | 24,662 |
+| `entropy_temperature` | **no** | 48/2/2 | 0.9205429864253395 | 26,198 |
+| `column_dominance` | no | 46/2/4 | 0.8831178411958842 | 24,824 |
+
+Every rule that applies a per-column sharpening reaches 48 TP. The rule that
+only *readmits* sub-threshold argmaxes (`column_dominance`, +641 candidates)
+reaches 46. So the mechanism is not simply "let more candidates through"; the
+temperature also re-ranks contested columns. The four 48-TP rules differ in
+score only through the `total_node_ratio` penalty, not through edge accuracy.
+
+### 7.3 `entropy_temperature` across samples — no reverse pass at all
+
+| sample | GT edges | official | harmonic | `entropy_temperature` |
+|---|---:|---|---|---|
+| `44b6_0113de3b` | 50 | 46/2/4 | 48/2/2 | **48**/2/2 |
+| `44b6_0b24845f` | 49 | 39/9/10 | 40/10/9 | **42**/11/7 |
+| `44b6_0c582fdc` | 70 | 57/6/13 | 62/6/8 | **62**/7/8 |
+| `44b6_0db75fae` | 151 | 133/9/18 | 134/8/17 | **139**/12/12 |
+
+Pooled over these four samples (320 GT edges):
+
+| method | TP | FP | FN | pooled edge Jaccard |
+|---|---:|---:|---:|---:|
+| official | 275 | 26 | 45 | 0.794798 |
+| harmonic | 284 | 26 | 36 | 0.820809 |
+| `entropy_temperature` | **291** | 32 | 29 | 0.826705 |
+
+**The bidirectional-agreement explanation of harmonic's advantage is dead.** A
+rule that never looks at the reverse logits matches harmonic's edge recovery
+on two samples and exceeds it on the other two.
+
+**But by the pre-registered criteria, `entropy_temperature` is NOT adopted.**
+C3 requires beating harmonic on pooled TP *with pooled FP not worse*; FP rises
+from 26 to 32. C3 therefore fails as written, and C4 (McNemar) cannot be
+evaluated at all. The rule is *screened*, not *adopted*. The mechanistic
+conclusion does not depend on adoption: it rests on TP equivalence, which is
+established.
+
+Sharpening also switches divisions on, as predicted in section 6: on
+`0b24845f`, `0c582fdc` and `0db75fae`, `entropy_temperature` emits 1, 1 and 2
+division false positives where `forward_only` emits none. Some `p₂` are being
+pushed over the 0.9 line.

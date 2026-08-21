@@ -511,12 +511,19 @@ def _forward_published_temperature(pair: PairInputs) -> np.ndarray:
 
 
 def _entropy_temperature(pair: PairInputs) -> np.ndarray:
-    """Sharpen a column in proportion to how diluted it is.
+    """Sharpen each column by an exponent set by its own entropy.
 
-    ``gamma(t) = log(N_source) / H(column t)``, clamped to the same
-    ``[0.5, 2.0]`` window the published method uses.  A column that is already
-    confident keeps its shape; a column whose mass is spread across many
-    plausible parents is sharpened.  No reverse pass and no fitted constant.
+    ``gamma(t) = clamp(log(N_source) / H(column t), 0.5, 2.0)``.  Because
+    ``H <= log N`` always, the raw ratio is never below one, so this rule only
+    ever sharpens.  The exponent is *largest* for the most confident (lowest
+    entropy) columns, where the clamp at 2.0 binds; a near-uniform column gets
+    ``gamma`` close to 1 and is left almost alone.
+
+    The absolute mass gained is nevertheless largest for mid-range columns,
+    because an already-peaked column has almost no headroom left.  That is the
+    behaviour asserted in the unit test, and it is why this rule moves entries
+    across the fixed 0.5 cut.  No reverse pass and no fitted constant: the
+    clamp window is inherited from the published method.
     """
 
     forward = _p(pair)
@@ -526,6 +533,18 @@ def _entropy_temperature(pair: PairInputs) -> np.ndarray:
     entropy = np.maximum(column_entropy(forward), EPSILON)
     gamma = np.clip(np.log(sources) / entropy, *PUBLISHED_SCALE_CLAMP)
     return column_temperature(forward, gamma)
+
+
+def _fixed_temperature(pair: PairInputs) -> np.ndarray:
+    """The crudest possible sharpening: square the forward column.
+
+    No reverse pass, no entropy, no per-column adaptation.  The exponent 2.0
+    is not fitted; it is the upper end of the clamp the published method
+    already applies.  If this alone reproduces the published gain, then the
+    bidirectional machinery is not what the gain is made of.
+    """
+
+    return column_temperature(_p(pair), 2.0)
 
 
 def _dual_softmax(pair: PairInputs) -> np.ndarray:
@@ -759,6 +778,16 @@ _register(
         formula="s = norm_col(p ** clamp(log(N_source)/H(p_col), 0.5, 2))",
         score=_entropy_temperature,
         uses_reverse=False,
+    )
+)
+_register(
+    ScoringRule(
+        rule_id="fixed_temperature",
+        hypothesis="If squaring the forward column reproduces the published gain, the reverse pass is decoration.",
+        formula="s = norm_col(p ** 2)",
+        score=_fixed_temperature,
+        uses_reverse=False,
+        parameters={"gamma": 2.0},
     )
 )
 _register(
