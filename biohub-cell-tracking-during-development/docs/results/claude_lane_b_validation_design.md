@@ -27,7 +27,14 @@ All numbers below are measured, not estimated. Reproduction commands are in §8.
 | Sample 2 (`44b6_0b24845f`, 49 edges): agreement licenses | **"consistent, still not separated"** — pooled McNemar p = 0.125 (§4.6) |
 | **UPDATE §4.7** — pre-registered H0 (2.60 of 6 sign agreements) vs observed | **6/6 twice; H0 rejected, LR 916×** |
 | Pooled 3-sample panel (169 edges): harmonic vs official | **p = 0.0078, CI [+0.011,+0.069] — passes, knife-edge** |
-| Reversed edges needed to overturn that verdict | **1** |
+| Reversed edges needed to overturn that verdict | **1** at 3 samples; **≥15** at 5 samples |
+| **FIVE-SAMPLE FINAL (§4.8)** — harmonic vs official | **b=29, c=0, p=3.7e-09 — ESTABLISHED** |
+| Effect size as evidence grew | +0.0373 (1 movie) → +0.0360 (3) → **+0.0178 (5)** |
+| `mutual_confidence` vs `motion_gated` | **not separated** — fails leave-one-out, gap 0.0059 < floor 0.0195 |
+| Share of the official score carried by `44b6_12dfb391` | **71.2%** |
+| Division term, now live | every method **0/1**, `division_jaccard` = 0.0 |
+| Value of detecting the one division | **+0.100**, vs a four-method spread of 0.0486 |
+| Panel noise floor, one movie → five | 0.1356 → 0.0672 → **0.0195** |
 | Pooled `harmonic_v1` score (not 0.9211) | **0.7802** |
 | Pooled score discarded to node over-prediction | **0.0220** (61% of the harmonic gain) |
 
@@ -777,10 +784,28 @@ This reverses current practice: `44b6_0113de3b`, today's development sample, mov
 locked tier. The justification is not statistical fastidiousness — it is that iterating on
 it is iterating on the leaderboard.
 
-**Honest limits of this split.** The dev tier is 3 movies, one domain, one division. It
-resolves δ ≥ 0.030 — enough to reject `motion_gated`, not enough to rank `harmonic_v1`
-against `official_ilp`. It gives **no** signal on the 10% division term and **no** signal
-on `6bba_`. It is a floor to build on, not a validation set. §7 says how to grow it.
+**Updated 2026-08-21 with all five samples measured.** The tier assignment is unchanged —
+the locked pair are leaderboard test movies (§2.1) and that reason does not expire. What the
+measured scores add:
+
+| tier | samples | GT edges | share of official (size-weighted) score |
+|---|---|---:|---|
+| dev | `44b6_12dfb391`, `44b6_0db75fae`, `44b6_0c582fdc` | 994 | 12dfb391 alone = **77.8%** of the tier |
+| locked | `44b6_0113de3b`, `44b6_0b24845f` | 99 | — |
+
+The dev tier resolves **δ ≥ 0.021** (recomputed on the measured discordance), holds the
+panel's only division, and spans density 1.00 → 7.88 nodes/frame. It correctly ranks
+`harmonic_v1` over `official_ilp` on its own (b = 26, c = 0 across its three samples).
+
+**The new problem this exposes: concentration.** `44b6_12dfb391` is 71.2% of the full
+panel's official score and 77.8% of the dev tier's. Any conclusion drawn from a single
+aggregate number is, to first order, a statement about one movie. This is not fixed by tier
+membership; it is fixed by the reporting rule P10 below, which is now mandatory.
+
+**Honest limits that remain.** One domain (`44b6_` only), one division, zero gap-closing
+coverage, and density confounded with size. The dev tier is a working panel now — it settles
+harmonic-vs-official — but it still cannot test division handling, cannot say anything about
+`6bba_`, and cannot separate `mutual_confidence` from `motion_gated`. §7 says how to grow it.
 
 ---
 
@@ -823,6 +848,20 @@ leaderboard's own answer key (§2.1).
 **P8 — division coverage is declared, not assumed.** Any report whose panel yields
 `division_tp+fp+fn = 0` must state: *"division term (10% of the official score) untested on
 this panel."* `summarise()` drops the term silently; the report must not.
+
+**P10 — no aggregate claim without a leave-one-sample-out check.** `44b6_12dfb391` carries
+71.2% of the official score's weight, so an aggregate can be moved by one movie alone. Every
+comparison that is reported as a conclusion must also report the worst-case result with each
+sample dropped in turn. If the verdict flips when any single sample is removed, it is
+reported as **fragile** and must not drive a decision. This rule is what separated the
+established `harmonic_v1` > `official_ilp` result (survives every drop) from the fragile
+`mutual_confidence` > `motion_gated` one (dies when `44b6_0c582fdc` is dropped) in §4.8.
+`scripts/score_prereg_and_pool.py` computes this automatically.
+
+**P11 — report four numbers, not one.** Per-sample table, then micro edge Jaccard, then
+macro (unweighted mean), then the official size-weighted score. The mutual−motion gap is
++0.0073 micro, +0.0059 size-weighted and +0.0281 macro (§4.8); reporting any single one of
+those hides which movies the change actually helped.
 
 **P9 — panel changes are versioned.** Changing tier membership means a new panel version
 id, and results across panel versions are never compared numerically.
