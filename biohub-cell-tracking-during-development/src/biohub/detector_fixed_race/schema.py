@@ -214,41 +214,68 @@ class CandidateEdgeArrays:
     def validate(self, nodes: NodeArrays | None = None) -> None:
         """Validate edge direction, time deltas, and coordinate orientation."""
 
-        if np.any(self.delta_t <= 0):
-            raise ValueError("candidate edge delta_t/time must be positive")
-        if np.any(self.source_node_id >= self.target_node_id):
-            raise ValueError("candidate edge source_node_id must be smaller than target_node_id")
+        length = self.length
+        chunk_size = 1_000_000
+        for start in range(0, length, chunk_size):
+            end = min(start + chunk_size, length)
+            if np.any(self.delta_t[start:end] <= 0):
+                raise ValueError("candidate edge delta_t/time must be positive")
+            if np.any(self.source_node_id[start:end] >= self.target_node_id[start:end]):
+                raise ValueError("candidate edge source_node_id must be smaller than target_node_id")
         if nodes is None:
             return
 
         node_count = nodes.length
-        if np.any(self.source_node_id < 0) or np.any(self.target_node_id < 0):
-            raise ValueError("candidate edge node IDs must be non-negative")
-        if np.any(self.source_node_id >= node_count) or np.any(self.target_node_id >= node_count):
-            raise ValueError("candidate edge node IDs must refer to existing nodes")
+        for start in range(0, length, chunk_size):
+            end = min(start + chunk_size, length)
+            if np.any(self.source_node_id[start:end] < 0) or np.any(self.target_node_id[start:end] < 0):
+                raise ValueError("candidate edge node IDs must be non-negative")
+            if np.any(self.source_node_id[start:end] >= node_count) or np.any(
+                self.target_node_id[start:end] >= node_count
+            ):
+                raise ValueError("candidate edge node IDs must refer to existing nodes")
 
         source = self.source_node_id
         target = self.target_node_id
-        source_t = nodes.tzyx[source, 0].astype(np.int64, copy=False)
-        target_t = nodes.tzyx[target, 0].astype(np.int64, copy=False)
-        if np.any(target_t <= source_t):
-            raise ValueError("candidate edge target time must be greater than source time")
-        expected_delta_t = target_t - source_t
-        if not np.array_equal(self.delta_t.astype(np.int64), expected_delta_t):
-            raise ValueError("candidate edge delta_t does not match source/target time")
+        length = self.length
+        # Validate dense edge columns in bounded chunks.  Detector-fixed
+        # caches can exceed tens of millions of rows, for which constructing a
+        # full expected-delta array would duplicate hundreds of MB at once.
+        for start in range(0, length, chunk_size):
+            end = min(start + chunk_size, length)
+            source_chunk = source[start:end]
+            target_chunk = target[start:end]
+            source_t = nodes.tzyx[source_chunk, 0].astype(np.int64, copy=False)
+            target_t = nodes.tzyx[target_chunk, 0].astype(np.int64, copy=False)
+            if np.any(target_t <= source_t):
+                raise ValueError("candidate edge target time must be greater than source time")
+            expected_delta_t = target_t - source_t
+            if not np.array_equal(self.delta_t[start:end].astype(np.int64), expected_delta_t):
+                raise ValueError("candidate edge delta_t does not match source/target time")
 
-        expected_voxel_delta = nodes.tzyx[target, 1:].astype(np.float32) - nodes.tzyx[source, 1:].astype(np.float32)
-        if not np.allclose(self.voxel_delta, expected_voxel_delta, rtol=1e-5, atol=1e-5):
-            raise ValueError("candidate edge voxel_delta has the wrong source/target orientation")
-        expected_physical_delta = nodes.physical_zyx[target] - nodes.physical_zyx[source]
-        if not np.allclose(self.physical_delta, expected_physical_delta, rtol=1e-5, atol=1e-5):
-            raise ValueError("candidate edge physical_delta has the wrong source/target orientation")
-        expected_voxel_distance = np.linalg.norm(expected_voxel_delta, axis=1).astype(np.float32)
-        expected_physical_distance = np.linalg.norm(expected_physical_delta, axis=1).astype(np.float32)
-        if not np.allclose(self.voxel_distance, expected_voxel_distance, rtol=1e-5, atol=1e-5):
-            raise ValueError("candidate edge voxel_distance does not match voxel_delta")
-        if not np.allclose(self.physical_distance, expected_physical_distance, rtol=1e-5, atol=1e-5):
-            raise ValueError("candidate edge physical_distance does not match physical_delta")
+            expected_voxel_delta = (
+                nodes.tzyx[target_chunk, 1:].astype(np.float32)
+                - nodes.tzyx[source_chunk, 1:].astype(np.float32)
+            )
+            if not np.allclose(
+                self.voxel_delta[start:end], expected_voxel_delta, rtol=1e-5, atol=1e-5
+            ):
+                raise ValueError("candidate edge voxel_delta has the wrong source/target orientation")
+            expected_physical_delta = nodes.physical_zyx[target_chunk] - nodes.physical_zyx[source_chunk]
+            if not np.allclose(
+                self.physical_delta[start:end], expected_physical_delta, rtol=1e-5, atol=1e-5
+            ):
+                raise ValueError("candidate edge physical_delta has the wrong source/target orientation")
+            expected_voxel_distance = np.linalg.norm(expected_voxel_delta, axis=1).astype(np.float32)
+            expected_physical_distance = np.linalg.norm(expected_physical_delta, axis=1).astype(np.float32)
+            if not np.allclose(
+                self.voxel_distance[start:end], expected_voxel_distance, rtol=1e-5, atol=1e-5
+            ):
+                raise ValueError("candidate edge voxel_distance does not match voxel_delta")
+            if not np.allclose(
+                self.physical_distance[start:end], expected_physical_distance, rtol=1e-5, atol=1e-5
+            ):
+                raise ValueError("candidate edge physical_distance does not match physical_delta")
 
     @property
     def length(self) -> int:

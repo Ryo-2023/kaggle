@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 import torch
@@ -469,10 +470,16 @@ def _build_edge_arrays(
             reverse_probability=empty_f32,
         )
 
-    source = np.empty((total_length,), dtype=np.int64)
-    target = np.empty((total_length,), dtype=np.int64)
-    forward_logits = np.empty((total_length,), dtype=np.float32)
-    reverse_logits = np.empty((total_length,), dtype=np.float32)
+    def allocate_edge_array(name: str, dtype: np.dtype[Any], shape: tuple[int, ...]) -> np.ndarray:
+        if state.pair_store_root is None:
+            return np.empty(shape, dtype=dtype)
+        path = state.pair_store_root / f"edge-{name}.mmap"
+        return np.memmap(path, mode="w+", dtype=dtype, shape=shape)
+
+    source = allocate_edge_array("source", np.dtype(np.int64), (total_length,))
+    target = allocate_edge_array("target", np.dtype(np.int64), (total_length,))
+    forward_logits = allocate_edge_array("forward_logits", np.dtype(np.float32), (total_length,))
+    reverse_logits = allocate_edge_array("reverse_logits", np.dtype(np.float32), (total_length,))
     offset = 0
     for pair, source_ids, target_ids, count in pair_refs:
         end = offset + count
@@ -483,18 +490,35 @@ def _build_edge_arrays(
             reverse_logits[offset:end] = np.asarray(payload["reverse_logits"], dtype=np.float32).reshape(-1)
         offset = end
 
-    source_t = nodes.tzyx[source, 0].astype(np.int16)
-    target_t = nodes.tzyx[target, 0].astype(np.int16)
-    delta_t = (target_t - source_t).astype(np.int16)
-    voxel_delta = (nodes.tzyx[target, 1:].astype(np.float32) - nodes.tzyx[source, 1:].astype(np.float32))
-    physical_delta = nodes.physical_zyx[target] - nodes.physical_zyx[source]
+    delta_t = allocate_edge_array("delta_t", np.dtype(np.int16), (total_length,))
+    voxel_delta = allocate_edge_array("voxel_delta", np.dtype(np.float32), (total_length, 3))
+    physical_delta = allocate_edge_array("physical_delta", np.dtype(np.float32), (total_length, 3))
+    voxel_distance = allocate_edge_array("voxel_distance", np.dtype(np.float32), (total_length,))
+    physical_distance = allocate_edge_array("physical_distance", np.dtype(np.float32), (total_length,))
+    chunk_length = 1_000_000
+    for start in range(0, total_length, chunk_length):
+        end = min(start + chunk_length, total_length)
+        source_chunk = np.asarray(source[start:end], dtype=np.int64)
+        target_chunk = np.asarray(target[start:end], dtype=np.int64)
+        source_t = nodes.tzyx[source_chunk, 0].astype(np.int16, copy=False)
+        target_t = nodes.tzyx[target_chunk, 0].astype(np.int16, copy=False)
+        delta_t[start:end] = target_t - source_t
+        voxel_chunk = (
+            nodes.tzyx[target_chunk, 1:].astype(np.float32)
+            - nodes.tzyx[source_chunk, 1:].astype(np.float32)
+        )
+        physical_chunk = nodes.physical_zyx[target_chunk] - nodes.physical_zyx[source_chunk]
+        voxel_delta[start:end] = voxel_chunk
+        physical_delta[start:end] = physical_chunk
+        voxel_distance[start:end] = np.linalg.norm(voxel_chunk, axis=1).astype(np.float32, copy=False)
+        physical_distance[start:end] = np.linalg.norm(physical_chunk, axis=1).astype(np.float32, copy=False)
     if edge_activation == "softmax":
         # Preserve upstream row-wise softmax per frame pair.  Do not first
         # normalize the flattened cache: that pass is both mathematically
         # discarded below and needlessly allocates temporary arrays for
         # millions of candidate pairs.
-        forward_probability = np.empty_like(forward_logits)
-        reverse_probability = np.empty_like(reverse_logits)
+        forward_probability = allocate_edge_array("forward_probability", np.dtype(np.float32), (total_length,))
+        reverse_probability = allocate_edge_array("reverse_probability", np.dtype(np.float32), (total_length,))
         offset = 0
         for pair, _source_ids, _target_ids, count in pair_refs:
             with _pair_payload(pair) as payload:
@@ -506,18 +530,22 @@ def _build_edge_arrays(
                 ).reshape(-1)
             offset += count
     elif edge_activation == "sigmoid":
-        forward_probability = _sigmoid(forward_logits)
-        reverse_probability = _sigmoid(reverse_logits)
+        forward_probability = allocate_edge_array("forward_probability", np.dtype(np.float32), (total_length,))
+        reverse_probability = allocate_edge_array("reverse_probability", np.dtype(np.float32), (total_length,))
+        for start in range(0, total_length, chunk_length):
+            end = min(start + chunk_length, total_length)
+            forward_probability[start:end] = _sigmoid(np.asarray(forward_logits[start:end]))
+            reverse_probability[start:end] = _sigmoid(np.asarray(reverse_logits[start:end]))
     else:
         raise ValueError(f"unsupported edge activation: {edge_activation}")
     return CandidateEdgeArrays(
         source_node_id=source,
         target_node_id=target,
         delta_t=delta_t,
-        voxel_delta=voxel_delta.astype(np.float32),
-        physical_delta=physical_delta.astype(np.float32),
-        voxel_distance=np.linalg.norm(voxel_delta, axis=1).astype(np.float32),
-        physical_distance=np.linalg.norm(physical_delta, axis=1).astype(np.float32),
+        voxel_delta=voxel_delta,
+        physical_delta=physical_delta,
+        voxel_distance=voxel_distance,
+        physical_distance=physical_distance,
         forward_logit=forward_logits,
         reverse_logit=reverse_logits,
         forward_probability=forward_probability,

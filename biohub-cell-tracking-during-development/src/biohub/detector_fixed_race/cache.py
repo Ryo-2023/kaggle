@@ -141,6 +141,45 @@ def _load_npz(path: Path, *, kind: str) -> dict[str, np.ndarray]:
         raise ValueError(f"could not read {kind} artifact {path}: {exc}") from exc
 
 
+def _validate_npz_streaming(path: Path, arrays: Mapping[str, np.ndarray], *, kind: str) -> None:
+    """Validate serialized array names/shapes without loading the whole NPZ.
+
+    Dense detector caches can contain tens of millions of candidate rows.  A
+    full ``dict(np.load(...))`` round-trip would temporarily duplicate every
+    edge column and can exceed the memory available to the CPU container.  The
+    source arrays have already passed schema validation; here we read one
+    serialized column at a time and verify its structural/finite invariants.
+    """
+
+    expected = set(arrays)
+    try:
+        with np.load(path, allow_pickle=False) as payload:
+            actual = set(payload.files)
+            missing = expected - actual
+            extra = actual - expected
+            if missing:
+                raise ValueError(f"{kind} artifact is missing arrays: {sorted(missing)}")
+            if extra:
+                raise ValueError(f"{kind} artifact contains unexpected arrays: {sorted(extra)}")
+            for name, expected_array in arrays.items():
+                loaded = payload[name]
+                if loaded.dtype != expected_array.dtype:
+                    raise ValueError(
+                        f"{kind} artifact array {name} has dtype {loaded.dtype}, expected {expected_array.dtype}"
+                    )
+                if loaded.shape != expected_array.shape:
+                    raise ValueError(
+                        f"{kind} artifact array {name} has shape {loaded.shape}, expected {expected_array.shape}"
+                    )
+                if np.issubdtype(loaded.dtype, np.floating) and not np.isfinite(loaded).all():
+                    raise ValueError(f"{kind} artifact array {name} contains non-finite values")
+                del loaded
+    except ValueError:
+        raise
+    except (OSError, KeyError, TypeError) as exc:
+        raise ValueError(f"could not read {kind} artifact {path}: {exc}") from exc
+
+
 def _verify_artifact_digests(root: Path, manifest: Mapping[str, Any]) -> dict[str, str]:
     artifacts = manifest.get("artifact_digests")
     if not isinstance(artifacts, Mapping):
@@ -303,13 +342,20 @@ def write_detector_cache(
         manifest_data["ground_truth_included"] = False
         manifest_data["cache_hash"] = _cache_hash(manifest_data)
 
-        # Round-trip through the actual files before publishing READY.  This
-        # catches unsupported numpy dtypes and serialization surprises before a
-        # reader can observe the directory.
-        loaded_nodes = NodeArrays(**_load_npz(nodes_path, kind="nodes"))
-        loaded_edges = CandidateEdgeArrays(**_load_npz(edges_path, kind="candidate_edges"))
-        loaded_nodes.validate()
-        loaded_edges.validate(loaded_nodes)
+        # Round-trip through the actual files before publishing READY.  For a
+        # dense detector cache, validate one serialized column at a time to
+        # avoid duplicating all edge arrays in RAM.
+        node_arrays = _node_arrays_dict(nodes)
+        edge_arrays = _edge_arrays_dict(edges)
+        serialized_nbytes = sum(array.nbytes for array in (*node_arrays.values(), *edge_arrays.values()))
+        if serialized_nbytes > 512 * 1024 * 1024:
+            _validate_npz_streaming(nodes_path, node_arrays, kind="nodes")
+            _validate_npz_streaming(edges_path, edge_arrays, kind="candidate_edges")
+        else:
+            loaded_nodes = NodeArrays(**_load_npz(nodes_path, kind="nodes"))
+            loaded_edges = CandidateEdgeArrays(**_load_npz(edges_path, kind="candidate_edges"))
+            loaded_nodes.validate()
+            loaded_edges.validate(loaded_nodes)
         _verify_artifact_digests(temporary_root, manifest_data)
 
         manifest_path = temporary_root / "manifest.json"
