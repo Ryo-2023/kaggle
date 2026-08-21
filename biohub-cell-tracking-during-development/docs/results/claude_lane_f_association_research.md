@@ -388,6 +388,14 @@ Measured on `44b6_12dfb391`, the only sample with a GT division, with
 | 1.0 (pinned) | 668/81/105 | 0/0/1 | 0.0 | 0.7809215555664836 |
 | 0.6 | 668/**117**/105 | 0/**35**/1 | 0.0 | **0.7488002699448160** |
 
+Repeated with `entropy_temperature`, so that the conclusion does not depend on
+one scoring rule:
+
+| rule / division_weight | edge TP/FP/FN | division TP/FP/FN | final score |
+|---|---|---|---:|
+| `entropy_temperature` / 1.0 | 694/106/79 | 0/16/1 | 0.7871019288348903 |
+| `entropy_temperature` / 0.6 | 689/**174**/84 | 0/**66**/1 | **0.7239335788759532** |
+
 The mechanism prediction was right and the value prediction was wrong.
 Lowering the price does exactly what the algebra said — divisions go from 0 to
 35 — but **all 35 are false, the one true division is still missed, and edge
