@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
 本更新前の最新push: `origin/codex/biohub-multi-method-race` の `262e99d`
-本レポートが対象とするvalidation receipt実装commit: `0e98f8a`
+本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -321,9 +321,9 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 実測結果:
 
-- 旧revision時点のfull pytest: `174 passed, 2 warnings in 39.26s`。これはvalidation receipt互換修正commit `0e98f8a`後の確認値ではなく、最新full pytestは未完了である。
-- validation receipt実装: commit `0e98f8a`。レビュー、実データ集約確認、最新full pytestは未完了であり、完了とは扱っていない。
-- 最新のreport＋validation receipt限定テスト: `19 passed in 2.80s`、対象Ruff: `All checks passed!`（2026-08-22 JST）。
+- 旧revision時点のfull pytest: `174 passed, 2 warnings in 39.26s`。これはvalidation receipt evidence強化commit `fbfbf26`後の確認値ではなく、最新full pytestは未完了である。
+- validation receipt実装: commit `fbfbf26`。初回レビューの2件を修正し、fresh re-reviewは `APPROVED`。実データ集約確認と最新full pytestは未完了であり、goal全体の完了とは扱っていない。
+- 最新のreport＋validation receipt限定テスト: `24 passed in 4.05s`、対象Ruff: `All checks passed!`（2026-08-22 JST）。
 - detector-fixed関連確認: `12 passed in 3.83s`、対象Ruff `All checks passed!`
 - race対象Ruff: `All checks passed!`
 - report対象pytest: `4 passed`
@@ -336,7 +336,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - race branch: `codex/biohub-multi-method-race`
 - 本レポート更新前のlatest pushed race commit: `262e99d`
-- validation receipt実装commit: `0e98f8a`
+- validation receipt実装commit: `fbfbf26`
 - remote: `origin/codex/biohub-multi-method-race`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
 
@@ -395,7 +395,7 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 1. 実行中のdivision sample `44b6_12dfb391`を完走し、division TP/FP/FNを取得する。未完了のため現時点のスコアは記載しない。
 2. `reverse_weight=0.10`候補をdivisionありsampleで検証し、既定値変更の可否を判断する。
-3. validation receipt実装（local HEAD `0e98f8a`）をレビューし、実データ集約とfull pytestを完了する。
+3. developmentの4方式を個別再生した後、validation receiptの実データ集約とfull pytestを完了する。
 4. NMS 3.5 µm候補は旧blob laneとして、detector-fixed panelとは別条件で評価する。
 5. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
 
@@ -448,7 +448,7 @@ feature cacheの最初の全100フレーム実行では、sliding window間で�
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --train-root /workspace/biohub-cell-tracking-during-development/data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/full_auto'
 ```
 
-関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を含む実装をpush済み。本レポート更新前の最新pushは `262e99d`、validation receipt互換修正commitは `0e98f8a` である。
+関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を含む実装をpush済み。本レポート更新前の最新pushは `262e99d`、validation receipt evidence強化commitは `fbfbf26` である。
 
 NVIDIAデスクトップ移行用に `docker-compose.nvidia.yml` も追加した。通常Composeは現MacBookのCPU環境を維持し、移行先では公式CUDA wheel indexを `BIOHUB_TORCH_INDEX_URL` に指定して `gpus: all` でbuildする。Dockerfile側はCPU indexを既定にしつつ、override時だけ `uv sync --no-install-package torch` 後に指定indexのPyTorchを導入する。これによりCPU-onlyの現環境を壊さず、移行先では `--device auto` がCUDAを選べる。
 
@@ -548,4 +548,6 @@ development、0b、0cの3 sample平均は、既存receiptを再集計して offi
 | `mutual_confidence` | `0.730962742975474` | `0.744584626517552` | `-0.021304858046124` |
 | `motion_gated` | `0.680529988364937` | `0.709169276247987` | `-0.056720208315689` |
 
-harmonicは4 sampleすべてでofficialを上回ったが、divisionを含む`44b6_12dfb391`は現在`division_sample_run`が実行中である。2026-08-21 18:35:54 UTCの監視時点ではPID `1004368`、プロセス経過 `736 s`、CPU `635%`、RSS `1,249,112 KiB`、pair cache `17/99`、READY未生成、`oom_kill=7`（増加なし）だった。deviceは`auto`要求で現行DockerのCPU上で稼働中だが、最終manifest確定前のためactual deviceは未確定として扱う。12dfのprediction GEFF、division metric、Final Scoreはまだ未取得であり、結果を推測していない。validation receipt実装はcommit `0e98f8a`にあり、レビュー、実データ集約確認、最新full pytestは未完了である。本レポート更新前の最新push `262e99d`と対象実装commit `0e98f8a`を区別している。
+harmonicは4 sampleすべてでofficialを上回ったが、divisionを含む`44b6_12dfb391`は現在`division_sample_run`が実行中である。2026-08-21 19:44:10 UTCの監視時点ではPID `1004368`、プロセス経過 `1,992 s`、CPU `630%`、RSS `1,188,888 KiB`、pair cache `43/99`、READY未生成、`oom_kill=7`（増加なし）だった。deviceは`auto`要求で現行DockerのCPU上で稼働中だが、最終manifest確定前のためactual deviceは未確定として扱う。12dfのprediction GEFF、division metric、Final Scoreはまだ未取得であり、結果を推測していない。
+
+validation receipt実装はcommit `fbfbf26`にあり、fresh re-reviewは `APPROVED` となった。4 sampleの実artifact集約smokeでは、developmentの旧4方式runが単一出力ディレクトリを共有して最後の方式が`prediction_manifest.json`を上書きしていたため、集約器が `prediction_path mismatch for ('44b6_0113de3b', 'official_ilp')` を返して不整合を拒否した。detector cacheの再計算は不要で、developmentの4方式を別ディレクトリへ個別再生してmanifestを再生成する必要がある。この再生後の実データ集約と最新full pytestは未完了である。本レポート更新前の最新push `262e99d`と対象実装commit `fbfbf26`を区別している。
