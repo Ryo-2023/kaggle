@@ -106,17 +106,18 @@ Enumerated the full competition file list through the Kaggle API (125 pages,
 | `sample_submission.csv` | 1 file | 890 | — |
 | **Total** | | **87,609,892,618** | **81.593** |
 
-All four test movies duplicate a train movie of the same name, byte-size for byte-size:
+All four test movies duplicate a train movie of the same `sample_id`, byte-size for
+byte-size, and **train publishes ground truth for all four**:
 
-| dataset | `test/` bytes | `train/` bytes | equal | chunk size mismatches |
-|---|---:|---:|:--:|:--:|
-| `44b6_0113de3b` | 456,757,564 | 456,757,564 | yes | 0 / 102 |
-| `44b6_0b24845f` | 547,662,847 | 547,662,847 | yes | 0 / 102 |
-| `6bba_05b6850b` | 361,668,669 | 361,668,669 | yes | 0 / 102 |
-| `6bba_05db0fb1` | 540,242,928 | 540,242,928 | yes | 0 / 102 |
+| dataset | `test/` zarr bytes | `train/` zarr bytes | equal | chunk mismatches | `train/*.geff` GT bytes |
+|---|---:|---:|:--:|:--:|---:|
+| `44b6_0113de3b` | 456,757,564 | 456,757,564 | yes | 0 / 102 | 7,617 |
+| `44b6_0b24845f` | 547,662,847 | 547,662,847 | yes | 0 / 102 | 7,618 |
+| `6bba_05b6850b` | 361,668,669 | 361,668,669 | yes | 0 / 102 | 12,964 |
+| `6bba_05db0fb1` | 540,242,928 | 540,242,928 | yes | 0 / 102 | 15,343 |
 
-Every one of the 102 constituent chunk files matches in size, and **`train/<name>.geff`
-ground truth exists for all four**.
+Every one of the 102 constituent chunk files matches in size for every movie. This is
+established, not a hypothesis.
 
 Consequences:
 
@@ -154,76 +155,133 @@ plus `<name>.zarr/zarr.json` and `<name>.zarr/0/zarr.json`.
 
 ## 3. Runtime and memory arithmetic
 
-### 3.1 Measured inputs
+### 3.1 Measured inputs — three full 100-frame detector runs
 
-| Quantity | Value | Source |
-|---|---:|---|
-| Detector cache materialisation, 100 frames, CPU | **4,841.27 s** | `BRIEF` ADDENDUM A3, from `full_auto/cache/44b6_0113de3b/` |
-| Cache-only association + GEFF + metric, **4** methods | **116.29 s** | `BRIEF` ADDENDUM A4 |
-| → one method, per movie | ≈ **29.1 s** | 116.29 / 4 |
-| **Per movie, one method, end to end** | **≈ 4,870.4 s = 81.2 min** | sum |
-| Candidate edges per movie | 7,240,938 | ADDENDUM A3 |
-| Cache size on disk per movie | 195 MB | ADDENDUM A3 |
-| Container ceiling | 7.651 GiB | `docker stats` |
-| Observed container RSS during detector | 4.2 – 5.0 GiB | `docker stats` samples |
+All CPU, all in `biohub-dev`, all `detector_call_count = 100`, all from
+`<CODEX>/artifacts/detector_fixed_race/*/cache/<sample>/manifest.json`
+(`provenance.elapsed_seconds`, `node_count`, `edge_count`).
 
-Model load and zarr open are **not** separately measured and are excluded; they make the
-figures below optimistic, not pessimistic.
+| sample | detector s | cache nodes | **candidate edges** | assoc s (1 method) | in public `test/`? |
+|---|---:|---:|---:|---:|:--:|
+| `44b6_0113de3b` | 4,841.27 | 26,887 | 7,240,938 | 29.07 | **yes** |
+| `44b6_0c582fdc` | 5,447.65 | 34,910 | 12,459,009 | 58.1 – 59.3 | no |
+| `44b6_0b24845f` | 5,476.42 | 66,845 | **45,354,474** | 145.9 – 161.1 | **yes** |
+| min / mean / max | 4,841 / **5,255** / 5,476 | 26,887 / 42,881 / 66,845 | 7.2 M / 21.7 M / **45.4 M** | 29 / 80 / **161** | |
+
+Association figures: 116.29 s for four methods on the dev sample (÷4 = 29.07 s);
+`wall_time.txt` receipts under `panel_runs_0c_*` and `panel_runs_0b_*` for the others.
+The three sub-minute smoke runs (40.47 s, 138.78 s, 340.36 s) are partial-frame smokes
+and are **excluded** — they are not 100-frame movies.
+
+**Per movie, one method, end to end:** dev 4,870.3 s · `0c582fdc` 5,506.4 s ·
+`0b24845f` **5,627.8 s** (= 1.563 h). Mean 5,334.8 s. Model load and zarr open are still
+not separately measured, so all of this is optimistic.
+
+**The dev sample is the smallest of the three, not a typical one.** Every earlier
+estimate anchored on it understates node count by up to 2.5× and candidate edges by
+6.3×.
 
 ### 3.2 Does the current pipeline finish the test set inside the limit?
 
-Cost for `M` movies: `C(M) = M × 4,870.4 s`.
+Using the worst measured movie (5,627.8 s):
 
-| Scenario | Movies | Wall time | vs 9 h (32,400 s) | vs 12 h (43,200 s) |
+| Scenario | Movies | Wall time | vs 9 h | vs 12 h |
 |---|---:|---:|---|---|
-| Visible public test | 4 | 19,482 s = **5.41 h** | fits, 60% used | fits, 45% used |
-| Hidden set = 10 | 10 | 48,704 s = 13.53 h | **1.50× over** | 1.13× over |
-| Hidden set = 20 | 20 | 97,408 s = 27.06 h | **3.01× over** | 2.26× over |
-| Hidden set = 50 | 50 | 243,520 s = 67.6 h | **7.52× over** | 5.64× over |
-| Hidden set = train size | 199 | 969,210 s = **269.2 h** | **29.9× over** | 22.4× over |
+| Visible public test | 4 | 22,511 s = **6.25 h** | fits, 69 % used | fits, 52 % used |
+| Hidden = 6 | 6 | 33,767 s = 9.38 h | **1.04× over** | fits |
+| Hidden = 10 | 10 | 56,278 s = 15.63 h | **1.74× over** | 1.30× over |
+| Hidden = 20 | 20 | 112,556 s = 31.3 h | **3.47× over** | 2.61× over |
+| Hidden = 50 | 50 | 281,390 s = 78.2 h | **8.68× over** | 6.51× over |
+| Hidden = train size | 199 | 1,119,932 s = **311.1 h** | **34.6× over** | 25.9× over |
 
-Break-even movie count: **6.65 movies at 9 h**, 8.87 at 12 h — and that is with zero
-headroom for model load, I/O variation or a slower machine.
+Break-even: **5.76 movies at 9 h**, 7.68 at 12 h, with zero headroom.
 
-### 3.3 The CPU-parity correction, which is the actual headline
+Only two of the four visible test movies have ever been measured — `44b6_0113de3b` and
+`44b6_0b24845f`. The two `6bba_*` test movies come from a different acquisition series
+and have never been run at all.
 
-The 4,841 s figure was measured in `biohub-dev` while `docker stats` showed
-**~700 % CPU**, i.e. roughly seven cores in use. A Kaggle CPU-only notebook provides
-**4 vCPU**. If the detector is compute-bound and scales with cores, wall time on Kaggle
-multiplies by about `7 / 4 = 1.75`:
+### 3.3 The CPU-parity correction — the actual headline
+
+The measurements ran while `docker stats` showed **~700 % CPU** (~7 cores). A Kaggle
+CPU-only notebook provides **4 vCPU**. If the detector is compute-bound and scales with
+cores, wall time multiplies by about `7 / 4 = 1.75`:
 
 | | container | Kaggle CPU (est. ×1.75) |
 |---|---:|---:|
-| Per movie | 4,870 s | **8,523 s = 2.37 h** |
-| Visible 4-movie test | 5.41 h | **9.47 h — over a 9 h limit** |
-| Movies that fit in 9 h | 6.65 | **3.80** |
+| Per movie (worst measured) | 5,627.8 s | **9,848.7 s = 2.74 h** |
+| Visible 4-movie test set | 6.25 h | **10.94 h — over a 9 h limit** |
+| Movies that fit in 9 h | 5.76 | **3.29** |
 
-**On CPU, this pipeline does not reliably finish even the four visible test movies.**
-The 1.75× factor is an estimate, not a measurement — but the margin at 4 movies is only
-1.66×, so the conclusion survives a fairly wide error bar.
+**On CPU this pipeline does not finish even the four visible test movies.** The 1.75×
+factor is estimated, not measured, but the margin at four movies is only 1.44×, so the
+conclusion is robust to a wide error bar.
 
-Speedup required to fit a 9 h limit, relative to current CPU throughput:
+Speedup required to fit 9 h:
 
-| Hidden test movies | 6 | 10 | 20 | 50 | 199 |
-|---|---:|---:|---:|---:|---:|
-| Required speedup (container baseline) | 0.90× | 1.50× | 3.01× | 7.52× | 29.9× |
-| Required speedup (Kaggle-CPU estimate) | 1.58× | 2.63× | 5.26× | 13.2× | 52.3× |
+| Hidden test movies | 4 | 6 | 10 | 20 | 50 | 199 |
+|---|---:|---:|---:|---:|---:|---:|
+| container baseline | 0.69× | 1.04× | 1.74× | 3.47× | 8.68× | 34.6× |
+| Kaggle-CPU estimate | **1.22×** | 1.82× | 3.04× | 6.08× | 15.2× | 60.5× |
 
-**GPU inference is not an optimisation here; it is the only route to a valid submission.**
-And it is entirely unmeasured: the container runs `torch 2.13.0+cpu` with no CUDA and no
-MPS, and `pyproject.toml` pins torch to the `pytorch-cpu` index explicitly
-(`[tool.uv.sources] torch = { index = "pytorch-cpu" }`). There is no GPU timing anywhere
-in this project.
+**GPU inference is not an optimisation here; it is the only route to a valid
+submission.** It remains entirely unmeasured: the container runs `torch 2.13.0+cpu`
+with no CUDA and no MPS, and `pyproject.toml` pins torch to the `pytorch-cpu` index
+(`[tool.uv.sources] torch = { index = "pytorch-cpu" }`).
 
-### 3.4 Memory
+### 3.4 Memory — candidate edges grow quadratically and there is no headroom
 
-Peak RAM was never isolated — the only figures are whole-container `docker stats`
-samples of 4.2–5.0 GiB while the detector ran, which include everything else in the
-container. Against Kaggle's ~30 GiB (CPU) / ~13–16 GiB (GPU) notebook RAM this looks
-comfortable, but the 7.2 M candidate edges per movie and the ILP solve are the two
-structures that would grow with a denser or larger hidden movie, and neither has a
-measured peak. Disk is not a concern: 195 MB of cache per movie against Kaggle's 20 GB
-working directory.
+Across the three measured movies, candidate edges scale almost exactly with the square
+of the detected node count:
+
+```
+E ≈ 0.01015 · N²
+    26,887 nodes → predicted  7,337,544   observed  7,240,938   (+1.3 %)
+    34,910 nodes → predicted 12,369,887   observed 12,459,009   (−0.7 %)
+    66,845 nodes → predicted 45,354,474   observed 45,354,474   (fit point)
+```
+
+A 2.49× spread in node count produces a **6.26× spread in candidate edges**.
+
+Per-edge in-memory footprint, summed from the cache schema in `manifest.json`
+(`delta_t` int16; `forward_logit`, `forward_probability`, `physical_distance`,
+`reverse_logit`, `reverse_probability`, `voxel_distance` float32; `physical_delta` and
+`voxel_delta` float32×3; `source_node_id`, `target_node_id` int64):
+
+```
+2 + 4 + 4 + 12 + 4 + 4 + 4 + 8 + 8 + 12 + 4 = 66 bytes per candidate edge
+```
+
+| sample | candidate edges | edge arrays in RAM |
+|---|---:|---:|
+| `44b6_0113de3b` | 7,240,938 | 0.445 GiB |
+| `44b6_0c582fdc` | 12,459,009 | 0.766 GiB |
+| `44b6_0b24845f` | 45,354,474 | **2.79 GiB** |
+
+The only RAM observation anyone has — 4.2–5.0 GiB of container RSS — was taken on
+`44b6_0113de3b`, whose edge arrays are the **smallest of the three, 6.3× below
+`44b6_0b24845f`**. The existing memory picture is anchored on the best case.
+
+Combining `E ≈ 0.01015·N²` with 66 B/edge gives `RAM ≈ 0.67·N²` bytes for the edge
+arrays alone, and therefore a hard ceiling on detectable cells:
+
+| RAM budget for edge arrays | Max nodes | vs densest movie measured |
+|---|---:|---:|
+| 7.651 GiB (this container) | ~110,700 | 1.66× |
+| 13 GiB (Kaggle GPU notebook) | ~144,400 | 2.16× |
+| 30 GiB (Kaggle CPU notebook) | ~219,300 | 3.28× |
+
+**A hidden movie with roughly twice the cell density of `44b6_0b24845f` exhausts a
+Kaggle GPU notebook's RAM on the candidate-edge arrays alone**, before the model, the
+image volume or the ILP solver are counted. Peak RSS has never been isolated, so the
+true ceiling is lower than these figures, not higher.
+
+### 3.5 Output size
+
+The dry-run CSV is 2,532,038 B for 50,506 rows — **50.1 bytes/row**. Predicted
+`harmonic_v1` graph sizes: `44b6_0113de3b` 50,506 rows, `44b6_0c582fdc` 61,778,
+`44b6_0b24845f` 104,264 (mean 72,183). A four-movie test set is therefore ~289 k rows
+≈ 14.5 MB, and a 199-movie set ~14.4 M rows ≈ 720 MB. Both fit Kaggle's 20 GB working
+directory; only the latter is slow enough to be worth timing.
 
 ---
 
@@ -366,13 +424,14 @@ it is a complete absence of measurement.
 | # | Gap | Severity |
 |---|---|---|
 | 1 | The four visible test movies duplicate four train movies with GT. Public LB is meaningless; the local 0.92112 is an in-sample number on a public test movie, not a generalisation estimate. | **S0** |
-| 2 | At 4,841 s/movie on CPU the pipeline fits at most ~6.6 movies in 9 h, and under a CPU-parity correction not even the visible four. Any hidden test set beyond a handful of movies fails outright. GPU inference is unmeasured and the environment pins CPU-only torch. | **S1** |
+| 2 | Across three measured movies the worst costs 5,627.8 s. 9 h admits 5.76 movies; under a CPU-parity correction only 3.29, so not even the visible four. Any hidden set beyond a handful fails outright. GPU inference is unmeasured and the environment pins CPU-only torch. | **S1** |
+| 2b | Candidate edges scale as `E ≈ 0.01015·N²`. At 66 B/edge the arrays alone reach 2.79 GiB on `44b6_0b24845f`, and a movie ~2× denser exhausts a Kaggle GPU notebook's RAM before the model or solver are counted. The only RAM observation ever taken was on the *smallest* of the three movies. | **S1** |
 | 3 | `tracksdata` is installed from a git commit and that version is not on PyPI. An internet-off notebook cannot install it as pinned. | **S1** |
 | 4 | Checkpoint, upstream `tracking_cellmot` source, `ilpy` solver backend and the CUDA torch build have no packaging route to an offline notebook. | **S1** |
 | 5 | The competition's own Code Requirements tab has never been read. Runtime limit, GPU offering, internet policy and external-data policy are all assumed. | **S1** |
 | 6 | Zero end-to-end Kaggle-notebook rehearsal has ever been done, and the team has never submitted. | **S1** |
 | 7 | `zarr` must be 3.x to read this format-v3 data; the Kaggle image version is unverified. `numba`/`numpy 2.4` coupling is a live compatibility risk. | **S2** |
-| 8 | Peak RAM was never isolated — only whole-container `docker stats` samples exist. | **S2** |
+| 8 | Peak RSS was never isolated — only whole-container `docker stats` samples, and those were taken on the least demanding of the three movies. | **S2** |
 | 9 | Division scoring is entirely unmeasured: 30 predicted forks against a movie with no annotated GT division. | **S2** |
 | 10 | `sample_submission.csv` (890 B) has never been downloaded, so the header is verified against the organisers' converter and the local precedent artefact but not against the competition's own file. | **S3** |
 
