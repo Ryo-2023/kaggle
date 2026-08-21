@@ -382,6 +382,199 @@ each sample (again the assumption most favourable to harmonic):
 
 ---
 
+### 4.7 SCORED — the pre-registration graded against three samples
+
+Added 2026-08-21 after Codex completed the four-method race on samples 2 and 3.
+**§4.6 above is unedited.** This section grades it.
+
+Counts read from the on-disk receipts (`panel_runs_0b_*`, `panel_runs_0c_*`,
+`panel_runs/`, `dev_full_auto_compact_timed/`), never transcribed:
+
+| sample | GT edges | official | harmonic | mutual | motion |
+|---|---:|---|---|---|---|
+| `44b6_0113de3b` | 50 | 46/2/4 → 0.88379 | 48/2/2 → 0.92112 | 43/0/7 → 0.85983 | 42/2/8 → 0.80961 |
+| `44b6_0b24845f` | 49 | 39/9/10 → 0.62622 | 40/10/9 → 0.62747 | 37/8/12 → 0.60938 | 35/8/14 → 0.58141 |
+| `44b6_0c582fdc` | 70 | 57/6/13 → 0.73850 | 62/6/8 → 0.80224 | 55/5/15 → 0.72368 | 50/6/20 → 0.65057 |
+
+#### The pre-registration's H0 is rejected
+
+| | predicted | observed |
+|---|---|---|
+| mean pairwise sign agreements, of 6 — **H0** | **2.60** | — |
+| mean pairwise sign agreements, of 6 — **H1** | 4.85 – 5.42 | — |
+| `44b6_0b24845f` | — | **6 / 6**, ranking matches sample 1, harmonic −official = **+1** |
+| `44b6_0c582fdc` | — | **6 / 6**, ranking matches sample 1, harmonic −official = **+5** |
+
+Joint probability of this outcome: **0.000288 under H0**, 0.264 under H1/comonotone —
+a likelihood ratio of **916×** in favour of H1. Both new samples reproduced the sample-1
+ranking `harmonic_v1 > official_ilp > mutual_confidence > motion_gated` exactly.
+
+**I was wrong to treat the ordering as noise.** The pre-registered H0 predicted ~2.6 of 6
+sign agreements and the data delivered 6 of 6, twice. The method ordering is systematic.
+What remains contested is not *whether* the ordering is real but *how large* the score
+consequence is and whether it generalises — see below.
+
+#### Pooled pairwise exact McNemar (169 GT edges, Bonferroni α = 0.00833)
+
+| A | B | per-sample edge gains | pooled b | c | exact p | p<0.05 | Bonferroni |
+|---|---|---|---:|---:|---:|:---:|:---:|
+| official_ilp | harmonic_v1 | +2, +1, +5 | 8 | 0 | **0.007812** | yes | **yes (barely)** |
+| official_ilp | mutual_confidence | −3, −2, −2 | 0 | 7 | 0.015625 | yes | **no** |
+| official_ilp | motion_gated | −4, −4, −7 | 0 | 15 | 0.000061 | yes | yes |
+| harmonic_v1 | mutual_confidence | −5, −3, −7 | 0 | 15 | 0.000061 | yes | yes |
+| harmonic_v1 | motion_gated | −6, −5, −12 | 0 | 23 | <0.000001 | yes | yes |
+| mutual_confidence | motion_gated | −1, −2, −5 | 0 | 8 | **0.007812** | yes | **yes (barely)** |
+
+**harmonic-vs-official pools to b=8, c=0, p = 0.0078125, which does cross α = 0.008333.
+Stated plainly: on this evidence harmonic_v1 beats official_ilp.** Two caveats that must
+travel with that sentence:
+
+1. **This is an optimistic bound, not a measurement.** Both b and c come from the
+   nested-TP assumption — that within each sample the better method recovered a strict
+   superset of the worse one's edges, so c = 0 by construction. Nested-TP *maximises*
+   apparent separation. The receipts store counts, not the matched-edge mask, so the true
+   pairing is unobserved.
+2. **It is knife-edge.** Sensitivity to reversals (edges where official succeeded and
+   harmonic failed):
+
+| reversed edges added | b | c | p | survives Bonferroni |
+|---:|---:|---:|---:|:---:|
+| 0 (nested assumption) | 8 | 0 | 0.0078 | **yes** |
+| 1 | 9 | 1 | 0.0215 | no |
+| 2 | 10 | 2 | 0.0386 | no |
+| 3 | 11 | 3 | 0.0574 | no (fails even α=0.05) |
+
+**A single reversed edge out of 169 moves harmonic-vs-official from "significant after
+correction" to "not significant".** The same applies to mutual-vs-motion (also b=8). The
+other four pairs survive ≥3 reversals and are robust.
+
+**What the matched-edge mask is needed for:** it is the only thing that turns b=8, c=0 from
+an assumption into an observation. Dumping
+`td.DEFAULT_ATTR_KEYS.MATCHED_EDGE_MASK` per predicted edge alongside each GEFF would give
+the real per-edge outcome for every method, hence the true (b, c) per pair. Until then the
+harmonic verdict rests on an unverified assumption that a single counter-example destroys.
+This is now the highest-value cheap fix in the project.
+
+#### Pooled panel scores (169 GT edges)
+
+| method | TP | FP | FN | micro edge Jaccard | size-weighted adj Jaccard (`summarise()`) |
+|---|---:|---:|---:|---:|---:|
+| `harmonic_v1` | 150 | 18 | 19 | **0.802139** | **0.780156** |
+| `official_ilp` | 142 | 17 | 27 | 0.763441 | 0.744108 |
+| `mutual_confidence` | 135 | 13 | 34 | 0.741758 | 0.725286 |
+| `motion_gated` | 127 | 16 | 42 | 0.686486 | 0.673964 |
+
+harmonic − official = **+0.036048** on the pooled panel, near-identical to the +0.037326 seen
+on the dev movie alone. Paired bootstrap on the weighted score difference, 100,000 draws:
+
+| pair | observed | paired CI95 (FP fixed) | excludes 0 |
+|---|---:|---|:---:|
+| official → harmonic | +0.0360 | **[+0.0111, +0.0693]** | **yes** |
+| official → mutual | −0.0188 | [−0.0478, +0.0080] | no |
+| official → motion | −0.0701 | [−0.1119, −0.0345] | yes |
+| harmonic → mutual | −0.0549 | [−0.0973, −0.0183] | yes |
+| harmonic → motion | −0.1062 | [−0.1568, −0.0651] | yes |
+| mutual → motion | −0.0513 | [−0.0846, −0.0268] | yes |
+
+False positives are held fixed here, which is the correct paired analysis: FP is a property
+of the prediction, not of which GT edges you happened to resample. A variant that resamples
+FP independently per method widens official→harmonic to [−0.0117, +0.0886] and loses
+significance, but that variant is wrong for this question — the four methods share one
+detector cache, so their false positives are strongly correlated, and drawing them
+independently injects roughly 5.5 edges of purely artificial standard deviation into the
+difference. Both variants are recorded in `pooled_three_sample.json`.
+
+The two tests now agree: McNemar p = 0.0078 and a paired CI excluding zero, for the same
+pair, under the same nested-TP assumption.
+
+#### Score-level resolution is still coarse
+
+The mean-discordance noise floor for a 169-edge panel is **δ ≥ 0.0672** (π_d = 0.0750,
+dJ/dr = 1.6287). The observed harmonic advantage (0.0360) sits *below* that floor while
+still being detectable by the paired test. That is not a contradiction: McNemar conditions
+on the 8 discordant edges and discards the ~142 concordant ones, which carry no information
+about which method is better. The floor is the right number for an *unpaired* claim ("this
+run scored X, that run scored Y"); the paired CI is the right number for a *head-to-head*
+comparison on a fixed panel. **Report the paired CI for A/B comparisons and the floor for
+absolute claims.**
+
+#### What is licensed now, and what still is not
+
+**Licensed** (169 GT edges, three samples, nested-TP assumption stated):
+
+- `motion_gated` is worse than all three others. Robust to ≥3 reversals; the firmest
+  conclusion the project has. **Drop it.**
+- `harmonic_v1` beats `mutual_confidence` and `motion_gated`; `official_ilp` beats
+  `motion_gated`. Robust.
+- `harmonic_v1` beats `official_ilp` — **but say it with the knife-edge caveat**: p = 0.0078
+  against α = 0.0083, one reversed edge from failing, and resting on an unverified pairing.
+  Wording: *"harmonic_v1 beats official_ilp on the three-sample panel (pooled McNemar
+  p = 0.0078, paired CI [+0.011, +0.069]), under a nested-TP assumption that a single
+  counter-example would overturn; confirm with the matched-edge mask before relying on it."*
+
+**Not licensed:**
+
+- `official_ilp` vs `mutual_confidence` — p = 0.0156 fails Bonferroni, CI contains zero.
+  **Not separated.**
+- Any difference at the 0.005–0.01 scale. The best-established pair has a paired CI
+  half-width of ±0.029.
+- Any claim about divisions. All three samples still have zero; `division_jaccard` is null
+  throughout; 10% of the official score remains completely untested.
+- Any claim about the `6bba_` domain — still zero coverage, still 64% of train and 50% of test.
+- **Any absolute score level.** See below.
+
+#### Absolute scores collapse off the dev movie
+
+`official_ilp`: **0.8838 → 0.6262 → 0.7385**. The dev movie is not merely unrepresentative
+(§3.1) — it is anomalously *easy*, and every headline number in the project inherits that:
+
+| | `44b6_0113de3b` | `44b6_0b24845f` | `44b6_0c582fdc` |
+|---|---:|---:|---:|
+| official FP | 2 | **9** | 6 |
+| official node recall | 1.000 | 0.980 | 0.972 |
+| official `total_node_ratio` | 0.0093 | **0.6870** | 0.1533 |
+
+The pooled `harmonic_v1` estimate is **0.7802**, not 0.9211. Anyone carrying 0.92 forward as
+a leaderboard expectation is out by ~0.14. And because `44b6_0113de3b` and `44b6_0b24845f`
+*are* two of the four leaderboard movies (§2.1), the best available leaderboard estimate for
+harmonic comes from those two — 0.9211 and 0.6275 — with the two `6bba_` movies unknown.
+
+#### The node-count penalty is now a first-order term
+
+`total_node_ratio` per sample, and the predicted node counts behind it:
+
+| sample | estimated nodes | official pred / ratio | harmonic pred / ratio | motion pred / ratio |
+|---|---:|---|---|---|
+| `44b6_0113de3b` | 25,755 | 25,994 / +0.009 | 26,301 / +0.021 | 25,143 / **−0.024** |
+| `44b6_0b24845f` | 32,795 | 55,324 / **+0.687** | **57,221 / +0.745** | 50,219 / +0.531 |
+| `44b6_0c582fdc` | 27,958 | 32,245 / +0.153 | 32,602 / +0.166 | 31,072 / +0.111 |
+
+On sample 2 the detector emits **74% more nodes than the movie is estimated to contain**,
+costing harmonic 7.4% of its score on that sample. On the dev movie the same term was worth
+0.2%. **§4.5 understated this by a factor of ~35 because the dev movie hid it.**
+
+Pooled, the penalty costs:
+
+| method | weighted raw J | weighted adj J | lost to node penalty |
+|---|---:|---:|---:|
+| `harmonic_v1` | 0.802139 | 0.780156 | **0.0220** |
+| `official_ilp` | 0.763441 | 0.744108 | 0.0193 |
+| `mutual_confidence` | 0.741758 | 0.725286 | 0.0165 |
+| `motion_gated` | 0.686486 | 0.673964 | 0.0125 |
+
+**0.022 of pooled score is being discarded to node over-prediction — 61% of the entire
+harmonic-over-official gain (0.036) that four association methods of work produced.**
+Reducing the predicted node count is a larger and cheaper lever than association method
+choice, and nobody is pulling it.
+
+Worse, the penalty is *anti-correlated with quality*: the better a method is at association,
+the more nodes it keeps, and the harder it is penalised (harmonic 57,221 vs motion 50,219 on
+sample 2). The metric partially punishes the better method. Any node-count work must be
+reported as a separate line item, never folded into an association comparison — protocol
+P2 exists precisely for this.
+
+---
+
 ## 5. The split
 
 Two tiers. Assignment is driven by §2.1 first (leaderboard contamination), then by the
@@ -528,4 +721,13 @@ Total container cost of steps 2–4: a few seconds and well under 200 MB RSS.
 PYTHONPATH=scripts python scripts/preregister_sample2.py \
   --receipt <CODEX>/artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/race_receipt.json \
   --n2 49 --out artifacts/validation_design/prereg_sample2.json
+```
+
+```bash
+# 6. grade the pre-registration and pool all completed samples
+PYTHONPATH=scripts python scripts/score_prereg_and_pool.py \
+  --race-root <CODEX>/artifacts/detector_fixed_race \
+  --prereg artifacts/validation_design/prereg_sample2.json \
+  --n-boot 100000 \
+  --out artifacts/validation_design/pooled_three_sample.json
 ```
