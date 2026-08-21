@@ -1,9 +1,9 @@
 # Biohub Cell Tracking — ChatGPT報告用・全結果統合版
 
-作成日: 2026-08-20（JST）
+作成日: 2026-08-21（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
-最新push: `f27dfdc`
+最新push: `origin/codex/biohub-multi-method-race`（実装確認済みcommit: `eb6e472`）
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -13,6 +13,8 @@
 - 公式 TemporalUNet3D + SimpleNodeTransformer + ILP pipelineを実データで完走した。
 - 同一sample・同一公式metricで、追加3 lane（`blob_lap`、`cc_flow`、`motion_lap`）を推論からprediction GEFF、公式評価まで完走した。
 - 全比較のBest Methodは `harmonic v1`（Final Score `0.9211200215044129`）。
+- detector-fixed raceでは同一TemporalUNet3D detector cacheを固定し、developmentと`44b6_0b24845f`で4 association方式を公式metricまで完走した。0bのBestは`harmonic_v1`（Final Score `0.6274705993317501`）で、official ILP `0.6262213541803576`を`+0.0012492451513925`上回った。
+- 0bの公式ILPはprediction `55,324 nodes / 44,335 edges`、Edge TP/FP/FN `39/9/10`、Adjusted/Final `0.6262213541803576`を取得した。GTは評価phase以外に使っていない。
 - 新規race laneでは `blob_lap`（Final Score `0.9140773262846648`）が最良だった。
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
@@ -112,6 +114,17 @@ Race branchの主なcommit:
 | `1fa235b` | NMS改善実験の記録 |
 | `6100101` | 再現コマンドのsource revision固定 |
 
+### 3.3 Detector-Fixed Association Race
+
+| 項目 | 値 |
+|---|---|
+| detector | `TemporalUNet3D + SimpleNodeTransformer`、source commit `075fc5f5a52d11077f9dc2b074644618f26939e2` |
+| checkpoint | `edge_predictor_best.pth`、SHA-256 `347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235` |
+| detector cache | GT-free `nodes.npz` + `candidate_edges.npz`、0b hash `50739a79bf081799d37987bbdd800ee2f95c5246ce07adead21812a3599a3b65` |
+| edge replay sidecar | `candidate_edges.mmap/`、schema `detector_fixed.cache_mmap.v1`、source cache hash一致、約2.8 GiB |
+| code commit | `eb6e472`（edge memmap sidecar、chunked validation、pair-contiguous grouping） |
+| device | `auto`→`cpu`（DockerのPyTorch CPU wheel。CUDA→MPS→CPU fallback実装済み） |
+
 ## 4. Method configuration
 
 ### 4.1 `blob_lap`
@@ -144,12 +157,14 @@ Race branchの主なcommit:
 - frame-local one-to-one LAP
 - solver: `scipy.optimize.linear_sum_assignment`
 - `official_detector_shared=false`
-- `official_detector_motion=deferred`
-- したがって、これは公式TemporalUNet3D detectorのmotion ablationではなく、blob候補上の古典motion associationである
+- `official_detector_motion=deferred`（旧blob race laneの設定）
+- したがって、これは公式TemporalUNet3D detectorのmotion ablationではなく、blob候補上の古典motion associationである。detector-fixed raceの`motion_gated`は同じ公式cacheを読み、節14で別に評価した。
 
-## 5. 公式metric結果
+## 5. 旧Multi-Method Race（blob detector系）の公式metric結果
 
 全laneでDivision TP/FP/FNは `0/0/0`、Division Jaccardは `null`。公式summarizerがdivision termを落とすため、Final ScoreはこのsampleではAdjusted Edge Jaccardと一致する。
+
+この節の`official baseline`は旧blob detector raceの基準である。公式TemporalUNet3Dを固定したdetector-fixed raceの結果は、節14に別表で記録する。同じsample・公式metricでもdetectorが異なるため、両表のスコアを直接同一手法の改良差として混ぜない。
 
 | 手法 | Final Score | Adjusted Edge Jaccard | Edge Jaccard | nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | node recall | total node ratio | runtime [s] | delta vs official |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -273,6 +288,16 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development biohub uv run --no-sync python scripts/run_benchmark_race.py summarize --root . --output docs/results/multi_method_benchmark_race.md --summary-json artifacts/multi_method_race/race_summary.json
 ```
 
+### detector-fixed race（0b再現）
+
+```bash
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0b24845f --train-root artifacts/detector_fixed_race/panel_data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/panel_auto --device auto'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/build_detector_cache_mmap.py artifacts/detector_fixed_race/panel_auto/cache/44b6_0b24845f'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0b24845f --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_0b24845f --output artifacts/detector_fixed_race/panel_runs --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_0b24845f.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods official_ilp'
+```
+
+`harmonic_v1`、`mutual_confidence`、`motion_gated`は、同じ`--cache`に対して`--methods`だけをそれぞれ置き換え、OOMを避けるため個別に実行した。
+
 ### NMS改善実験
 
 追加実験の固定変更は `BlobLapConfig(nms_distance_um=3.5)` のみ。実験receiptは `artifacts/performance_experiments/blob_lap_nms35/` にある。canonical fixed laneへはまだ昇格していない。
@@ -297,7 +322,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - race branch: `codex/biohub-multi-method-race`
-- race latest commit: `f27dfdc`
+- race latest implementation commit: `eb6e472`（本レポート更新commitはこの直後に追加）
 - remote: `origin/codex/biohub-multi-method-race`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
 
@@ -318,6 +343,13 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - `artifacts/multi_method_race/evaluation/{blob_lap,cc_flow,motion_lap}/metrics.json`
 - `artifacts/multi_method_race/race_summary.json`
 - `artifacts/performance_experiments/blob_lap_nms35/`
+- `docs/results/detector_fixed_association_race.md`
+- `artifacts/detector_fixed_race/full_auto/cache/44b6_0113de3b/`
+- `artifacts/detector_fixed_race/panel_auto/cache/44b6_0b24845f/`（canonical NPZ + `candidate_edges.mmap/`）
+- `artifacts/detector_fixed_race/panel_runs/44b6_0b24845f/`（official ILP）
+- `artifacts/detector_fixed_race/panel_runs_0b_harmonic/44b6_0b24845f/`
+- `artifacts/detector_fixed_race/panel_runs_0b_mutual/44b6_0b24845f/`
+- `artifacts/detector_fixed_race/panel_runs_0b_motion/44b6_0b24845f/`
 
 Kaggleへの外部提出は実施していない。prediction生成・local official evaluationまでであり、ユーザー承認なしのKaggle submissionは行っていない。
 
@@ -325,24 +357,24 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 ### 既知の問題
 
-1. 比較は単一Kaggle train sampleのみ。leaderboard性能やdense-truth性能を意味しない。
+1. 旧blob raceの比較は単一Kaggle train sampleのみ。detector-fixed raceはdevelopment＋0bの2 sampleまでで、leaderboard性能やdense-truth性能を意味しない。
 2. このsampleにはdivisionがなく、division termは評価上dropされている。
 3. harmonicのsource-cell独立監査は保持notebook JSON不足でBLOCKED。
-4. official receiptにはraw candidate count/digestがなく、detector driftを完全には比較できない。
+4. 旧official receiptにはraw candidate count/digestがなく、detector driftを完全には比較できない。detector-fixed cacheはcandidate digestとcache hashを保存している。
 5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の不一致がある。
 6. high-level viewerの`matched_node_id` / `match_node_id`不一致でGUI表示は未完了。ただしheadless overlay evidenceは保存済み。
-7. 全lane CPU-only。GPU性能は主張していない。
+7. 現行Dockerの全laneはCPU-only。detector-fixedはCUDA→MPS→CPUの自動fallbackを実装済みだが、GPU実測性能はまだ主張していない。
 8. 外部候補は公式metric未取得。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値はない。
 
 ### 次の一手
 
-1. NMS 3.5 µm候補を、同じ条件で複数train sampleへ検証する。
-2. 公式TemporalUNet3D center detectorの永続candidate cacheをupstream差分として安全に抽出できるか確認する。
-3. 公式detector nodesにharmonic bidirectional association + ILPを接続し、detector固定のassociation改善を測る。
-4. NMS confidence calibration、duplicate suppression、sparse annotationを前提にしたheld-out validationを行う。
+1. `44b6_0c582fdc`を次の実データpanelとしてmaterializeし、sidecar作成後にofficial→harmonic→mutual→motionを個別評価する。
+2. `44b6_0c582fdc`で安定性を確認後、0db75faeとdivisionを含む`12dfb391`へ拡張する。
+3. 0bでharmonicがofficialを僅かに上回った仮説を、複数sample・divisionありsampleで検証する。
+4. NMS 3.5 µm候補は旧blob laneとして、detector-fixed panelとは別条件で評価する。
 5. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
 
-現時点での採用判断は、**全体Bestはharmonic v1、race新規Bestはblob_lap、次の性能改善候補はNMS 3.5 µm + harmonic association**である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの0bではharmonic_v1がofficial ILPを僅かに上回った**である。次は0c以降でdetector-fixed harmonicの再現性を検証する。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -383,7 +415,7 @@ detector-fixed raceのmaterialize CLIは `--device auto` が既定値であり�
 
 feature cacheの最初の全100フレーム実行では、sliding window間で同一nodeのcontextual featureが変わることを検出した。これはTemporalUNetの窓相対時刻・前後frame contextに由来する仕様であり、誤った完全一致検証を修正した。最初の観測をcanonical node featureとして保存し、衝突観測数をprovenanceへ記録する。forward/reverse raw logitsはpair単位で保持するため、association比較の入力は失われない。
 
-修正後の4フレーム実データsmokeはcache公開まで完走し、node `897`、候補edge `151,830`、feature衝突観測 `453`を記録した。2フレーム `auto` smokeでは `requested_device=auto`、実選択 `cpu` を確認した。全100フレームの再実行は、修正済みadapter・auto設定で継続中であり、公式metric数値は完了後に本節へ追記する。
+修正後の4フレーム実データsmokeはcache公開まで完走し、node `897`、候補edge `151,830`、feature衝突観測 `453`を記録した。2フレーム `auto` smokeでは `requested_device=auto`、実選択 `cpu` を確認した。全100フレームのdevelopment cache生成と公式metricは完了し、追加で0b sampleのcache生成・公式ILP・harmonic・mutual・motionも完了した。0c/0db/12dfb391は未完了である。
 
 再現コマンド（GPU環境ではautoでGPUを選択）:
 
@@ -391,7 +423,7 @@ feature cacheの最初の全100フレーム実行では、sliding window間で�
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --train-root /workspace/biohub-cell-tracking-during-development/data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/full_auto'
 ```
 
-関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）を `codex/biohub-multi-method-race`へpush済み。
+関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を `codex/biohub-multi-method-race`へpush済み。
 
 NVIDIAデスクトップ移行用に `docker-compose.nvidia.yml` も追加した。通常Composeは現MacBookのCPU環境を維持し、移行先では公式CUDA wheel indexを `BIOHUB_TORCH_INDEX_URL` に指定して `gpus: all` でbuildする。Dockerfile側はCPU indexを既定にしつつ、override時だけ `uv sync --no-install-package torch` 後に指定indexのPyTorchを導入する。これによりCPU-onlyの現環境を壊さず、移行先では `--device auto` がCUDAを選べる。
 
@@ -410,4 +442,19 @@ development sample `44b6_0113de3b` の100フレームを、公式TemporalUNet3D 
 
 4方式のcache-only association、GEFF生成、公式metricのwall timeは `116.29477067900007 s`。Gurobi licenseなしのためILPはSCIP fallbackで、official/harmonicの結果は既存canonical Strong Baseline v1とnode/edge数・metricが一致した。divisionのないsampleのためDivision Jaccardは`null`、公式summarizerはdivision termをdropした。
 
-prediction GEFFは `docs/results/detector_fixed_association_race.md` に一覧化した。validation panelの他4 sampleは画像・GT metadataを固定済みだが、CPU detector cacheと公式metricは未完了である。
+### 14.1 追加panel sample `44b6_0b24845f`
+
+同じGT-free detector cache（cache hash `50739a79bf081799d37987bbdd800ee2f95c5246ce07adead21812a3599a3b65`、nodes `66,845`、candidate edges `45,354,474`、detector elapsed `5,476.415639576997 s`、`auto/cpu`）を固定し、associationだけを交換した。GT GEFFは `artifacts/detector_fixed_race/panel_data/train/44b6_0b24845f.geff` である。
+
+| 手法 | prediction nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | Edge Jaccard | Adjusted / Final | runtime [s] | 公式ILPとの差 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `official_ilp` | `55,324 / 44,335` | `39/9/10` | `0/0/0` | `0.6724137931034483` | `0.6262213541803576 / 0.6262213541803576` | `157.345064` | `+0` |
+| `harmonic_v1` | `57,221 / 47,043` | `40/10/9` | `0/0/0` | `0.6779661016949152` | `0.6274705993317501 / 0.6274705993317501` | `161.112689` | `+0.0012492451513925` |
+| `mutual_confidence` | `52,875 / 40,639` | `37/8/12` | `0/0/0` | `0.6491228070175439` | `0.6093777667220346 / 0.6093777667220346` | `147.215804` | `-0.0168435874583230` |
+| `motion_gated` | `50,219 / 37,723` | `35/8/14` | `0/0/0` | `0.6140350877192983` | `0.5814113726151023 / 0.5814113726151023` | `145.915102` | `-0.0448099815652553` |
+
+0bの公式ILPはcandidate `48,068`→selected `44,335`、node recall `0.9803921568627451`、total node ratio `0.6869644762921177`。4方式ともprediction manifestをGTを開く前に検証し、Gurobi不可のためSCIPへfallbackした。Division JaccardはGTにdivisionがないため`null`である。runtimeは各方式を同じsidecarから単独再生し、predictionディレクトリの`wall_time.txt`へ外部Python wrapperで保存した。
+
+0bの最初の全方式再生では圧縮NPZの全列展開がOOM killとなった（`memory.events oom_kill`は過去失敗を含め7）。pair単位disk capture、chunked memmap、chunked validation、pair-contiguous grouping、edge sidecarを導入後、0bの4方式は追加OOMなしで完走した。
+
+prediction GEFF、GT、receipt、cache sidecarは `docs/results/detector_fixed_association_race.md` に一覧化した。validation panelはdevelopment＋0bの2 sample・4方式まで完了し、0c/0db/12dfb391は画像とGTを固定済みだが、CPU detector cacheと公式metricが未完了である。

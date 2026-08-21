@@ -7,7 +7,7 @@
 
 同一の公式 detector 出力を固定し、association だけを交換して比較する。画像、cell-center、node feature、forward/reverse raw edge logitsは一度だけ取得し、後段はcacheのみを読む。GTはcache生成・candidate生成・association選択に渡さず、公式metric評価時だけ開く。
 
-比較予定の4方式:
+比較対象の4方式（developmentと0bは完了、0c以降は未完了）:
 
 | method_id | association | graph最適化 |
 |---|---|---|
@@ -39,14 +39,14 @@ scoreを見ずに、image metadataとGT graph metadata（node/edge/divisionの�
 | sample | shape | GT nodes / edges | division source | 状態 |
 |---|---:|---:|---:|---|
 | `44b6_0113de3b` | `(100,64,256,256)` | `52 / 50` | `0` | development / 完了 |
-| `44b6_0b24845f` | `(100,64,256,256)` | `51 / 49` | `0` | panel固定 |
+| `44b6_0b24845f` | `(100,64,256,256)` | `51 / 49` | `0` | 4方式完了 |
 | `44b6_0c582fdc` | `(100,64,256,256)` | `71 / 70` | `0` | panel固定 |
 | `44b6_0db75fae` | `(100,64,256,256)` | `157 / 151` | `0` | panel固定 |
 | `44b6_12dfb391` | `(100,64,256,256)` | `788 / 773` | `1` | division panel |
 
 ## 4. cache契約と実行状況
 
-cacheはGT-free manifest、`nodes.npz`、`candidate_edges.npz`、`READY`を原子的に公開する。manifestにはimage/checkpoint/source/adapter hash、detector設定、実デバイス、node/edge数を記録する。
+cacheはGT-free manifest、`nodes.npz`、`candidate_edges.npz`、`READY`を原子的に公開する。manifestにはimage/checkpoint/source/adapter hash、detector設定、実デバイス、node/edge数を記録する。0bではcanonicalなdigest検証済みNPZを壊さず、association再生用の派生 `candidate_edges.mmap/`（schema `detector_fixed.cache_mmap.v1`、`source_cache_hash`一致）を追加した。sidecarはGT-freeで、必要なedge列だけを`numpy.memmap`として読む。
 
 最初の全100フレーム試行では、sliding window間で同一nodeのcontextual featureが変わることが判明した。これはTemporalUNetの前後frame contextとwindow相対時刻による仕様である。修正後は最初の観測をcanonical featureとして保存し、衝突観測数をprovenanceへ記録する。pair単位のforward/reverse logitsはそのまま保持する。
 
@@ -72,9 +72,26 @@ cacheはGT-free manifest、`nodes.npz`、`candidate_edges.npz`、`READY`を原�
 | requested / actual device | `auto / cpu` |
 | cache artifacts | `nodes.npz` 3,564,450 bytes、`candidate_edges.npz` 197,971,252 bytes |
 
+0b sample `44b6_0b24845f` の全100フレームcacheも完了した。GTはcache生成・candidate生成・associationには渡していない。
+
+| 項目 | 値 |
+|---|---:|
+| cache hash | `50739a79bf081799d37987bbdd800ee2f95c5246ce07adead21812a3599a3b65` |
+| node数 | `66,845` |
+| candidate edge数 | `45,354,474` |
+| detector / forward / reverse calls | `100 / 99 / 99` |
+| feature conflict observations | `65,356` |
+| detector elapsed | `5,476.415639576997 s`（約91.27分） |
+| requested / actual device | `auto / cpu` |
+| adapter source SHA-256 | `e914af35a2b68f2509027429efaa6ab29670be822212ae7c8628985f42a4ac72` |
+| image SHA-256 | `7f7809f8948ce7f6c5c7cfb03d5b6fb8f140c725d16f0d63653d59620845d33a` |
+| edge NPZ / mmap sidecar | `1,225,881,332` bytes / `2,993,397,988` bytes（sidecar `du` 約2.8 GiB） |
+
+0bの最初のassociation再生では、圧縮NPZを全列展開したためコンテナのOOM killとなった。その後、pair単位のdisk capture、chunked memmap edge列、chunked validation、pair-contiguous grouping、`candidate_edges.mmap` sidecarを導入した。最終の0b公式ILP・追加3方式はOOM killを増やさず完走した。実装変更は `eb6e472` にcommit・push済みである。
+
 ## 5. 公式metric結果
 
-全100フレームのcache生成後に、各prediction GEFFと公式metric receiptを追記する。未取得の数値は推測で埋めない。
+developmentと0bのcache生成後に、prediction GEFFと公式metric receiptを取得した。0c・0db・12dfb391はcache生成・公式metricが未完了であり、未取得の数値は推測で埋めない。
 
 | sample / method | prediction GEFF | nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | Edge Jaccard | Adjusted Edge Jaccard | Division Jaccard | Final Score | runtime |
 |---|---|---:|---|---|---:|---:|---:|---:|---:|
@@ -82,8 +99,14 @@ cacheはGT-free manifest、`nodes.npz`、`candidate_edges.npz`、`READY`を原�
 | `44b6_0113de3b` / harmonic | `dev_full_auto_compact_timed/44b6_0113de3b/harmonic_v1.geff` | `26,301 / 24,205` | `48/2/2` | `0/0/0` | `0.9230769230769231` | `0.9211200215044129` | `null` | `0.9211200215044129` | race合計116.29 s* |
 | `44b6_0113de3b` / mutual | `dev_full_auto_compact_timed/44b6_0113de3b/mutual_confidence.geff` | `25,806 / 22,727` | `43/0/7` | `0/0/0` | `0.86` | `0.859829702970297` | `null` | `0.859829702970297` | race合計116.29 s* |
 | `44b6_0113de3b` / motion | `dev_full_auto_compact_timed/44b6_0113de3b/motion_gated.geff` | `25,143 / 21,799` | `42/2/8` | `0/0/0` | `0.8076923076923077` | `0.8096115765422697` | `null` | `0.8096115765422697` | race合計116.29 s* |
+| `44b6_0b24845f` / official | `panel_runs/44b6_0b24845f/official_ilp.geff` | `55,324 / 44,335` | `39/9/10` | `0/0/0` | `0.6724137931034483` | `0.6262213541803576` | `null` | `0.6262213541803576` | 157.345064 s |
+| `44b6_0b24845f` / harmonic | `panel_runs_0b_harmonic/44b6_0b24845f/harmonic_v1.geff` | `57,221 / 47,043` | `40/10/9` | `0/0/0` | `0.6779661016949152` | `0.6274705993317501` | `null` | `0.6274705993317501` | 161.112689 s |
+| `44b6_0b24845f` / mutual | `panel_runs_0b_mutual/44b6_0b24845f/mutual_confidence.geff` | `52,875 / 40,639` | `37/8/12` | `0/0/0` | `0.6491228070175439` | `0.6093777667220346` | `null` | `0.6093777667220346` | 147.215804 s |
+| `44b6_0b24845f` / motion | `panel_runs_0b_motion/44b6_0b24845f/motion_gated.geff` | `50,219 / 37,723` | `35/8/14` | `0/0/0` | `0.6140350877192983` | `0.5814113726151023` | `null` | `0.5814113726151023` | 145.915102 s |
 
-`*` cache-only association、GEFF生成、公式metricを4方式で実行したwall time。公式baselineとの差は、official `+0`、harmonic `+0.0373255379836626`、mutual `-0.0239647805504533`、motion `-0.0741829069784806`。
+`*` developmentのcache-only association、GEFF生成、公式metricを4方式で実行したwall time。0bのruntimeは各方式をsidecarから単独再生し、外部Python wrapperで計測した（各predictionディレクトリの`wall_time.txt`）。developmentの公式baselineとの差は、official `+0`、harmonic `+0.0373255379836626`、mutual `-0.0239647805504533`、motion `-0.0741829069784806`。0bのofficialとの差は、harmonic `+0.0012492451513925`、mutual `-0.0168435874583230`、motion `-0.0448099815652553`。
+
+0bのcandidate→selected edge数は、official `48,068→44,335`、harmonic `51,874→47,043`、mutual `43,362→40,639`、motion `39,345→37,723`。officialのnode recallは`0.9803921568627451`、total node ratioは`0.6869644762921177`である。4方式ともprediction manifestをGTを開く前に検証した。
 
 全方式でDivision TP/FP/FNは`0/0/0`、このdevelopment sampleにはdivisionがないためDivision Jaccardは`null`で公式summarizerがdivision termをdropした。
 
@@ -96,10 +119,16 @@ prediction GEFFとmanifest/receipt:
 - `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/mutual_confidence.geff`
 - `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/motion_gated.geff`
 - `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/race_receipt.json`
+- GT: `artifacts/detector_fixed_race/panel_data/train/44b6_0b24845f.geff`（development GTは `/workspace/biohub-cell-tracking-during-development/data/train/44b6_0113de3b.geff`）
+- `artifacts/detector_fixed_race/panel_runs/44b6_0b24845f/official_ilp.geff`
+- `artifacts/detector_fixed_race/panel_runs_0b_harmonic/44b6_0b24845f/harmonic_v1.geff`
+- `artifacts/detector_fixed_race/panel_runs_0b_mutual/44b6_0b24845f/mutual_confidence.geff`
+- `artifacts/detector_fixed_race/panel_runs_0b_motion/44b6_0b24845f/motion_gated.geff`
+- 0b各方式のreceipt/manifest/runtime: 各predictionディレクトリの `race_receipt.json`、`prediction_manifest.json`、`wall_time.txt`
 
 ## 6. デバイス診断とGPU移行
 
-今回のDocker実測値は `torch 2.13.0+cpu`、`torch.version.cuda=None`、`torch.cuda.is_available=False`、CUDA device count `0`、MPS built/available `False/False`、`nvidia-smi`なしである。従ってautoがCPUを選んだ原因は環境であり、行列計算の実装不具合ではない。
+今回のDocker実測値は `torch 2.13.0+cpu`、`torch.version.cuda=None`、`torch.cuda.is_available=False`、CUDA device count `0`、MPS built/available `False/False`、`nvidia-smi`なしである。developmentと0bのmaterialize receiptも`requested_device=auto`、`device=cpu`を記録した。従ってautoがCPUを選んだ原因は環境であり、行列計算の実装不具合ではない。
 
 NVIDIA環境では `docker-compose.nvidia.yml` と公式CUDA wheel indexを使い、`gpus: all`で起動する。source側の `--device auto` はCUDAを最優先する。MPS環境では同じautoがMPSを選ぶ。GEFF I/O、ILP/SCIP、公式metric、古典associationはCPU処理である。
 
@@ -107,11 +136,15 @@ NVIDIA環境では `docker-compose.nvidia.yml` と公式CUDA wheel indexを使�
 
 ```bash
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --train-root /workspace/biohub-cell-tracking-during-development/data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/full_auto'
+
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0b24845f --train-root artifacts/detector_fixed_race/panel_data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/panel_auto'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/build_detector_cache_mmap.py artifacts/detector_fixed_race/panel_auto/cache/44b6_0b24845f'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0b24845f --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_0b24845f --output artifacts/detector_fixed_race/panel_runs --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_0b24845f.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods official_ilp,harmonic_v1,mutual_confidence,motion_gated'
 ```
 
 ## 8. 既知の問題
 
 - 現行MacBook DockerはCPU-onlyであり、GPU実測値はまだない。
 - node featureはwindow context依存のため、cacheのcanonical featureは最初の観測である。association比較はpair logitsを使用する。
-- panel画像はKaggleから取得済みだが、development sample以外のfull detector cacheと公式metricは未完了である。
+- panel画像・GTは取得済み。developmentと0bのdetector cache・4方式公式metricは完了したが、0c/0db/12dfb391のfull detector cacheと公式metricは未完了である。
 - Kaggleへの外部submissionは行わない。
