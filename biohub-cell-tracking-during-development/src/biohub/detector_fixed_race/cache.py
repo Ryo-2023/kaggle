@@ -36,6 +36,8 @@ CACHE_SCHEMA_VERSION = DETECTOR_CACHE_SCHEMA_VERSION
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _NODES_FILE = "nodes.npz"
 _EDGES_FILE = "candidate_edges.npz"
+_EDGE_MMAP_DIR = "candidate_edges.mmap"
+_EDGE_MMAP_SCHEMA_VERSION = "detector_fixed.cache_mmap.v1"
 
 
 def _require_text(name: str, value: object) -> str:
@@ -178,6 +180,110 @@ def _validate_npz_streaming(path: Path, arrays: Mapping[str, np.ndarray], *, kin
         raise
     except (OSError, KeyError, TypeError) as exc:
         raise ValueError(f"could not read {kind} artifact {path}: {exc}") from exc
+
+
+def build_edge_memory_map(root: Path) -> Path:
+    """Create columnar ``.npy`` sidecars for low-RSS association replay.
+
+    The canonical cache remains the digest-checked NPZ pair.  The sidecar is a
+    deterministic, ground-truth-free derivative that lets ``load_detector_cache``
+    use ``numpy.memmap`` instead of expanding a dense compressed NPZ into RAM.
+    """
+
+    root = Path(root)
+    manifest_path = root / "manifest.json"
+    ready_path = root / "READY"
+    if not manifest_path.is_file() or not ready_path.is_file():
+        raise ValueError("detector cache must be READY before building memory-map sidecars")
+    try:
+        manifest = _normalise_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"could not read detector cache manifest: {exc}") from exc
+    _validate_manifest_ground_truth_free(manifest)
+    declared_hash = manifest.get("cache_hash")
+    if not _is_sha256(declared_hash) or _cache_hash(manifest) != declared_hash:
+        raise ValueError("detector cache manifest hash is invalid")
+    _verify_artifact_digests(root, manifest)
+    _, edges_file = _manifest_artifact_names(manifest)
+    edges_path = root / edges_file
+    temporary_root = root / f".{_EDGE_MMAP_DIR}.tmp-{os.getpid()}"
+    sidecar_root = root / _EDGE_MMAP_DIR
+    if temporary_root.exists():
+        shutil.rmtree(temporary_root)
+    temporary_root.mkdir(parents=False, exist_ok=False)
+    published = False
+    try:
+        with np.load(edges_path, allow_pickle=False) as payload:
+            for name in EDGE_ARRAY_NAMES:
+                source = payload[name]
+                target_path = temporary_root / f"{name}.npy"
+                target = np.lib.format.open_memmap(
+                    target_path,
+                    mode="w+",
+                    dtype=source.dtype,
+                    shape=source.shape,
+                )
+                chunk_size = 1_000_000
+                for start in range(0, source.shape[0], chunk_size):
+                    end = min(start + chunk_size, source.shape[0])
+                    target[start:end] = source[start:end]
+                target.flush()
+                del target, source
+        metadata = {
+            "schema_version": _EDGE_MMAP_SCHEMA_VERSION,
+            "source_cache_hash": declared_hash,
+            "edge_count": int(manifest.get("edge_count", 0)),
+            "arrays": {
+                name: {
+                    "dtype": str(np.load(temporary_root / f"{name}.npy", mmap_mode="r").dtype),
+                    "shape": list(np.load(temporary_root / f"{name}.npy", mmap_mode="r").shape),
+                }
+                for name in EDGE_ARRAY_NAMES
+            },
+        }
+        (temporary_root / "manifest.json").write_text(
+            json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if sidecar_root.exists():
+            shutil.rmtree(sidecar_root)
+        os.replace(temporary_root, sidecar_root)
+        published = True
+    finally:
+        if not published and temporary_root.exists():
+            shutil.rmtree(temporary_root)
+    return sidecar_root
+
+
+def _load_edge_memory_map(root: Path, manifest: Mapping[str, Any]) -> CandidateEdgeArrays | None:
+    sidecar_root = Path(root) / _EDGE_MMAP_DIR
+    metadata_path = sidecar_root / "manifest.json"
+    if not sidecar_root.is_dir() or not metadata_path.is_file():
+        return None
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"could not read edge memory-map manifest: {exc}") from exc
+    if metadata.get("schema_version") != _EDGE_MMAP_SCHEMA_VERSION:
+        raise ValueError("unsupported edge memory-map schema")
+    if metadata.get("source_cache_hash") != manifest.get("cache_hash"):
+        raise ValueError("edge memory-map source cache hash mismatch")
+    arrays: dict[str, np.ndarray] = {}
+    declared_arrays = metadata.get("arrays")
+    if not isinstance(declared_arrays, Mapping):
+        raise ValueError("edge memory-map manifest arrays are missing")
+    for name in EDGE_ARRAY_NAMES:
+        path = sidecar_root / f"{name}.npy"
+        if not path.is_file():
+            raise ValueError(f"edge memory-map array is missing: {name}")
+        array = np.load(path, mmap_mode="r", allow_pickle=False)
+        declared = declared_arrays.get(name)
+        if not isinstance(declared, Mapping):
+            raise ValueError(f"edge memory-map metadata is missing: {name}")
+        if str(array.dtype) != declared.get("dtype") or list(array.shape) != declared.get("shape"):
+            raise ValueError(f"edge memory-map metadata mismatch: {name}")
+        arrays[name] = array
+    return CandidateEdgeArrays(**arrays)
 
 
 def _verify_artifact_digests(root: Path, manifest: Mapping[str, Any]) -> dict[str, str]:
@@ -413,7 +519,9 @@ def load_detector_cache(root: Path) -> DetectorCache:
     _verify_artifact_digests(root, manifest)
     nodes_file, edges_file = _manifest_artifact_names(manifest)
     nodes = NodeArrays(**_load_npz(root / nodes_file, kind="nodes"))
-    edges = CandidateEdgeArrays(**_load_npz(root / edges_file, kind="candidate_edges"))
+    edges = _load_edge_memory_map(root, manifest)
+    if edges is None:
+        edges = CandidateEdgeArrays(**_load_npz(root / edges_file, kind="candidate_edges"))
     nodes.validate()
     edges.validate(nodes)
 
@@ -432,6 +540,7 @@ __all__ = [
     "CACHE_SCHEMA_VERSION",
     "DETECTOR_CACHE_SCHEMA_VERSION",
     "build_detector_cache_manifest",
+    "build_edge_memory_map",
     "load_detector_cache",
     "write_detector_cache",
 ]

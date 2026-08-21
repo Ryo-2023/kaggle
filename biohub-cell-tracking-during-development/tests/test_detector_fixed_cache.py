@@ -7,6 +7,7 @@ import pytest
 from biohub.benchmark_race.contracts import SampleSpec
 from biohub.detector_fixed_race.cache import (
     build_detector_cache_manifest,
+    build_edge_memory_map,
     load_detector_cache,
     write_detector_cache,
 )
@@ -120,3 +121,20 @@ def test_detector_cache_requires_ready_and_digest(
     (receipt.root / "READY").unlink()
     with pytest.raises(ValueError, match="READY"):
         load_detector_cache(receipt.root)
+
+
+def test_detector_cache_edge_memory_map_is_used_for_replay(
+    tmp_path: Path,
+    sample_spec: SampleSpec,
+    sample_arrays: dict[str, NodeArrays | CandidateEdgeArrays],
+) -> None:
+    nodes = sample_arrays["nodes"]
+    edges = sample_arrays["edges"]
+    assert isinstance(nodes, NodeArrays)
+    assert isinstance(edges, CandidateEdgeArrays)
+    receipt = write_detector_cache(tmp_path / "cache", valid_manifest(sample_spec), nodes, edges)
+    sidecar = build_edge_memory_map(receipt.root)
+    assert sidecar.is_dir()
+    loaded = load_detector_cache(receipt.root)
+    assert isinstance(loaded.edges.source_node_id, np.memmap)
+    np.testing.assert_array_equal(loaded.edges.source_node_id, edges.source_node_id)

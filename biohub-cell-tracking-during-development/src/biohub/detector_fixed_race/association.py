@@ -102,20 +102,51 @@ def _group_rows(cache: DetectorCache) -> list[tuple[np.ndarray, np.ndarray, np.n
         return []
     source_times = nodes.tzyx[edges.source_node_id, 0].astype(np.int64, copy=False)
     target_times = nodes.tzyx[edges.target_node_id, 0].astype(np.int64, copy=False)
-    keys = np.stack((source_times, target_times), axis=1)
-    unique_keys, inverse = np.unique(keys, axis=0, return_inverse=True)
+    # Detector materialization writes candidate rows pair-by-pair.  Exploit
+    # that ordering to find boundaries without constructing a dense
+    # ``(E,2)`` key matrix and ``inverse`` array (which is prohibitive for
+    # tens of millions of rows).  Keep a guarded fallback for externally
+    # supplied caches whose rows are not contiguous by pair.
+    boundary = np.empty((edges.length,), dtype=bool)
+    boundary[0] = True
+    boundary[1:] = (source_times[1:] != source_times[:-1]) | (target_times[1:] != target_times[:-1])
+    starts = np.flatnonzero(boundary)
+    ends = np.concatenate((starts[1:], np.array([edges.length], dtype=starts.dtype)))
+    contiguous = all(
+        np.all(source_times[start:end] == source_times[start])
+        and np.all(target_times[start:end] == target_times[start])
+        for start, end in zip(starts.tolist(), ends.tolist(), strict=True)
+    )
+    if not contiguous:
+        keys = np.stack((source_times, target_times), axis=1)
+        unique_keys, inverse = np.unique(keys, axis=0, return_inverse=True)
+        groups: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+        for group_index, key in enumerate(unique_keys):
+            row_indices = np.flatnonzero(inverse == group_index)
+            if row_indices.size == 0:
+                continue
+            if int(key[1]) <= int(key[0]):
+                raise ValueError("association candidate edges must point to a later frame")
+            groups.append(
+                (
+                    row_indices,
+                    np.unique(edges.source_node_id[row_indices]),
+                    np.unique(edges.target_node_id[row_indices]),
+                )
+            )
+        return groups
+
     groups: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
-    for group_index, key in enumerate(unique_keys):
-        row_indices = np.flatnonzero(inverse == group_index)
-        if row_indices.size == 0:
-            continue
-        if int(key[1]) <= int(key[0]):
+    for start, end in zip(starts.tolist(), ends.tolist(), strict=True):
+        key = (int(source_times[start]), int(target_times[start]))
+        if key[1] <= key[0]:
             raise ValueError("association candidate edges must point to a later frame")
+        row_indices = np.arange(start, end, dtype=np.int64)
         groups.append(
             (
                 row_indices,
-                np.unique(edges.source_node_id[row_indices]),
-                np.unique(edges.target_node_id[row_indices]),
+                np.unique(edges.source_node_id[start:end]),
+                np.unique(edges.target_node_id[start:end]),
             )
         )
     return groups
