@@ -24,6 +24,7 @@ All numbers below are measured, not estimated. Reproduction commands are in §8.
 | GT edges needed for δ=0.01 | **2,627 – 13,135** (13–61 movies) |
 | GT edges in all 5 local samples | **1,093** |
 | Best resolution obtainable from the entire 199-movie train set | **δ ≈ 0.0046 – 0.0081** |
+| Sample 2 (`44b6_0b24845f`, 49 edges): agreement licenses | **"consistent, still not separated"** — pooled McNemar p = 0.125 (§4.6) |
 
 **The practical target is δ = 0.01, not 0.005.** A 0.005 difference sits at the very edge
 of what the whole published dataset can establish; treat any claim below 0.01 as
@@ -300,7 +301,7 @@ is visible rather than absorbed.
 
 ---
 
-## 4.6 PRE-REGISTRATION — what sample 2 must show
+### 4.6 PRE-REGISTRATION — what sample 2 must show
 
 Written **before** the second sample's numbers existed. Codex is running the four-method
 race on `44b6_0b24845f` (51 GT nodes / **49 GT edges**) now. A prediction recorded after
@@ -344,7 +345,7 @@ Predicted TP counts on 49 GT edges (95% intervals):
 ≈2.6, H1 predicts ≈4.9–5.4.** Report that number. The H0 and H1 TP intervals overlap almost
 completely, so no individual method's TP count on sample 2 can settle anything by itself.
 
-### What a two-sample result does and does not license
+#### What a two-sample result does and does not license
 
 Pooling samples 1 and 2 gives **99 GT edges**, resolvable δ = **0.0964** — still 2.6× larger
 than the 0.0373 claim. Pooled exact McNemar, assuming harmonic's TP set nests official's on
