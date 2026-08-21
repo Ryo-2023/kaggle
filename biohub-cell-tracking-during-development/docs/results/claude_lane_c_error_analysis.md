@@ -1,7 +1,9 @@
 # Lane C — edge-level error analysis: official_ilp vs harmonic_v1 vs mutual_confidence vs motion_gated
 
-Sample: `44b6_0113de3b`. Ground truth: `MAIN/data/train/44b6_0113de3b.geff` (52 nodes, 50 edges,
-scale `(1.625, 0.40625, 0.40625)` µm/voxel Z/Y/X, image `(100,64,256,256)` uint16).
+Primary sample (§1–§9): `44b6_0113de3b`. A second sample, `44b6_0c582fdc`, is checked in §10
+once its four-method race finished — same method, same conclusion recurs. Ground truth for the
+primary sample: `MAIN/data/train/44b6_0113de3b.geff` (52 nodes, 50 edges, scale
+`(1.625, 0.40625, 0.40625)` µm/voxel Z/Y/X, image `(100,64,256,256)` uint16).
 
 Predictions used: the **detector-fixed race** GEFFs supplied in the coordinator's 2026-08-21
 08:00 JST addendum, all four built off one identical detector cache (hash
@@ -224,10 +226,90 @@ neighbor brightness numerically, only inspected the rendered crops.
   42→48 four-way TP spread, and the specific 46→48 official→harmonic delta, lives entirely on
   the hard lineage. This is an n≈1-cell comparison, not a general tracking-quality comparison.
   Do not generalize "harmonic beats official" beyond this one trajectory without the 5-sample
-  panel.
+  panel. **§10 checks this on a second sample and the same structural problem recurs.**
 - Division handling is untested by this sample (zero divisions in GT) — unrelated to this
   diff, already flagged in BRIEF §3.3.
 - `official_ilp`'s and `harmonic_v1`'s candidate-level score for Edge A/B is not visible from
   the final compacted GEFFs (only the *selected* edges are retained); a precise "how close was
   official to picking it too" needs the candidate pool, which lives in the detector cache —
   out of scope for Lane C's resource allowance (cache-only work is Lane F's per Addendum A4).
+
+## 10. Second sample: `44b6_0c582fdc` — does the "one hard lineage" pattern generalize?
+
+Per the coordinator's follow-up (2026-08-21 13:20 JST): Codex finished the same four-method
+race on two more panel samples. `44b6_0c582fdc` is the most interesting — harmonic gets a
+5-edge TP gain (57→62) versus the dev sample's 2-edge gain (46→48), so if the effect is
+general it should be much more visible here.
+
+Sources (all read-only, Codex's `strong-baseline-v1` worktree):
+```
+GT      artifacts/detector_fixed_race/panel_data/train/44b6_0c582fdc.geff  (71 nodes, 70 edges)
+image   artifacts/detector_fixed_race/panel_data/train/44b6_0c582fdc.zarr  (100,64,256,256) uint16, same scale
+preds   artifacts/detector_fixed_race/panel_runs_0c_{official,harmonic,mutual,motion}/44b6_0c582fdc/{method}.geff
+```
+Same reproduction method as §1–§7 (vendored `evaluate`/`_evaluate_matched_graph`, no
+reimplementation); every method's recomputed TP/FP/node_recall matches its own
+`race_receipt.json` exactly:
+
+| method | edge TP/FP/FN | node_recall | final_score |
+|---|---|---:|---:|
+| `official_ilp` | 57/6/13 | 0.9718 (69/71) | 0.7385 |
+| `harmonic_v1` | 62/6/8 | **1.0 (71/71)** | 0.8022 |
+| `mutual_confidence` | 55/5/15 | 0.9577 | 0.7237 |
+| `motion_gated` | 50/6/20 | 0.9437 | 0.6506 |
+
+**Structural finding, more extreme than the dev sample**: a union-find over all 70 GT edges
+shows the entire 71-node GT graph is **one single connected component**, spanning t=20→90
+continuously, with in/out-degree ≤ 1 everywhere (no divisions/merges, verified the same way as
+§1). This sample's annotation is **one single tracked cell for its whole 71-frame span** — not
+two lineages like the dev sample, just one, slightly longer. The many different node-id local
+suffixes (`...072` through `...086`) are the same kind of in-tool track relabeling seen in §1,
+not separate cells.
+
+**The 5 edges harmonic recovers over official** (official FN → harmonic TP; zero edges go the
+other way — no regressions):
+
+| GT edge | t | source (z,y,x) | target (z,y,x) | official | harmonic |
+|---|---|---|---|---|---|
+| 129000000085→130000000084 | 41→42 | (36,153,147) | (35,149,141) | both node-match identically (1.72, 0.57 µm); no edge selected | edge selected, `edge_prob=0.547` |
+| 133000000083→134000000083 | 45→46 | (34,138,135) | (34,139,134) | **source node not even kept** in official's compacted graph (isolated node dropped, Addendum A2) | both endpoints matched (1.86, 1.86 µm), edge selected, `edge_prob=0.572` |
+| 146000000079→147000000079 | 58→59 | (29,87,108) | (30,83,106) | both node-match identically (0.41, 1.46 µm); no edge selected (also recovered by `motion_gated`) | edge selected, `edge_prob=0.647` |
+| 155000000077→156000000077 | 67→68 | (29,55,86) | (29,53,85) | **source node not even kept** in official's compacted graph | source matched at 4.24 µm (loose - dimmer/less certain detection), target at 1.72 µm, edge selected, `edge_prob=0.522` |
+| 167000000076→168000000076 | 79→80 | (26,27,77) | (26,24,72) | both node-matched, but target match is 6.7 µm — right at the 7.0 µm matching radius, a borderline call | target match is 0.0 µm (essentially exact), edge selected, `edge_prob=0.527` |
+
+**Reading**: 3 of the 5 (edges 1, 3, 5) repeat the dev-sample pattern exactly — identical
+node-level detections, pure edge-selection difference, moderate `edge_prob` (0.52–0.65, all
+comfortably past whatever bar mattered but nowhere near overwhelming confidence). The other 2
+(edges 2, 4) are a new wrinkle: `official_ilp`'s ILP solution never keeps that GT node's
+matching prediction at all (it has no edge worth keeping in official's scoring, so it is
+compacted away as an isolated node — see Addendum A2), while harmonic's ILP does connect it.
+This is a genuine association-driven node-recall difference (0.9718 vs 1.0), not a detector
+difference — the same underlying detection is present in both methods' shared cache, only
+`official_ilp`'s solved graph discards it.
+
+Two representative crops (96×96, `low=80.0, high=2702.9` from this zarr's own quantiles,
+crosshair on the exact GT voxel), saved under `artifacts/` (gitignored):
+`0c_edge1_src_t41_z36_marked.png` / `0c_edge1_tgt_t42_z35_marked.png` (edge 1, the "clean"
+edge-selection-only case) and `0c_edge5_src_t79_z26_marked.png` /
+`0c_edge5_tgt_t80_z26_marked.png` (edge 5, the borderline-vs-exact match case). Both show the
+same qualitative pattern as §8: the annotated cell sits in a visually crowded neighborhood of
+several similar-brightness nuclei, not standing out as the obviously brightest blob.
+
+**Conclusion for this sample**: the pattern from §9 is not a one-off. Two independent samples
+now both reduce to a single continuously-tracked lineage, and in both, harmonic's entire
+advantage over official is concentrated on that one lineage's hardest hops. A 5-edge gain on a
+70-edge single-cell trajectory is not stronger evidence of general superiority than a 2-edge
+gain on a 48-edge one — it is the same phenomenon at a different length. **Both data points
+available so far are n=1-cell comparisons.** Whether this is how every sample in this dataset
+is annotated (one cell densely tracked per movie, everything else sparse/unannotated) is worth
+Codex or another lane confirming directly against the panel's `panel.json` / annotation
+provenance; if so, the project's "5-sample panel" is closer to a 5-cell panel for edge-Jaccard
+purposes, and per-lineage variance (not just per-sample variance) should be reported.
+
+Raw outputs: `artifacts/edge_diff_raw_44b6_0c582fdc.json`,
+`artifacts/edge_diff_detail_44b6_0c582fdc.json`; scripts:
+`artifacts/edge_diff_generalized.py`, `artifacts/edge_diff_detail_0c.py`,
+`artifacts/render_crops_0c.py` (all gitignored, kept for reproducibility).
+
+Sample `44b6_0b24845f` (the other newly-finished panel sample) is not yet analyzed — queued,
+see the Lane C report §5.
