@@ -297,35 +297,81 @@ reaches 46. So the mechanism is not simply "let more candidates through"; the
 temperature also re-ranks contested columns. The four 48-TP rules differ in
 score only through the `total_node_ratio` penalty, not through edge accuracy.
 
-### 7.3 `entropy_temperature` across samples — no reverse pass at all
+### 7.3 `entropy_temperature` on all five samples — no reverse pass at all
 
 | sample | GT edges | official | harmonic | `entropy_temperature` |
 |---|---:|---|---|---|
-| `44b6_0113de3b` | 50 | 46/2/4 | 48/2/2 | **48**/2/2 |
+| `44b6_0113de3b` | 50 | 46/2/4 | 48/2/2 | 48/2/2 |
 | `44b6_0b24845f` | 49 | 39/9/10 | 40/10/9 | **42**/11/7 |
-| `44b6_0c582fdc` | 70 | 57/6/13 | 62/6/8 | **62**/7/8 |
+| `44b6_0c582fdc` | 70 | 57/6/13 | 62/6/8 | 62/7/8 |
 | `44b6_0db75fae` | 151 | 133/9/18 | 134/8/17 | **139**/12/12 |
+| `44b6_12dfb391` | 773 | 668/81/105 | 688/89/85 | **694**/106/79 |
 
-Pooled over these four samples (320 GT edges):
+Pooled over all five samples (1,093 GT edges):
 
 | method | TP | FP | FN | pooled edge Jaccard |
 |---|---:|---:|---:|---:|
-| official | 275 | 26 | 45 | 0.794798 |
-| harmonic | 284 | 26 | 36 | 0.820809 |
-| `entropy_temperature` | **291** | 32 | 29 | 0.826705 |
+| official | 943 | 107 | 150 | 0.785833 |
+| harmonic | 972 | 115 | 121 | **0.804636** |
+| `entropy_temperature` | **985** | 138 | 108 | 0.800162 |
 
-**The bidirectional-agreement explanation of harmonic's advantage is dead.** A
-rule that never looks at the reverse logits matches harmonic's edge recovery
-on two samples and exceeds it on the other two.
+Per-sample TP delta of `entropy_temperature` over harmonic: `+0, +2, +0, +5, +6`.
+Over official: `+2, +3, +5, +6, +26`. It is never below harmonic on any sample.
 
-**But by the pre-registered criteria, `entropy_temperature` is NOT adopted.**
-C3 requires beating harmonic on pooled TP *with pooled FP not worse*; FP rises
-from 26 to 32. C3 therefore fails as written, and C4 (McNemar) cannot be
-evaluated at all. The rule is *screened*, not *adopted*. The mechanistic
-conclusion does not depend on adoption: it rests on TP equivalence, which is
-established.
+### 7.4 Verdict: the agreement explanation is dead; the rule is not adopted
 
-Sharpening also switches divisions on, as predicted in section 6: on
-`0b24845f`, `0c582fdc` and `0db75fae`, `entropy_temperature` emits 1, 1 and 2
-division false positives where `forward_only` emits none. Some `p₂` are being
-pushed over the 0.9 line.
+**Killed.** "Harmonic wins because the two directions must agree" is false. A
+rule that never reads the reverse logits recovers at least as many true edges
+as harmonic on every one of five samples, and more on three of them. The
+reverse detector pass — which doubles edge-model inference — is not what
+produces the recall gain.
+
+**Not adopted, and not better.** The advantage splits cleanly:
+
+* the **recall** half of harmonic's gain is a temperature effect and is fully
+  reproducible from the forward logits alone;
+* the **precision** half is not. `entropy_temperature` buys its extra 13
+  pooled TP with 23 extra pooled FP, and loses on the metric that counts:
+  pooled edge Jaccard 0.8002 against harmonic's 0.8046.
+
+Pre-registered criterion C3 required beating harmonic on pooled TP *with
+pooled FP not worse*. FP rises 115 → 138, so **C3 fails as written** and the
+rule is screened, not adopted. C4 (McNemar) remains unevaluable.
+
+Worth stating against my own interest: had I pre-registered "pooled edge
+Jaccard" instead of "TP with FP not worse", the verdict would still be a
+rejection, but had I pre-registered "pooled TP" alone it would have been an
+acceptance. Three plausible criteria, three different answers on the same
+numbers. That is precisely why the criterion has to be fixed before the run,
+and it is why the +0.037 headline deserved this much scrutiny.
+
+### 7.5 Structural confirmation, ground-truth-free
+
+Candidate diagnostics on the dev cache, 26,663 target slots across 99 frame
+pairs:
+
+| rule | candidates | targets with a parent | contested sources | recoverable targets |
+|---|---:|---:|---:|---:|
+| `forward_only` | 24,183 | 24,183 | 630 | 2,342 |
+| `published_harmonic` | 25,023 | 25,023 | 824 | 1,541 |
+| `entropy_temperature` | 26,198 | 26,198 | 1,334 | 441 |
+
+`candidates == targets with a parent` exactly, for every rule: the column
+softmax makes two parents for one child arithmetically impossible, confirming
+that the ILP's in-degree constraint is redundant and that the 0.5 cut is a
+majority test, not a probability test.
+
+Sharpening consumes the recoverable pool (2,342 → 441) and roughly doubles
+the number of contested sources (630 → 1,334). More contested sources means
+more out-degree decisions for the ILP, which is exactly where the extra false
+positives and the spurious divisions come from.
+
+### 7.6 Divisions
+
+Sharpening does switch divisions on, as section 6 predicted, but it switches
+on the wrong ones. On `44b6_12dfb391` (the only sample with a GT division),
+`forward_only` gives `division 0/0/1` and `entropy_temperature` gives
+`division 0/16/1`: sixteen false divisions, still not the true one.
+`division_jaccard` is `0.0` in both cases, so the 0.1 division term of the
+official score contributes exactly nothing, for every method measured.
+
