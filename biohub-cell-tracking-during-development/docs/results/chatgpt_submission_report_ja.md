@@ -1,9 +1,11 @@
 # Biohub Cell Tracking — ChatGPT報告用・全結果統合版
 
-作成日: 2026-08-21（JST）
+初版作成日: 2026-08-21（JST）
+最終更新日: 2026-08-22（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
-最新push: `origin/codex/biohub-multi-method-race`（直前に確認済みレポートcommit: `a07c3be`、実装commit: `f405c00`）
+本更新前の最新push: `origin/codex/biohub-multi-method-race` の `262e99d`
+本レポートが対象とするvalidation receipt実装commit: `0e98f8a`
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -13,9 +15,12 @@
 - 公式 TemporalUNet3D + SimpleNodeTransformer + ILP pipelineを実データで完走した。
 - 同一sample・同一公式metricで、追加3 lane（`blob_lap`、`cc_flow`、`motion_lap`）を推論からprediction GEFF、公式評価まで完走した。
 - 全比較のBest Methodは `harmonic v1`（Final Score `0.9211200215044129`）。
-- detector-fixed raceでは同一TemporalUNet3D detector cacheを固定し、developmentと`44b6_0b24845f`で4 association方式を公式metricまで完走した。0bのBestは`harmonic_v1`（Final Score `0.6274705993317501`）で、official ILP `0.6262213541803576`を`+0.0012492451513925`上回った。
-- 0bの公式ILPはprediction `55,324 nodes / 44,335 edges`、Edge TP/FP/FN `39/9/10`、Adjusted/Final `0.6262213541803576`を取得した。GTは評価phase以外に使っていない。
-- `44b6_0c582fdc`も同じdetector固定条件で4方式を完走し、0cのBestは`harmonic_v1`（Final Score `0.8022386963904503`）。0cのofficial ILPは`0.738499713856499`で、harmonic差は`+0.0637389825339513`だった。development＋0b＋0cの3 sample panelを完了した。
+- detector-fixed raceでは同一TemporalUNet3D detector cacheを固定し、development、`44b6_0b24845f`、`44b6_0c582fdc`、`44b6_0db75fae`の4 sampleで4 association方式を公式metricまで完走した。各sampleのBestはharmonic v1である。
+- 0dbのBestは`harmonic_v1`（Final Score `0.8249556959559359`）で、official ILP `0.8150423866970982`を`+0.0099133092588377`上回った。harmonicはEdge TP/FP/FN `134/8/17`、Division TP/FP/FN `0/1/0`で、division false positiveが1件ある。
+- 0dbの公式ILPはprediction `18,325 nodes / 16,060 edges`、Edge TP/FP/FN `133/9/18`、Adjusted/Final `0.8150423866970982`を取得した。GTは評価phase以外に使っていない。
+- `44b6_0c582fdc`も同じdetector固定条件で4方式を完走し、0cのBestは`harmonic_v1`（Final Score `0.8022386963904503`）。0cのofficial ILPは`0.738499713856499`で、harmonic差は`+0.0637389825339513`だった。
+- detector-fixed 4 sampleのFinal Score平均はofficial `0.765889484563676`、harmonic `0.793946253295637`、mutual `0.744584626517552`、motion `0.709169276247987`。harmonicのofficial差は `+0.028056768731961` である。
+- `44b6_12dfb391` はdivisionを含む `division_sample_run` が実行中で、prediction GEFFと公式metricは未完了である。未取得のスコアは記載していない。
 - 新規race laneでは `blob_lap`（Final Score `0.9140773262846648`）が最良だった。
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
@@ -316,7 +321,9 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 実測結果:
 
-- full pytest: `174 passed, 2 warnings in 39.26s`（harmonic sweep CLI追加後に再実行）
+- 旧revision時点のfull pytest: `174 passed, 2 warnings in 39.26s`。これはvalidation receipt互換修正commit `0e98f8a`後の確認値ではなく、最新full pytestは未完了である。
+- validation receipt実装: commit `0e98f8a`。レビュー、実データ集約確認、最新full pytestは未完了であり、完了とは扱っていない。
+- 最新のreport＋validation receipt限定テスト: `19 passed in 2.80s`、対象Ruff: `All checks passed!`（2026-08-22 JST）。
 - detector-fixed関連確認: `12 passed in 3.83s`、対象Ruff `All checks passed!`
 - race対象Ruff: `All checks passed!`
 - report対象pytest: `4 passed`
@@ -328,7 +335,8 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - race branch: `codex/biohub-multi-method-race`
-- race latest implementation commit: `f405c00`、直前レポートcommit: `da7768e`
+- 本レポート更新前のlatest pushed race commit: `262e99d`
+- validation receipt実装commit: `0e98f8a`
 - remote: `origin/codex/biohub-multi-method-race`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
 
@@ -362,6 +370,11 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - `artifacts/detector_fixed_race/panel_runs_0c_mutual/44b6_0c582fdc/`
 - `artifacts/detector_fixed_race/panel_runs_0c_motion/44b6_0c582fdc/`
 - `artifacts/detector_fixed_race/harmonic_sweep/`（3 sample × reverse_weight 0.10/0.20/0.30）
+- `artifacts/detector_fixed_race/panel_auto/cache/44b6_0db75fae/`（canonical NPZ + `candidate_edges.mmap/`）
+- `artifacts/detector_fixed_race/panel_runs_0db_official/44b6_0db75fae/`
+- `artifacts/detector_fixed_race/panel_runs_0db_harmonic/44b6_0db75fae/`
+- `artifacts/detector_fixed_race/panel_runs_0db_mutual/44b6_0db75fae/`
+- `artifacts/detector_fixed_race/panel_runs_0db_motion/44b6_0db75fae/`
 
 Kaggleへの外部提出は実施していない。prediction生成・local official evaluationまでであり、ユーザー承認なしのKaggle submissionは行っていない。
 
@@ -369,8 +382,8 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 ### 既知の問題
 
-1. 旧blob raceの比較は単一Kaggle train sampleのみ。detector-fixed raceはdevelopment＋0b＋0cの3 sampleまでで、leaderboard性能やdense-truth性能を意味しない。
-2. このsampleにはdivisionがなく、division termは評価上dropされている。
+1. 旧blob raceの比較は単一Kaggle train sampleのみ。detector-fixed raceはdevelopment＋0b＋0c＋0dbの4 sampleまでで、leaderboard性能やdense-truth性能を意味しない。
+2. development、0b、0c、0dbのGT splitにはdivisionがなく、これらのFinal Scoreではdivision termが評価上dropされている。divisionを含む12dfb391は実行中で、division性能は未確定である。
 3. harmonicのsource-cell独立監査は保持notebook JSON不足でBLOCKED。
 4. 旧official receiptにはraw candidate count/digestがなく、detector driftを完全には比較できない。detector-fixed cacheはcandidate digestとcache hashを保存している。
 5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の不一致がある。
@@ -380,12 +393,13 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 ### 次の一手
 
-1. 0db75faeとdivisionを含む`12dfb391`へdetector-fixed panelを拡張する（必要な計算時間と容量を見積もってから実行）。
+1. 実行中のdivision sample `44b6_12dfb391`を完走し、division TP/FP/FNを取得する。未完了のため現時点のスコアは記載しない。
 2. `reverse_weight=0.10`候補をdivisionありsampleで検証し、既定値変更の可否を判断する。
-3. NMS 3.5 µm候補は旧blob laneとして、detector-fixed panelとは別条件で評価する。
-4. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
+3. validation receipt実装（local HEAD `0e98f8a`）をレビューし、実データ集約とfull pytestを完了する。
+4. NMS 3.5 µm候補は旧blob laneとして、detector-fixed panelとは別条件で評価する。
+5. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの0bではharmonic_v1がofficial ILPを僅かに上回った**である。次は0c以降でdetector-fixed harmonicの再現性を検証する。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの4 sampleではharmonic_v1が全sampleでofficial ILPを上回った**である。division sampleの完走とvalidation receiptのレビュー・full pytestが残っている。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -426,7 +440,7 @@ detector-fixed raceのmaterialize CLIは `--device auto` が既定値であり�
 
 feature cacheの最初の全100フレーム実行では、sliding window間で同一nodeのcontextual featureが変わることを検出した。これはTemporalUNetの窓相対時刻・前後frame contextに由来する仕様であり、誤った完全一致検証を修正した。最初の観測をcanonical node featureとして保存し、衝突観測数をprovenanceへ記録する。forward/reverse raw logitsはpair単位で保持するため、association比較の入力は失われない。
 
-修正後の4フレーム実データsmokeはcache公開まで完走し、node `897`、候補edge `151,830`、feature衝突観測 `453`を記録した。2フレーム `auto` smokeでは `requested_device=auto`、実選択 `cpu` を確認した。全100フレームのdevelopment cache生成と公式metric、0b・0c sampleのcache生成・公式ILP・harmonic・mutual・motionが完了した。0db/12dfb391は未完了である。
+修正後の4フレーム実データsmokeはcache公開まで完走し、node `897`、候補edge `151,830`、feature衝突観測 `453`を記録した。2フレーム `auto` smokeでは `requested_device=auto`、実選択 `cpu` を確認した。全100フレームのdevelopment、0b、0c、0dbのcache生成と公式metric、4方式比較が完了した。`12dfb391`はdivision sample runが実行中で未完了である。
 
 再現コマンド（GPU環境ではautoでGPUを選択）:
 
@@ -434,7 +448,7 @@ feature cacheの最初の全100フレーム実行では、sliding window間で�
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --train-root /workspace/biohub-cell-tracking-during-development/data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/full_auto'
 ```
 
-関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を `codex/biohub-multi-method-race`へpush済み。
+関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を含む実装をpush済み。本レポート更新前の最新pushは `262e99d`、validation receipt互換修正commitは `0e98f8a` である。
 
 NVIDIAデスクトップ移行用に `docker-compose.nvidia.yml` も追加した。通常Composeは現MacBookのCPU環境を維持し、移行先では公式CUDA wheel indexを `BIOHUB_TORCH_INDEX_URL` に指定して `gpus: all` でbuildする。Dockerfile側はCPU indexを既定にしつつ、override時だけ `uv sync --no-install-package torch` 後に指定indexのPyTorchを導入する。これによりCPU-onlyの現環境を壊さず、移行先では `--device auto` がCUDAを選べる。
 
@@ -468,7 +482,7 @@ development sample `44b6_0113de3b` の100フレームを、公式TemporalUNet3D 
 
 0bの最初の全方式再生では圧縮NPZの全列展開がOOM killとなった（`memory.events oom_kill`は過去失敗を含め7）。pair単位disk capture、chunked memmap、chunked validation、pair-contiguous grouping、edge sidecarを導入後、0bの4方式は追加OOMなしで完走した。
 
-prediction GEFF、GT、receipt、cache sidecarは `docs/results/detector_fixed_association_race.md` に一覧化した。validation panelはdevelopment＋0b＋0cの3 sample・4方式まで完了し、0db/12dfb391は画像とGTを固定済みだが、CPU detector cacheと公式metricが未完了である。
+prediction GEFF、GT、receipt、cache sidecarは `docs/results/detector_fixed_association_race.md` に一覧化した。validation panelはdevelopment＋0b＋0c＋0dbの4 sample・4方式まで完了し、divisionを含む12dfb391は`division_sample_run`が実行中で、CPU detector cacheと公式metricが未完了である。
 
 ### 14.2 追加panel sample `44b6_0c582fdc`
 
@@ -481,11 +495,11 @@ prediction GEFF、GT、receipt、cache sidecarは `docs/results/detector_fixed_a
 | `mutual_confidence` | `31,638 / 27,174` | `55/5/15` | `0/0/0` | `null` | `0.7333333333333333` | `0.7236807592340891 / 0.7236807592340891` | `57.710211` | `-0.0148189546224099` |
 | `motion_gated` | `31,072 / 26,243` | `50/6/20` | `0/0/0` | `null` | `0.6578947368421053` | `0.65056701593744 / 0.65056701593744` | `58.797033` | `-0.0879326979190590` |
 
-0cのprediction manifestも4方式すべてGTを開く前に検証した。candidate→selectedはofficial `30,140→28,388`、harmonic `31,164→29,176`、mutual `28,526→27,174`、motion `27,154→26,243`。0cのdivisionなしのためDivision Jaccardは`null`である。これによりdetector-fixed raceはdevelopment＋0b＋0cの3 sample panelを完了した。0db75faeとdivisionを含む12dfb391は未実行である。
+0cのprediction manifestも4方式すべてGTを開く前に検証した。candidate→selectedはofficial `30,140→28,388`、harmonic `31,164→29,176`、mutual `28,526→27,174`、motion `27,154→26,243`。0cのdivisionなしのためDivision Jaccardは`null`である。これによりdetector-fixed raceはdevelopment＋0b＋0cの3 sample panelを完了した。0db75faeは次節で4方式を完了し、divisionを含む12dfb391は実行中である。
 
 ## 15. 2026-08-21 panel完了状況
 
-`44b6_0c582fdc`のGT-free materialize、edge memmap化、official/harmonic/mutual/motionのGEFF生成・公式metric評価が完了した。これにより、事前固定panelのdevelopment＋0b＋0cの3 sampleを完走した。0db75faeとdivisionを含む12dfb391は未実行である。0c実行中も`oom_kill`は開始前の7から増加せず、GPU fallback設定は`auto→cpu`としてreceiptへ保存された。
+`44b6_0c582fdc`のGT-free materialize、edge memmap化、official/harmonic/mutual/motionのGEFF生成・公式metric評価が完了した。0db75faeも同じ手順で完走し、事前固定panelのdevelopment＋0b＋0c＋0dbの4 sampleを完了した。divisionを含む12dfb391は実行中で未完了である。0cと0dbの実行中も`oom_kill`は開始前の7から増加せず、GPU fallback設定は`auto→cpu`としてreceiptへ保存された。
 
 ## 16. Harmonic reverse weight性能改善
 
@@ -499,8 +513,39 @@ detector再計算なしで、3 sampleの同一cache上に`harmonic_v1`の`revers
 
 `0.10`はdevelopmentと0cで僅かに改善したが、0bでは`0.20`を僅かに下回った。したがって既定値を変更せず、`0.10`をdivision sample追加後の候補として記録した。variant GEFF・receipt・runtimeは `artifacts/detector_fixed_race/harmonic_sweep/` に保存し、CLIは`--harmonic-reverse-weight`で再現できる。
 
-## 17. 追加panel `44b6_0db75fae` の進行状況（2026-08-21）
+## 17. 追加panel `44b6_0db75fae` 完了結果（2026-08-21）
 
-0dbは画像・GTを固定済みで、detector cacheのmaterializeを開始した。最新確認時点では実処理PID `959006` が経過 `1,163 s`（約19分23秒）、CPU `636%`、RSS `1,171,864 KiB` で稼働中だった。cacheの`READY`はまだ生成されておらず、prediction GEFFと公式metricは未取得である。
+0dbは画像とGTを固定したうえで、GT-free detector cacheのmaterialize、edge sidecar化、4方式の個別再生、prediction manifest検証、GTを評価時だけ開く公式metricまで完走した。GT GEFFは `artifacts/detector_fixed_race/panel_data/train/44b6_0db75fae.geff` である。
 
-同時点のcgroup `memory.events` は `oom_kill=7`（過去のNPZ全展開失敗を含む開始前の値から増加なし）で、処理を停止する異常兆候は確認していない。0dbの完了スコアを推測で補わず、materialize完了後にsidecar化、各方式の個別再生、GTを評価時だけ開く公式metric計測を行う。
+cacheは `artifacts/detector_fixed_race/panel_auto/cache/44b6_0db75fae/` に保存した。cache hashは `bdaa6c60fd1ccc14abe0bcc0fde1a0efe8330692e10b9926e898c909ee89a3e9`、nodes `19,599`、candidate edges `4,346,571`、detector calls `100`、forward/reverse edge calls `99/99`、detector elapsed `4839.955556327011 s`、requested/actual deviceは `auto/cpu` である。checkpoint SHA-256は `347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235`、upstream source commitは `075fc5f5a52d11077f9dc2b074644618f26939e2`、image SHA-256は `c16d44a2dc0b08ab6dd47401c5bf6b9e6e52ebcb5b638decee88dcdc0203eb73`、adapter SHA-256は `e914af35a2b68f2509027429efaa6ab29670be822212ae7c8628985f42a4ac72`。manifestは `ground_truth_included=false` を記録する。sidecarは `artifacts/detector_fixed_race/panel_auto/cache/44b6_0db75fae/candidate_edges.mmap/`、schemaは `detector_fixed.cache_mmap.v1`、source cache hashはcanonical manifestと一致し、cacheとsidecarの合計は約405 MBである。
+
+| 手法 | prediction nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | Division Jaccard | Edge Jaccard | Adjusted / Final | wall time [s] | 公式ILPとの差 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `official_ilp` | `18,325 / 16,060` | `133/9/18` | `0/0/0` | `null` | `0.83125` | `0.8150423866970982 / 0.8150423866970982` | `22.204889` | `+0` |
+| `harmonic_v1` | `18,576 / 16,523` | `134/8/17` | `0/1/0` | `0.0` | `0.8427672955974843` | `0.8249556959559359 / 0.8249556959559359` | `21.593063` | `+0.0099133092588377` |
+| `mutual_confidence` | `18,124 / 15,474` | `124/4/27` | `0/0/0` | `null` | `0.8` | `0.7854502771437888 / 0.7854502771437888` | `22.003911` | `-0.0295921095533094` |
+| `motion_gated` | `17,496 / 14,606` | `125/4/26` | `0/0/0` | `null` | `0.8064516129032258` | `0.795087139897136 / 0.795087139897136` | `19.994326` | `-0.0199552467999622` |
+
+candidate→selectedはofficial `16,889→16,060`、harmonic `17,469→16,523`、mutual `16,111→15,474`、motion `14,966→14,606`。harmonicはofficialよりEdge TPが1件増、FPが1件減、FNが1件減った一方、division FPを1件生成した。
+
+prediction GEFF、receipt、wall timeは次のとおりである。各 `race_receipt.json` には同じcache hashと、GTを開く前にprediction manifestを検証した記録がある。
+
+- official: `artifacts/detector_fixed_race/panel_runs_0db_official/44b6_0db75fae/official_ilp.geff`、同ディレクトリの `race_receipt.json`、`wall_time.txt`
+- harmonic: `artifacts/detector_fixed_race/panel_runs_0db_harmonic/44b6_0db75fae/harmonic_v1.geff`、同ディレクトリの `race_receipt.json`、`wall_time.txt`
+- mutual: `artifacts/detector_fixed_race/panel_runs_0db_mutual/44b6_0db75fae/mutual_confidence.geff`、同ディレクトリの `race_receipt.json`、`wall_time.txt`
+- motion: `artifacts/detector_fixed_race/panel_runs_0db_motion/44b6_0db75fae/motion_gated.geff`、同ディレクトリの `race_receipt.json`、`wall_time.txt`
+
+コンテナに`/usr/bin/time`が存在しなかったため、wall timeは同じ単独プロセスを`time.monotonic()`で外側から測定した。4方式ともreturn code `0`、Gurobi licenseなしによるSCIP fallbackのみで、cgroup `oom_kill=7`はmaterialize開始前から増加しなかった。
+
+## 18. detector-fixed 4 sample集約と残課題
+
+development、0b、0cの3 sample平均は、既存receiptを再集計して official `0.749505183852536`、harmonic `0.783609772408871`、mutual `0.730962742975474`、motion `0.680529988364937`であった。0dbを追加した4 sample平均は次のとおりで、3 sample時点の傾向と整合する。
+
+| association | 3 sample平均 Final Score | 4 sample平均 Final Score | 4 sampleでのofficial差 |
+|---|---:|---:|---:|
+| `official_ilp` | `0.749505183852536` | `0.765889484563676` | `+0` |
+| `harmonic_v1` | `0.783609772408871` | `0.793946253295637` | `+0.028056768731961` |
+| `mutual_confidence` | `0.730962742975474` | `0.744584626517552` | `-0.021304858046124` |
+| `motion_gated` | `0.680529988364937` | `0.709169276247987` | `-0.056720208315689` |
+
+harmonicは4 sampleすべてでofficialを上回ったが、divisionを含む`44b6_12dfb391`は現在`division_sample_run`が実行中である。2026-08-21 18:35:54 UTCの監視時点ではPID `1004368`、プロセス経過 `736 s`、CPU `635%`、RSS `1,249,112 KiB`、pair cache `17/99`、READY未生成、`oom_kill=7`（増加なし）だった。deviceは`auto`要求で現行DockerのCPU上で稼働中だが、最終manifest確定前のためactual deviceは未確定として扱う。12dfのprediction GEFF、division metric、Final Scoreはまだ未取得であり、結果を推測していない。validation receipt実装はcommit `0e98f8a`にあり、レビュー、実データ集約確認、最新full pytestは未完了である。本レポート更新前の最新push `262e99d`と対象実装commit `0e98f8a`を区別している。
