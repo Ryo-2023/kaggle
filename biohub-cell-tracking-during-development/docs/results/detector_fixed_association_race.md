@@ -234,8 +234,12 @@ detectorを再計算せず、同じGT-free cache・同じILP・同じ公式metri
 
 これは同一detector出力を固定したassociation raceとは別の、独立したblob NMS実験であり、detector-fixed lane ではない。NMSの半径変更だけを比較し、結果は次のとおりである。
 
-- NMS 3.0 Final Score: 0.9140773262846648
-- NMS 3.5 Final Score: 0.9172062183593925
-- Delta: +0.0031288920747277
+この比較では、metrics.jsonを公式metric receiptとして扱う。DeltaはNMS 3.5の`final_score`からNMS 3.0の`final_score`を引いた差分である。
 
-測定値のartifactは `artifacts/performance_experiments/blob_lap_nms35/metrics.json` に保存する。
+| variant | official metric receipt | field/value |
+|---|---|---|
+| NMS 3.0 | `artifacts/multi_method_race/evaluation/blob_lap/metrics.json` | `final_score=0.9140773262846648` |
+| NMS 3.5 | `artifacts/performance_experiments/blob_lap_nms35/metrics.json` | `final_score=0.9172062183593925` |
+| Delta (NMS 3.5 - NMS 3.0) | NMS 3.5 - NMS 3.0 | `+0.0031288920747277` |
+
+測定値のartifactは `artifacts/performance_experiments/blob_lap_nms35/metrics.json` に保存されている。
