@@ -25,6 +25,12 @@ Three invariants are enforced rather than recorded:
 
 from __future__ import annotations
 
+from biohub.reproducibility.cache_identity import (
+    RUN_ONLY_PROVENANCE_KEYS,
+    compare_caches,
+    content_input_digest,
+    content_output_digest,
+)
 from biohub.reproducibility.digest import (
     PREDICTION_DIRECTORY_HASH_ALGORITHM,
     directory_digest,
@@ -51,10 +57,14 @@ from biohub.reproducibility.receipts import (
 __all__ = [
     "PREDICTION_DIRECTORY_HASH_ALGORITHM",
     "REQUIRED_RECEIPT_FIELDS",
+    "RUN_ONLY_PROVENANCE_KEYS",
     "GroundTruthOrderingError",
     "PredictionPersistedToken",
     "ReceiptAudit",
     "audit_receipt",
+    "compare_caches",
+    "content_input_digest",
+    "content_output_digest",
     "detector_invariance_report",
     "directory_digest",
     "directory_digest_report",
