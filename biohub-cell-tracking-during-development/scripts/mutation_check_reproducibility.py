@@ -130,8 +130,8 @@ MUTATIONS: list[tuple[str, pathlib.Path, str, str, str]] = [
     (
         "device consistency check disabled",
         SRC / "receipts.py",
-        '        if requested not in (None, "auto") and actual is not None and requested != actual:',
-        "        if False:",
+        '    if requested not in (None, "auto") and actual is not None and requested != actual:',
+        "    if False:",
         "test_reproducibility_receipt_completeness.py::test_device_audit_flags_a_requested_device_that_was_not_used",
     ),
 ]
