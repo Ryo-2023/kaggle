@@ -3,7 +3,7 @@
 作成日: 2026-08-21（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
-最新push: `origin/codex/biohub-multi-method-race`（実装確認済みcommit: `eb6e472`）
+最新push: `origin/codex/biohub-multi-method-race`（レポートcommit: `20c3dd8`、実装commit: `eb6e472`）
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -122,6 +122,8 @@ Race branchの主なcommit:
 | checkpoint | `edge_predictor_best.pth`、SHA-256 `347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235` |
 | detector cache | GT-free `nodes.npz` + `candidate_edges.npz`、0b hash `50739a79bf081799d37987bbdd800ee2f95c5246ce07adead21812a3599a3b65` |
 | edge replay sidecar | `candidate_edges.mmap/`、schema `detector_fixed.cache_mmap.v1`、source cache hash一致、約2.8 GiB |
+| 0b adapter source SHA-256 | `e914af35a2b68f2509027429efaa6ab29670be822212ae7c8628985f42a4ac72` |
+| 0b image SHA-256 | `7f7809f8948ce7f6c5c7cfb03d5b6fb8f140c725d16f0d63653d59620845d33a` |
 | code commit | `eb6e472`（edge memmap sidecar、chunked validation、pair-contiguous grouping） |
 | device | `auto`→`cpu`（DockerのPyTorch CPU wheel。CUDA→MPS→CPU fallback実装済み） |
 
@@ -311,7 +313,8 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 実測結果:
 
-- full pytest: `148 passed, 1 warning in 196.99s`
+- full pytest: `148 passed, 1 warning in 196.99s`（`eb6e472`以前の記録。追加されたdetector-fixed関連テストを含む最新full pytestは0c実行中のため未実行）
+- `eb6e472`後のdetector-fixed関連確認: `11 passed in 4.74s`、Ruff `All checks passed!`
 - race対象Ruff: `All checks passed!`
 - report対象pytest: `4 passed`
 - full repository Ruff: 24件の既存問題（`src/biohub/official_metrics/metrics.py`、`src/biohub/visualizer/*`）が残る。今回の変更対象外のため修正していない。
@@ -322,7 +325,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - race branch: `codex/biohub-multi-method-race`
-- race latest implementation commit: `eb6e472`（本レポート更新commitはこの直後に追加）
+- race latest implementation commit: `eb6e472`、レポートcommit: `20c3dd8`
 - remote: `origin/codex/biohub-multi-method-race`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
 
@@ -446,12 +449,12 @@ development sample `44b6_0113de3b` の100フレームを、公式TemporalUNet3D 
 
 同じGT-free detector cache（cache hash `50739a79bf081799d37987bbdd800ee2f95c5246ce07adead21812a3599a3b65`、nodes `66,845`、candidate edges `45,354,474`、detector elapsed `5,476.415639576997 s`、`auto/cpu`）を固定し、associationだけを交換した。GT GEFFは `artifacts/detector_fixed_race/panel_data/train/44b6_0b24845f.geff` である。
 
-| 手法 | prediction nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | Edge Jaccard | Adjusted / Final | runtime [s] | 公式ILPとの差 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `official_ilp` | `55,324 / 44,335` | `39/9/10` | `0/0/0` | `0.6724137931034483` | `0.6262213541803576 / 0.6262213541803576` | `157.345064` | `+0` |
-| `harmonic_v1` | `57,221 / 47,043` | `40/10/9` | `0/0/0` | `0.6779661016949152` | `0.6274705993317501 / 0.6274705993317501` | `161.112689` | `+0.0012492451513925` |
-| `mutual_confidence` | `52,875 / 40,639` | `37/8/12` | `0/0/0` | `0.6491228070175439` | `0.6093777667220346 / 0.6093777667220346` | `147.215804` | `-0.0168435874583230` |
-| `motion_gated` | `50,219 / 37,723` | `35/8/14` | `0/0/0` | `0.6140350877192983` | `0.5814113726151023 / 0.5814113726151023` | `145.915102` | `-0.0448099815652553` |
+| 手法 | prediction nodes / edges | Edge TP/FP/FN | Division TP/FP/FN | Division Jaccard | Edge Jaccard | Adjusted / Final | runtime [s] | 公式ILPとの差 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `official_ilp` | `55,324 / 44,335` | `39/9/10` | `0/0/0` | `null` | `0.6724137931034483` | `0.6262213541803576 / 0.6262213541803576` | `157.345064` | `+0` |
+| `harmonic_v1` | `57,221 / 47,043` | `40/10/9` | `0/0/0` | `null` | `0.6779661016949152` | `0.6274705993317501 / 0.6274705993317501` | `161.112689` | `+0.0012492451513925` |
+| `mutual_confidence` | `52,875 / 40,639` | `37/8/12` | `0/0/0` | `null` | `0.6491228070175439` | `0.6093777667220346 / 0.6093777667220346` | `147.215804` | `-0.0168435874583230` |
+| `motion_gated` | `50,219 / 37,723` | `35/8/14` | `0/0/0` | `null` | `0.6140350877192983` | `0.5814113726151023 / 0.5814113726151023` | `145.915102` | `-0.0448099815652553` |
 
 0bの公式ILPはcandidate `48,068`→selected `44,335`、node recall `0.9803921568627451`、total node ratio `0.6869644762921177`。4方式ともprediction manifestをGTを開く前に検証し、Gurobi不可のためSCIPへfallbackした。Division JaccardはGTにdivisionがないため`null`である。runtimeは各方式を同じsidecarから単独再生し、predictionディレクトリの`wall_time.txt`へ外部Python wrapperで保存した。
 
