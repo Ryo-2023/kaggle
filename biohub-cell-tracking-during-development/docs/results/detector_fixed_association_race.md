@@ -6,13 +6,15 @@
 
 ## 0. 結論
 
-同一detector出力を固定したassociation比較として、development・0b・0c・0dbの4 sampleで4方式の公式metricを取得した。divisionを含む12dfb391は実行中で、scoreは未取得である。GT-free実行契約は `ground_truth_included=false` で、cache生成・candidate生成・association選択ではGTを開かず、公式metric評価時だけ参照する。machine-readableな選定・実行成果物は `artifacts/detector_fixed_race/panel.json`、各runの `race_receipt.json`、`prediction_manifest.json` を参照する。
+同一detector出力を固定したassociation比較として、development・0b・0c・0db・divisionを含む12dfb391の5 sampleで4方式の公式metricを取得した。GT-free実行契約は `ground_truth_included=false` で、cache生成・candidate生成・association選択ではGTを開かず、公式metric評価時だけ参照する。machine-readableな選定・実行成果物は `artifacts/detector_fixed_race/panel.json`、`artifacts/detector_fixed_race/validation_receipt.json`、各runの `race_receipt.json`、`prediction_manifest.json` を参照する。`validation_receipt.json` の `failed_samples=[]` を確認済みである。
+
+5 sample平均Final Scoreは official `0.7688958987642377`、harmonic `0.7944143977140719`、mutual `0.7467735686449968`、motion `0.7187007022873142`。harmonicはofficialを `+0.025518498949834156` 上回り、5 sample中 `5/5` で勝った。
 
 ## 1. 目的と比較条件
 
 同一の公式 detector 出力を固定し、association だけを交換して比較する。画像、cell-center、node feature、forward/reverse raw edge logitsは一度だけ取得し、後段はcacheのみを読む。GTはcache生成・candidate生成・association選択に渡さず、公式metric評価時だけ開く。
 
-比較対象の4方式（development・0b・0c・0dbは完了、12dfb391は実行中）:
+比較対象の4方式（development・0b・0c・0db・12dfb391の全5 sampleで完了）:
 
 | method_id | association | graph最適化 |
 |---|---|---|
@@ -47,7 +49,7 @@ scoreを見ずに、image metadataとGT graph metadata（node/edge/divisionの�
 | `44b6_0b24845f` | `(100,64,256,256)` | `51 / 49` | `0` | 4方式完了 |
 | `44b6_0c582fdc` | `(100,64,256,256)` | `71 / 70` | `0` | 4方式完了 |
 | `44b6_0db75fae` | `(100,64,256,256)` | `157 / 151` | `0` | 4方式完了 |
-| `44b6_12dfb391` | `(100,64,256,256)` | `788 / 773` | `1` | 実行中、score未取得 |
+| `44b6_12dfb391` | `(100,64,256,256)` | `788 / 773` | `1` | 完了（division sample） |
 
 ## 4. cache契約と実行状況
 
@@ -130,16 +132,39 @@ cacheはGT-free manifest、`nodes.npz`、`candidate_edges.npz`、`READY`を原�
 
 0dbのmaterializeと4方式の再生ではcgroup `memory.events` の `oom_kill=7` が開始前後で増加せず、追加OOM killはなかった。0bの初回全列展開で発生したOOMに対して導入したpair単位disk capture、chunked memmap、chunked validation、pair-contiguous grouping、sidecarを0dbでも再利用して完走した。
 
+12df sample `44b6_12dfb391` の全100フレームcache、`READY`、candidate edge sidecar、4方式の個別再生、prediction manifest検証、divisionを含む公式metric評価も完了した。GT pathは `artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff` で、cache生成・candidate生成・associationには渡していない。
+
+| 項目 | 値 |
+|---|---:|
+| cache manifest | `artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391/manifest.json` |
+| `READY` | cache hash `3fefd2f62dba07f0e2c7266a3fa7b0ee97f9a3ff6bb652598c35622bdfc75a40` + 改行 |
+| cache hash | `3fefd2f62dba07f0e2c7266a3fa7b0ee97f9a3ff6bb652598c35622bdfc75a40` |
+| nodes / candidate edges | `62,219 / 38,940,536` |
+| detector / forward / reverse calls | `100 / 99 / 99` |
+| feature conflict observations | `60,980` |
+| detector elapsed | `5,878.221322058991 s` |
+| requested / actual device | `auto / cpu` |
+| image SHA-256 | `94622f407ef6959ee4be8c126174216bee404fb1a26cf310f840377f41bbbc81` |
+| checkpoint SHA-256 | `347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235` |
+| source repository / commit | `https://github.com/royerlab/kaggle-cell-tracking-competition.git` / `075fc5f5a52d11077f9dc2b074644618f26939e2` |
+| adapter source SHA-256 | `e914af35a2b68f2509027429efaa6ab29670be822212ae7c8628985f42a4ac72` |
+| GT-free manifest | `ground_truth_included=false` |
+| sidecar | `artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391/candidate_edges.mmap/` |
+| sidecar schema / source cache hash | `detector_fixed.cache_mmap.v1` / canonical cache hashと一致 |
+| cache root / sidecar `du` | 約`3.4 GiB / 2.4 GiB` |
+
+12dfのsidecar manifestは `candidate_edges.mmap/manifest.json` にあり、edge count `38,940,536`、source cache hash `3fefd2f62dba07f0e2c7266a3fa7b0ee97f9a3ff6bb652598c35622bdfc75a40`、forward/reverse logit・probability、`delta_t`、voxel/physical delta・distanceの全列を記録する。4方式の `wall_time.txt` は official `162.105704 s`、harmonic `147.6 s`、mutual `164.1 s`、motion `149.6 s` で、すべて `returncode=0` だった。OOMはreceipt項目ではなく外部cgroup監視で確認し、`oom_kill=7`は開始前から増加しなかった。
+
 ## 5. 公式metric結果
 
-development、0b、0c、0dbのcache生成後に、prediction GEFFと公式metric receiptを取得した。12dfb391は実行中で、prediction GEFF・公式metric・scoreは未取得である。未取得の数値は推測で埋めない。
+development、0b、0c、0db、12dfb391のcache生成後に、prediction GEFFと公式metric receiptを取得した。全20個別runの数値は各receiptとmanifestから転記し、推測値は補っていない。
 
 | sample / method | prediction GEFF | nodes / edges | candidate → selected | Edge TP/FP/FN | Division TP/FP/FN | Edge Jaccard | Adjusted Edge Jaccard | Division Jaccard | Final Score | runtime |
 |---|---|---:|---:|---|---|---:|---:|---:|---:|---:|
-| `44b6_0113de3b` / official | `dev_full_auto_compact_timed/44b6_0113de3b/official_ilp.geff` | `25,994 / 23,536` | `24,183 → 23,536` | `46/2/4` | `0/0/0` | `0.8846153846153846` | `0.8837944835207503` | `null` | `0.8837944835207503` | race合計116.29 s* |
-| `44b6_0113de3b` / harmonic | `dev_full_auto_compact_timed/44b6_0113de3b/harmonic_v1.geff` | `26,301 / 24,205` | `25,023 → 24,205` | `48/2/2` | `0/0/0` | `0.9230769230769231` | `0.9211200215044129` | `null` | `0.9211200215044129` | race合計116.29 s* |
-| `44b6_0113de3b` / mutual | `dev_full_auto_compact_timed/44b6_0113de3b/mutual_confidence.geff` | `25,806 / 22,727` | `23,257 → 22,727` | `43/0/7` | `0/0/0` | `0.86` | `0.859829702970297` | `null` | `0.859829702970297` | race合計116.29 s* |
-| `44b6_0113de3b` / motion | `dev_full_auto_compact_timed/44b6_0113de3b/motion_gated.geff` | `25,143 / 21,799` | `22,032 → 21,799` | `42/2/8` | `0/0/0` | `0.8076923076923077` | `0.8096115765422697` | `null` | `0.8096115765422697` | race合計116.29 s* |
+| `44b6_0113de3b` / official | `panel_runs_dev_official/44b6_0113de3b/official_ilp.geff` | `25,994 / 23,536` | `24,183 → 23,536` | `46/2/4` | `0/0/0` | `0.8846153846153846` | `0.8837944835207503` | `null` | `0.8837944835207503` | 27.7 s |
+| `44b6_0113de3b` / harmonic | `panel_runs_dev_harmonic/44b6_0113de3b/harmonic_v1.geff` | `26,301 / 24,205` | `25,023 → 24,205` | `48/2/2` | `0/0/0` | `0.9230769230769231` | `0.9211200215044129` | `null` | `0.9211200215044129` | 28.7 s |
+| `44b6_0113de3b` / mutual | `panel_runs_dev_mutual/44b6_0113de3b/mutual_confidence.geff` | `25,806 / 22,727` | `23,257 → 22,727` | `43/0/7` | `0/0/0` | `0.86` | `0.859829702970297` | `null` | `0.859829702970297` | 26.3 s |
+| `44b6_0113de3b` / motion | `panel_runs_dev_motion/44b6_0113de3b/motion_gated.geff` | `25,143 / 21,799` | `22,032 → 21,799` | `42/2/8` | `0/0/0` | `0.8076923076923077` | `0.8096115765422697` | `null` | `0.8096115765422697` | 25.7 s |
 | `44b6_0b24845f` / official | `panel_runs/44b6_0b24845f/official_ilp.geff` | `55,324 / 44,335` | `48,068 → 44,335` | `39/9/10` | `0/0/0` | `0.6724137931034483` | `0.6262213541803576` | `null` | `0.6262213541803576` | 157.345064 s |
 | `44b6_0b24845f` / harmonic | `panel_runs_0b_harmonic/44b6_0b24845f/harmonic_v1.geff` | `57,221 / 47,043` | `51,874 → 47,043` | `40/10/9` | `0/0/0` | `0.6779661016949152` | `0.6274705993317501` | `null` | `0.6274705993317501` | 161.112689 s |
 | `44b6_0b24845f` / mutual | `panel_runs_0b_mutual/44b6_0b24845f/mutual_confidence.geff` | `52,875 / 40,639` | `43,362 → 40,639` | `37/8/12` | `0/0/0` | `0.6491228070175439` | `0.6093777667220346` | `null` | `0.6093777667220346` | 147.215804 s |
@@ -152,8 +177,12 @@ development、0b、0c、0dbのcache生成後に、prediction GEFFと公式metric
 | `44b6_0db75fae` / harmonic | `panel_runs_0db_harmonic/44b6_0db75fae/harmonic_v1.geff` | `18,576 / 16,523` | `17,469 → 16,523` | `134/8/17` | `0/1/0` | `0.8427672955974843` | `0.8249556959559359` | `0.0` | `0.8249556959559359` | 21.593063 s |
 | `44b6_0db75fae` / mutual | `panel_runs_0db_mutual/44b6_0db75fae/mutual_confidence.geff` | `18,124 / 15,474` | `16,111 → 15,474` | `124/4/27` | `0/0/0` | `0.8` | `0.7854502771437888` | `null` | `0.7854502771437888` | 22.003911 s |
 | `44b6_0db75fae` / motion | `panel_runs_0db_motion/44b6_0db75fae/motion_gated.geff` | `17,496 / 14,606` | `14,966 → 14,606` | `125/4/26` | `0/0/0` | `0.8064516129032258` | `0.795087139897136` | `null` | `0.795087139897136` | 19.994326 s |
+| `44b6_12dfb391` / official | `panel_runs_12df_official/44b6_12dfb391/official_ilp.geff` | `59,632 / 54,744` | `56,455 → 54,744` | `668/81/105` | `0/0/1` | `0.7822014051522248` | `0.7809215555664836` | `0.0` | `0.7809215555664836` | 162.105704 s |
+| `44b6_12dfb391` / harmonic | `panel_runs_12df_harmonic/44b6_12dfb391/harmonic_v1.geff` | `60,037 / 55,707` | `57,654 → 55,707` | `688/89/85` | `0/3/1` | `0.7981438515081206` | `0.7962869753878102` | `0.0` | `0.7962869753878102` | 147.6 s |
+| `44b6_12dfb391` / mutual | `panel_runs_12df_mutual/44b6_12dfb391/mutual_confidence.geff` | `59,135 / 52,882` | `54,181 → 52,882` | `648/84/125` | `0/0/1` | `0.7561260210035006` | `0.7555293371547744` | `0.0` | `0.7555293371547744` | 164.1 s |
+| `44b6_12dfb391` / motion | `panel_runs_12df_motion/44b6_12dfb391/motion_gated.geff` | `58,618 / 52,214` | `53,093 → 52,214` | `644/78/129` | `0/0/1` | `0.7567567567567568` | `0.7568264064446228` | `0.0` | `0.7568264064446228` | 149.6 s |
 
-`*` developmentのcache-only association、GEFF生成、公式metricを4方式で実行したwall time。0bのruntimeは各方式をsidecarから単独再生し、外部Python wrapperで計測した（各predictionディレクトリの`wall_time.txt`）。developmentの公式baselineとの差は、official `+0`、harmonic `+0.0373255379836626`、mutual `-0.0239647805504533`、motion `-0.0741829069784806`。0bのofficialとの差は、harmonic `+0.0012492451513925`、mutual `-0.0168435874583230`、motion `-0.0448099815652553`。
+developmentのruntimeは各個別再生ディレクトリの`wall_time.txt`、0b以降のruntimeも同じく方式別receiptのwall timeから転記した。developmentの公式baselineとの差は、official `+0`、harmonic `+0.0373255379836626`、mutual `-0.0239647805504533`、motion `-0.0741829069784806`。0bのofficialとの差は、harmonic `+0.0012492451513925`、mutual `-0.0168435874583230`、motion `-0.0448099815652553`。
 
 0bのcandidate→selected edge数は、official `48,068→44,335`、harmonic `51,874→47,043`、mutual `43,362→40,639`、motion `39,345→37,723`。officialのnode recallは`0.9803921568627451`、total node ratioは`0.6869644762921177`である。4方式ともprediction manifestをGTを開く前に検証した。
 
@@ -163,15 +192,17 @@ development、0b、0c、0dbのcache生成後に、prediction GEFFと公式metric
 
 development、0b、0cではDivision TP/FP/FNは`0/0/0`でdivision Jaccardは`null`だった。GTにdivisionがないため、公式summarizerはdivision termをdropした。0dbのharmonicだけはDivision TP/FP/FN=`0/1/0`を取得した。
 
+12dfでは全方式がDivision TP/FN=`0/1`で、harmonicだけDivision FP=`3`を生成した。harmonicのFinal Scoreはofficialより`+0.0153654198213266`高いが、divisionを1件も真陽性にできておらず、この部分は未解決である。
+
 developmentのofficial/harmonicのnode/edge数、Edge TP/FP/FN、Final Scoreは既存canonical Strong Baseline v1と一致した。最初の評価では孤立detector nodeをGEFFへ残したためFinalが低下したが、upstreamと同じく選択edgeに参加するnodeだけを保存するwriter修正後に一致した。0bは別sampleのためこの一致主張の対象外である。
 
 prediction GEFFとmanifest/receipt:
 
-- `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/official_ilp.geff`
-- `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/harmonic_v1.geff`
-- `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/mutual_confidence.geff`
-- `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/motion_gated.geff`
-- `artifacts/detector_fixed_race/dev_full_auto_compact_timed/44b6_0113de3b/race_receipt.json`
+- `artifacts/detector_fixed_race/panel_runs_dev_official/44b6_0113de3b/official_ilp.geff`
+- `artifacts/detector_fixed_race/panel_runs_dev_harmonic/44b6_0113de3b/harmonic_v1.geff`
+- `artifacts/detector_fixed_race/panel_runs_dev_mutual/44b6_0113de3b/mutual_confidence.geff`
+- `artifacts/detector_fixed_race/panel_runs_dev_motion/44b6_0113de3b/motion_gated.geff`
+- development各方式の `race_receipt.json`、`prediction_manifest.json`、`wall_time.txt`: `artifacts/detector_fixed_race/panel_runs_dev_{official,harmonic,mutual,motion}/44b6_0113de3b/`
 - GT: `artifacts/detector_fixed_race/panel_data/train/44b6_0b24845f.geff`（development GTは `/workspace/biohub-cell-tracking-during-development/data/train/44b6_0113de3b.geff`）
 - `artifacts/detector_fixed_race/panel_runs/44b6_0b24845f/official_ilp.geff`
 - `artifacts/detector_fixed_race/panel_runs_0b_harmonic/44b6_0b24845f/harmonic_v1.geff`
@@ -190,10 +221,16 @@ prediction GEFFとmanifest/receipt:
 - `artifacts/detector_fixed_race/panel_runs_0db_mutual/44b6_0db75fae/mutual_confidence.geff`
 - `artifacts/detector_fixed_race/panel_runs_0db_motion/44b6_0db75fae/motion_gated.geff`
 - 0db各方式のreceipt/manifest/runtime: 各predictionディレクトリの `race_receipt.json`、`prediction_manifest.json`、`wall_time.txt`
+- GT: `artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff`
+- `artifacts/detector_fixed_race/panel_runs_12df_official/44b6_12dfb391/official_ilp.geff`
+- `artifacts/detector_fixed_race/panel_runs_12df_harmonic/44b6_12dfb391/harmonic_v1.geff`
+- `artifacts/detector_fixed_race/panel_runs_12df_mutual/44b6_12dfb391/mutual_confidence.geff`
+- `artifacts/detector_fixed_race/panel_runs_12df_motion/44b6_12dfb391/motion_gated.geff`
+- 12df各方式のreceipt/manifest/runtime: 各predictionディレクトリの `race_receipt.json`、`prediction_manifest.json`、`wall_time.txt`
 
 ## 6. デバイス診断とGPU移行
 
-今回のDocker実測値は `torch 2.13.0+cpu`、`torch.version.cuda=None`、`torch.cuda.is_available=False`、CUDA device count `0`、MPS built/available `False/False`、`nvidia-smi`なしである。development・0b・0c・0dbのmaterialize receiptも`requested_device=auto`、`device=cpu`を記録した。従ってautoがCPUを選んだ原因は環境であり、行列計算の実装不具合ではない。
+今回のDocker実測値は `torch 2.13.0+cpu`、`torch.version.cuda=None`、`torch.cuda.is_available=False`、CUDA device count `0`、MPS built/available `False/False`、`nvidia-smi`なしである。development・0b・0c・0db・12dfの全materialize receiptも`requested_device=auto`、`device=cpu`を記録した。従ってautoがCPUを選んだ原因は環境であり、行列計算の実装不具合ではない。
 
 NVIDIA環境では `docker-compose.nvidia.yml` と公式CUDA wheel indexを使い、`gpus: all`で起動する。source側の `--device auto` はCUDAを最優先する。MPS環境では同じautoがMPSを選ぶ。GEFF I/O、ILP/SCIP、公式metric、古典associationはCPU処理である。
 
@@ -223,16 +260,40 @@ harmonic weight sweepは、上記の`--cache`を固定し、出力rootをvariant
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_0c582fdc --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_0c582fdc --output artifacts/detector_fixed_race/harmonic_sweep/44b6_0c582fdc_rw_0p10 --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_0c582fdc.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods harmonic_v1 --harmonic-reverse-weight 0.10'
 ```
 
+12dfb391の完了runは次のmaterialize、sidecar、4方式個別再生で再現できる。
+
+```bash
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_12dfb391 --train-root artifacts/detector_fixed_race/panel_data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/panel_auto --device auto'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/build_detector_cache_mmap.py artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_12dfb391 --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391 --output artifacts/detector_fixed_race/panel_runs_12df_official --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods official_ilp'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_12dfb391 --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391 --output artifacts/detector_fixed_race/panel_runs_12df_harmonic --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods harmonic_v1'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_12dfb391 --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391 --output artifacts/detector_fixed_race/panel_runs_12df_mutual --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods mutual_confidence'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py dev-race --sample 44b6_12dfb391 --cache artifacts/detector_fixed_race/panel_auto/cache/44b6_12dfb391 --output artifacts/detector_fixed_race/panel_runs_12df_motion --ground-truth artifacts/detector_fixed_race/panel_data/train/44b6_12dfb391.geff --upstream-root artifacts/strong_baseline_v1/upstream --methods motion_gated'
+```
+
+developmentのlegacy manifestは、同じcacheから方式別outputへ個別再生して解消した。再集約は、既存receiptを再利用して次の形で行う（receipt引数は5 sample×4方式を指定する）。
+
+```bash
+cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development
+PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py aggregate-panel-receipts --panel artifacts/detector_fixed_race/panel.json --evidence-root . \
+  --receipt artifacts/detector_fixed_race/panel_runs_dev_official/44b6_0113de3b/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_dev_harmonic/44b6_0113de3b/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_dev_mutual/44b6_0113de3b/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_dev_motion/44b6_0113de3b/race_receipt.json \
+  --receipt artifacts/detector_fixed_race/panel_runs/44b6_0b24845f/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0b_harmonic/44b6_0b24845f/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0b_mutual/44b6_0b24845f/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0b_motion/44b6_0b24845f/race_receipt.json \
+  --receipt artifacts/detector_fixed_race/panel_runs_0c_official/44b6_0c582fdc/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0c_harmonic/44b6_0c582fdc/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0c_mutual/44b6_0c582fdc/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0c_motion/44b6_0c582fdc/race_receipt.json \
+  --receipt artifacts/detector_fixed_race/panel_runs_0db_official/44b6_0db75fae/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0db_harmonic/44b6_0db75fae/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0db_mutual/44b6_0db75fae/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_0db_motion/44b6_0db75fae/race_receipt.json \
+  --receipt artifacts/detector_fixed_race/panel_runs_12df_official/44b6_12dfb391/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_12df_harmonic/44b6_12dfb391/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_12df_mutual/44b6_12dfb391/race_receipt.json --receipt artifacts/detector_fixed_race/panel_runs_12df_motion/44b6_12dfb391/race_receipt.json \
+  --methods official_ilp,harmonic_v1,mutual_confidence,motion_gated --output artifacts/detector_fixed_race/validation_receipt.json
+```
+
 ## 8. 既知の問題
 
 - 現行MacBook DockerはCPU-onlyであり、GPU実測値はまだない。
 - node featureはwindow context依存のため、cacheのcanonical featureは最初の観測である。association比較はpair logitsを使用する。
-- panel画像・GTは取得済み。development・0b・0c・0dbのdetector cacheと4方式公式metricは完了した。divisionを含む12dfb391は実行中で、prediction GEFF・公式metric・scoreは未取得である。
+- panel画像・GT、5 sampleのdetector cache、4方式公式metricは完了した。12dfb391はdivisionを含む完了sampleである。
 - Kaggleへの外部submissionは行わない。
 
 ## 9. panel実験の完了状況
 
-`44b6_0c582fdc`は0bと同じGT-free detector materializeを完了し、cache hash `2bd90bee3abf0afb07abdc971bfb45235a33bb931feaf6bfb3b884759682f748`、nodes `34,910`、candidate edges `12,459,009`、detector elapsed `5,447.649957480986 s`、`auto/cpu`を記録した。sidecar作成後、official/harmonic/mutual/motionのprediction GEFFと公式metricを取得した。0dbも同じ手順で完走し、development＋0b＋0c＋0dbの4 sampleで4方式比較が完了した。divisionを含む12dfb391は実行中で、scoreは未取得である。
+`44b6_0c582fdc`は0bと同じGT-free detector materializeを完了し、cache hash `2bd90bee3abf0afb07abdc971bfb45235a33bb931feaf6bfb3b884759682f748`、nodes `34,910`、candidate edges `12,459,009`、detector elapsed `5,447.649957480986 s`、`auto/cpu`を記録した。sidecar作成後、official/harmonic/mutual/motionのprediction GEFFと公式metricを取得した。0dbと12dfb391も同じ手順で完走し、5 sampleで4方式比較が完了した。
 
 ## 10. Harmonic reverse weight性能実験
 
@@ -250,13 +311,20 @@ detectorを再計算せず、同じGT-free cache・同じILP・同じ公式metri
 | `44b6_0c582fdc` | `0.20` | `0.8022386963904503` | `62/6/8` | `58.467485` |
 | `44b6_0c582fdc` | `0.30` | `0.7893912297016954` | `61/6/9` | `58.315125` |
 
-| weight | 3 sample平均 Final Score | 0.20との差 |
+| weight | 旧3 sample平均 Final Score（参考） | 0.20との差 |
 |---:|---:|---:|
 | `0.10` | `0.7836523346441413` | `+0.0000425622352703` |
 | `0.20` | `0.7836097724088710` | `+0` |
 | `0.30` | `0.7777614914000653` | `-0.0058482810088057` |
 
-`0.10`が3 sample平均では最大だが、改善幅は`4.26e-5`と小さく、0bでは`0.20`が僅かに上回る。したがって公開Strong Baseline v1の既定値は`0.20`のまま保持し、`0.10`を追加性能候補としてdivision sample検証待ちにする。全variantのprediction GEFF・receipt・wall timeは `artifacts/detector_fixed_race/harmonic_sweep/` 以下に保存した。
+追加したdivision sampleを含む5 sample共通集合では、rw0.10と既定rw0.20の実receipt平均は次のとおりである。
+
+| variant | 5 sample平均 Final Score | rw0.20との差 |
+|---|---:|---:|
+| `harmonic_v1_rw_0p10` | `0.7931993011556243` | `-0.0012150965584476` |
+| `harmonic_v1`（rw0.20） | `0.7944143977140719` | `+0` |
+
+12dfb391ではrw0.10が `0.8012113309947029`、rw0.20が `0.7962869753878102` で `+0.0049243556068927` 改善した。一方、0dbではrw0.10が `0.8138281708509945`、rw0.20が `0.8249556959559359` で `-0.0111275251049414` 悪化した。5 sample平均ではrw0.10が下回るため、公開Strong Baseline v1の既定値はrw0.20のまま維持し、rw0.10は不採用とする。全variantのprediction GEFF・receipt・wall timeは `artifacts/detector_fixed_race/harmonic_sweep/` 以下に保存した。
 
 ## 11. 追加panel `44b6_0db75fae` 完了結果（2026-08-21）
 
@@ -295,21 +363,30 @@ harmonicはofficialよりEdge TPが1件増、FPが1件減、FNが1件減った�
 
 測定値のartifactは `artifacts/performance_experiments/blob_lap_nms35/metrics.json` に保存されている。
 
-## 13. detector-fixed 4 sample集約（0db追加後）
+## 13. detector-fixed 5 sample集約（12df追加後）
 
-development、0b、0cの3 sample平均と、0dbを追加した4 sample平均を、各sampleの `race_receipt.json` の `metrics.final_score` から再集計した。12dfb391は実行中で、prediction GEFF・公式metric・scoreは未取得であるため、平均には含めていない。
+development、0b、0c、0db、12dfb391の5 sample平均を、各sampleの `race_receipt.json` の `metrics.final_score` から再集計した。集約の正典は `artifacts/detector_fixed_race/validation_receipt.json` である。
 
-| association | 3 sample平均 Final Score | 4 sample平均 Final Score | 4 sampleでのofficial差 |
+| association | 5 sample平均 Final Score | 5 sampleでのofficial差 | officialに勝ったsample数 |
 |---|---:|---:|---:|
-| `official_ilp` | `0.7495051838525356` | `0.7658894845636763` | `+0` |
-| `harmonic_v1` | `0.783609772408871` | `0.7939462532956372` | `+0.0280567687319609` |
-| `mutual_confidence` | `0.7309627429754736` | `0.7445846265175524` | `-0.0213048580461239` |
-| `motion_gated` | `0.6805299883649374` | `0.7091692762479871` | `-0.0567202083156892` |
+| `official_ilp` | `0.7688958987642377` | `+0` | `0/5` |
+| `harmonic_v1` | `0.7944143977140719` | `+0.025518498949834156` | `5/5` |
+| `mutual_confidence` | `0.7467735686449968` | `-0.02212233011924092` | `0/5` |
+| `motion_gated` | `0.7187007022873142` | `-0.0501951964769235` | `0/5` |
 
-0dbを加えても、harmonicは4 sampleすべてでofficialを上回った。divisionを含む12dfb391の結果はまだ未取得であり、この傾向をdivision性能へ外挿しない。
+0dbと12dfb391を加えても、harmonicは5 sampleすべてでofficialを上回った。division sampleでのDivision TPは全方式0、harmonicのDivision FPは3、official/mutual/motionのDivision FP/FNは `0/1` である。
 
-## 14. validation receipt のfresh re-reviewと4 sample smoke
+## 14. validation receipt のfresh re-reviewと5 sample smoke
 
-validation receipt実装の対象commitは `fbfbf26` で、fresh re-reviewは `APPROVED` だった。4 sampleの実artifact集約smokeでは、legacyなdevelopment旧4方式runが単一出力ディレクトリを共有し、最後の方式が `prediction_manifest.json` を上書きしていたため、集約器は `prediction_path mismatch for ('44b6_0113de3b', 'official_ilp')` を返して不整合を正しく拒否した。
+validation receipt実装の対象commitは `fbfbf26` で、fresh re-reviewは `APPROVED` だった。旧development runは4方式が単一出力ディレクトリを共有し、最後の方式が `prediction_manifest.json` を上書きしていたため、最終evidenceでは方式ごとの個別再生に切り替えた。
 
-detector cacheの再計算は不要であり、developmentの4方式を別output directoryへ個別再生して、方式ごとの `prediction_manifest.json` を再生成する必要がある。12dfb391は現時点で「進行中、未取得」である。
+detector cacheの再計算は不要であり、developmentの4方式を `panel_runs_dev_official`、`panel_runs_dev_harmonic`、`panel_runs_dev_mutual`、`panel_runs_dev_motion` へ個別再生して方式ごとの `prediction_manifest.json` を再生成した。各manifestは構造再読込に成功し、`validation_receipt.json` の20個別recordに束ねられている。
+
+## 15. 最終検証
+
+- full pytest: `199 passed, 2 warnings`
+- report＋validation receipt限定pytest: `25 passed`
+- 変更対象Ruff: `All checks passed!`
+- `git diff --check`: 通過
+
+pytestの2 warningは、divisionが存在しないtest splitで公式metricがdivision termをdropする既知の警告である。full repository Ruffは `src/biohub/official_metrics/metrics.py` と `src/biohub/visualizer/*` の既存24件を報告した。今回の変更対象外のため修正していない。

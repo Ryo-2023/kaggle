@@ -79,3 +79,18 @@ def test_detector_fixed_report_binds_independent_blob_nms_receipts() -> None:
             "`+0.0031288920747277`",
         ),
     }
+
+
+def test_detector_fixed_report_binds_five_sample_validation_receipt() -> None:
+    report = REPORT.read_text(encoding="utf-8")
+
+    for evidence in (
+        "artifacts/detector_fixed_race/validation_receipt.json",
+        "failed_samples=[]",
+        "0.7688958987642377",
+        "0.7944143977140719",
+        "0.025518498949834156",
+        "5/5",
+        "0/3/1",
+    ):
+        assert evidence in report
