@@ -361,6 +361,8 @@ def aggregate_validation_receipts(
         raise ValueError("methods must be a non-empty sequence of non-empty strings")
     if len(set(method_ids)) != len(method_ids):
         raise ValueError("methods must be unique")
+    if "official_ilp" not in method_ids:
+        raise ValueError("methods must include the official_ilp control")
 
     expected_pairs = {(sample_id, method_id) for sample_id in sample_ids for method_id in method_ids}
     records_by_pair: dict[tuple[str, str], dict[str, Any]] = {}
@@ -425,8 +427,27 @@ def aggregate_validation_receipts(
                 raise ValueError(
                     f"prediction manifest ground_truth_included must be false: {manifest_path}"
                 )
+            manifest_prediction_value = manifest.get("prediction_path")
+            if not isinstance(manifest_prediction_value, str) or not manifest_prediction_value.strip():
+                raise ValueError(f"prediction manifest is missing prediction_path: {manifest_path}")
+            record_prediction_value = record.get("prediction_path")
+            if not isinstance(record_prediction_value, str) or not record_prediction_value.strip():
+                raise ValueError(f"record {pair!r} is missing prediction_path")
+            manifest_prediction_path = _receipt_evidence_path(manifest_prediction_value, receipt_path)
+            record_prediction_path = _receipt_evidence_path(record_prediction_value, receipt_path)
+            if manifest_prediction_path.resolve() != record_prediction_path.resolve():
+                raise ValueError(f"prediction_path mismatch for {pair!r}")
+            if "sample_id" in manifest:
+                if manifest.get("sample_id") != sample_id:
+                    raise ValueError(f"prediction manifest sample_id mismatch: {manifest_path}")
+            else:
+                manifest_parts = manifest_prediction_path.resolve().parts
+                record_parts = record_prediction_path.resolve().parts
+                if sample_id not in manifest_parts or sample_id not in record_parts:
+                    raise ValueError(
+                        f"legacy prediction_path must contain sample_id {sample_id!r}: {manifest_path}"
+                    )
             for field, expected in (
-                ("sample_id", sample_id),
                 ("method_id", method_id),
                 ("cache_hash", record["cache_hash"]),
             ):

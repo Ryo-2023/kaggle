@@ -37,6 +37,7 @@ def _write_evidence(tmp_path: Path) -> tuple[Path, list[Path], dict[tuple[str, s
         receipt_records: list[dict[str, object]] = []
         for method_index, method_id in enumerate(METHODS):
             manifest_path = tmp_path / sample_id / method_id / "prediction_manifest.json"
+            prediction_path = manifest_path.parent / f"{method_id}.geff"
             _write_json(
                 manifest_path,
                 {
@@ -44,6 +45,7 @@ def _write_evidence(tmp_path: Path) -> tuple[Path, list[Path], dict[tuple[str, s
                     "method_id": method_id,
                     "cache_hash": cache_hash,
                     "ground_truth_included": False,
+                    "prediction_path": str(prediction_path),
                 },
             )
             score = (sample_index + 1) * 0.2 + method_index * 0.1
@@ -52,6 +54,7 @@ def _write_evidence(tmp_path: Path) -> tuple[Path, list[Path], dict[tuple[str, s
                 "method_id": method_id,
                 "cache_hash": cache_hash,
                 "prediction_manifest_path": str(manifest_path),
+                "prediction_path": str(prediction_path),
                 "prediction_node_count": 3 + sample_index,
                 "prediction_edge_count": 2 + method_index,
                 "metrics": {
@@ -170,6 +173,72 @@ def test_aggregate_validation_receipts_rejects_gt_contaminated_evidence(
             panel_path=panel_path,
             receipt_paths=receipt_paths,
             methods=METHODS,
+        )
+
+
+def test_aggregate_accepts_actual_shape_legacy_manifest_without_sample_id(tmp_path: Path) -> None:
+    panel_path, receipt_paths, records_by_pair = _write_evidence(tmp_path)
+    record = records_by_pair[(SAMPLES[0], METHODS[0])]
+    manifest_path = Path(record["prediction_manifest_path"])
+    manifest = json.loads(manifest_path.read_text())
+    manifest.pop("sample_id")
+    manifest_path.write_text(json.dumps(manifest))
+    receipt_records = json.loads(receipt_paths[0].read_text())
+    receipt_records[0] = record
+    receipt_paths[0].write_text(json.dumps(receipt_records))
+
+    result = panel_api.aggregate_validation_receipts(
+        panel_path=panel_path,
+        receipt_paths=receipt_paths,
+        methods=METHODS,
+    )
+
+    assert result["records"][0]["sample_id"] == SAMPLES[0]
+
+
+@pytest.mark.parametrize("path_case", ("manifest_missing", "record_missing", "mismatch"))
+def test_aggregate_validation_receipts_requires_matching_prediction_path(
+    tmp_path: Path,
+    path_case: str,
+) -> None:
+    panel_path, receipt_paths, records_by_pair = _write_evidence(tmp_path)
+    record = records_by_pair[(SAMPLES[0], METHODS[0])]
+    manifest_path = Path(record["prediction_manifest_path"])
+    manifest = json.loads(manifest_path.read_text())
+    if path_case == "manifest_missing":
+        manifest.pop("prediction_path")
+    elif path_case == "mismatch":
+        manifest["prediction_path"] = str(tmp_path / "wrong" / "official_ilp.geff")
+    manifest_path.write_text(json.dumps(manifest))
+    if path_case == "record_missing":
+        record.pop("prediction_path")
+    elif path_case == "mismatch":
+        record["prediction_path"] = str(tmp_path / "another" / "official_ilp.geff")
+    receipt_records = json.loads(receipt_paths[0].read_text())
+    receipt_records[0] = record
+    receipt_paths[0].write_text(json.dumps(receipt_records))
+
+    with pytest.raises(ValueError, match="prediction_path"):
+        panel_api.aggregate_validation_receipts(
+            panel_path=panel_path,
+            receipt_paths=receipt_paths,
+            methods=METHODS,
+        )
+
+
+def test_aggregate_validation_receipts_requires_official_control(tmp_path: Path) -> None:
+    panel_path, receipt_paths, _records_by_pair = _write_evidence(tmp_path)
+    for receipt_path in receipt_paths:
+        records = json.loads(receipt_path.read_text())
+        receipt_path.write_text(
+            json.dumps([record for record in records if record["method_id"] == "harmonic_v1"])
+        )
+
+    with pytest.raises(ValueError, match="official_ilp"):
+        panel_api.aggregate_validation_receipts(
+            panel_path=panel_path,
+            receipt_paths=receipt_paths,
+            methods=("harmonic_v1",),
         )
 
 
