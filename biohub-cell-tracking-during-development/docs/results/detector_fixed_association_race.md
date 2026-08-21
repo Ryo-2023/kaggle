@@ -151,3 +151,7 @@ docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-
 - node featureはwindow context依存のため、cacheのcanonical featureは最初の観測である。association比較はpair logitsを使用する。
 - panel画像・GTは取得済み。developmentと0bのdetector cache・4方式公式metricは完了したが、0c/0db/12dfb391のfull detector cacheと公式metricは未完了である。
 - Kaggleへの外部submissionは行わない。
+
+## 9. 継続中のpanel実験
+
+`44b6_0c582fdc`は、0bと同じGT-free detector materializeを継続中である。2026-08-21 05:20 UTC（14:20 JST）の監視時点でpair cacheは`44/99`、実処理PIDは生存、CPU約617%、RSS約0.8 GB、cgroup使用量約`5.84/7.65 GiB`、`oom_kill=7`（開始前から増加なし）、`READY`未生成である。したがって0cのprediction GEFF・公式metricは未取得であり、完了後に本節とmetric表を更新する。

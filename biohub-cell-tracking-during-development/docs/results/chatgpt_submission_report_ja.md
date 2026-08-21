@@ -3,7 +3,7 @@
 作成日: 2026-08-21（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 作業ブランチ: `codex/biohub-multi-method-race`
-最新push: `origin/codex/biohub-multi-method-race`（レポートcommit: `20c3dd8`、実装commit: `eb6e472`）
+最新push: `origin/codex/biohub-multi-method-race`（直前に確認済みレポートcommit: `da59280`、実装commit: `eb6e472`）
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
 この文書は、Strong Baseline v1、Multi-Method Benchmark Race、追加性能改善実験、公開手法の実行可能性調査、検証結果を、ChatGPTへそのまま渡せるように1ファイルへ統合したものである。
@@ -325,7 +325,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - race branch: `codex/biohub-multi-method-race`
-- race latest implementation commit: `eb6e472`、レポートcommit: `20c3dd8`
+- race latest implementation commit: `eb6e472`、直前レポートcommit: `da59280`
 - remote: `origin/codex/biohub-multi-method-race`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
 
@@ -461,3 +461,7 @@ development sample `44b6_0113de3b` の100フレームを、公式TemporalUNet3D 
 0bの最初の全方式再生では圧縮NPZの全列展開がOOM killとなった（`memory.events oom_kill`は過去失敗を含め7）。pair単位disk capture、chunked memmap、chunked validation、pair-contiguous grouping、edge sidecarを導入後、0bの4方式は追加OOMなしで完走した。
 
 prediction GEFF、GT、receipt、cache sidecarは `docs/results/detector_fixed_association_race.md` に一覧化した。validation panelはdevelopment＋0bの2 sample・4方式まで完了し、0c/0db/12dfb391は画像とGTを固定済みだが、CPU detector cacheと公式metricが未完了である。
+
+## 15. 2026-08-21 継続状況
+
+最小3 sample panel達成に向け、`44b6_0c582fdc`のGT-free detector materializeを継続している。2026-08-21 05:20 UTC（14:20 JST）の監視時点でpair cacheは`44/99`、実処理PIDは生存、CPU約617%、RSS約0.8 GB、cgroup使用量約`5.84/7.65 GiB`、`oom_kill=7`（開始前から増加なし）、`READY`未生成である。0cのprediction GEFFと公式metricは未取得であり、完了後にこの統合版と詳細版を更新する。既存の0b結果・コード・レポートは変更せず、materializeだけを継続している。
