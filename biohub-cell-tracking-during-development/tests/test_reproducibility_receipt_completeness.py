@@ -21,6 +21,7 @@ from biohub.reproducibility.receipts import (
     RECOMMENDED_RECEIPT_FIELDS,
     REQUIRED_RECEIPT_FIELDS,
     audit_receipt,
+    device_audit,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "reproducibility" / "real_receipts"
@@ -188,6 +189,85 @@ def test_strong_baseline_run_receipts_record_everything_but_a_cache_digest(metho
     assert audit.found["checkpoint_sha256"] == (
         "347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235"
     )
+
+
+# --------------------------------------------------------------------------------------
+# Device provenance: two pipelines, two conventions, no cross-check.
+# --------------------------------------------------------------------------------------
+
+
+def test_device_audit_accepts_a_resolved_pair() -> None:
+    report = device_audit([{"requested_device": "auto", "device": "cpu"}])
+
+    assert report["invariant_holds"] is True
+    assert report["requested_device"] == "auto"
+    assert report["actual_device"] == "cpu"
+
+
+def test_device_audit_flags_a_requested_device_that_was_not_used() -> None:
+    """Test-the-test: asking for CUDA and silently getting CPU is not comparable."""
+
+    report = device_audit([{"requested_device": "cuda", "device": "cpu"}])
+
+    assert report["invariant_holds"] is False
+    assert report["inconsistent"] is True
+
+
+@pytest.mark.parametrize(
+    "payload,missing",
+    [
+        ({"device": "cpu"}, ["requested_device"]),
+        ({"requested_device": "auto"}, ["device"]),
+        ({}, ["requested_device", "device"]),
+    ],
+)
+def test_device_audit_reports_missing_halves(payload: dict[str, Any], missing: list[str]) -> None:
+    report = device_audit([payload])
+
+    assert report["invariant_holds"] is False
+    assert report["missing"] == missing
+
+
+def test_detector_fixed_cache_records_a_resolved_device_pair(cache_manifest: dict[str, Any]) -> None:
+    """``detector_fixed_race`` resolves "auto" and records both halves."""
+
+    report = device_audit([cache_manifest])
+
+    assert report["invariant_holds"] is True
+    assert report["requested_device"] == "auto"
+    assert report["actual_device"] == "cpu"
+    assert report["requested_device_field"] == "requested_device"
+
+
+@pytest.mark.parametrize("method", ["official_ilp", "harmonic_ilp"])
+def test_strong_baseline_run_records_no_requested_device(method: str) -> None:
+    """The other pipeline hardcodes CPU and never records what was asked for.
+
+    ``strong_baseline/runner.py`` defaults ``expected_device="cpu"`` and never calls
+    ``resolve_torch_device``, so its receipts cannot distinguish "CPU was selected from
+    the available accelerators" from "CPU was the only thing ever attempted".  The
+    persisted ``run.json`` does not even carry ``expected_device``.
+    """
+
+    run = load(f"strong_baseline_v1_{method}_run.json")
+
+    report = device_audit([run])
+
+    assert report["actual_device"] == "cpu"
+    assert report["missing"] == ["requested_device"], (
+        "runner.py now records a requested device; drop this test and the finding"
+    )
+    assert report["invariant_holds"] is False
+
+
+def test_the_two_pipelines_do_not_agree_on_the_field_name(cache_manifest: dict[str, Any]) -> None:
+    """A cross-pipeline comparison cannot line the field up without an alias table."""
+
+    detector_fixed = device_audit([cache_manifest])
+    strong_baseline = device_audit([load("strong_baseline_v1_official_ilp_run.json")])
+
+    assert detector_fixed["requested_device_field"] == "requested_device"
+    assert strong_baseline["requested_device_field"] is None
 
 
 def test_only_one_of_the_two_headline_runs_has_a_source_receipt() -> None:

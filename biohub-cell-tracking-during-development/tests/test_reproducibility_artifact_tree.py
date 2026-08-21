@@ -199,6 +199,34 @@ def test_a_directory_with_several_predictions_keeps_only_one_manifest() -> None:
     )
 
 
+def test_the_clobber_was_worked_around_by_layout_not_fixed_in_the_writer() -> None:
+    """One method per directory avoids the collision; the writer still causes it.
+
+    ``write_prediction_manifest`` still targets ``<parent>/prediction_manifest.json``.
+    Newer runs escape only because each writes a single prediction into its own
+    directory — a convention nothing enforces.  The older multi-prediction directories
+    were never regenerated and are still missing three manifests apiece.
+    """
+
+    single = 0
+    still_broken: list[str] = []
+    for path, records in race_receipts(race_tree()):
+        directory = path.parent
+        predictions = sorted(directory.glob("*.geff"))
+        if len(predictions) == 1:
+            single += 1
+            continue
+        still_broken.append(str(directory.relative_to(race_tree())))
+        assert len(sorted(directory.glob("*prediction_manifest*.json"))) == 1
+        assert len(records) > 1
+
+    assert single >= 20, f"expected the per-method layout to dominate, found {single}"
+    assert still_broken, (
+        "every multi-prediction directory is gone; if the writer now emits one manifest "
+        "per prediction, delete this test and the finding"
+    )
+
+
 def test_no_metrics_receipt_can_prove_its_own_ordering() -> None:
     """``prediction_manifest_validated_before_gt`` is unfalsifiable as persisted.
 

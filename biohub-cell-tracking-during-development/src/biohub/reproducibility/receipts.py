@@ -42,6 +42,11 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "checkpoint_sha256": ("checkpoint_sha256",),
     "cache_digest": ("cache_hash", "cache_digest", "cache_sha256"),
     "device": ("device",),
+    # Two pipelines, two names for the same concept: ``detector_fixed_race`` writes
+    # ``requested_device`` after resolving "auto", while ``strong_baseline/runner.py``
+    # writes ``expected_device`` and hardcodes "cpu".  Both aliases are accepted so the
+    # auditor can compare across them, and :func:`device_audit` reports which was used.
+    "requested_device": ("requested_device", "expected_device"),
     "command": ("command", "argv", "cmd"),
     "association_code_sha256": (
         "association_code_sha256",
@@ -188,6 +193,64 @@ def method_sensitivity_report(records: Sequence[Mapping[str, Any]]) -> dict[str,
     }
 
 
+def device_audit(payloads: Sequence[Any]) -> dict[str, Any]:
+    """Check that a receipt records both the requested and the actual device.
+
+    ``detector_fixed_race`` resolves ``auto`` through ``resolve_torch_device`` and
+    records the pair.  ``strong_baseline/runner.py`` hardcodes ``expected_device="cpu"``
+    and never resolves, so its receipts cannot distinguish "CPU was chosen" from "CPU
+    was the only thing ever attempted".  Two results whose device provenance differs in
+    that way are not comparable, and nothing currently says so.
+    """
+
+    requested = _find_field(payloads, "requested_device")
+    actual = _find_field(payloads, "device")
+    field_name = None
+    for alias in _FIELD_ALIASES["requested_device"]:
+        if any(True for payload in payloads for _ in _iter_values(payload, alias)):
+            field_name = alias
+            break
+
+    missing = [
+        name
+        for name, value in (("requested_device", requested), ("device", actual))
+        if value is None
+    ]
+    inconsistent = False
+    if requested not in (None, "auto") and actual is not None and requested != actual:
+        inconsistent = True
+    return {
+        "requested_device": requested,
+        "actual_device": actual,
+        "requested_device_field": field_name,
+        "missing": missing,
+        "inconsistent": inconsistent,
+        "invariant_holds": not missing and not inconsistent,
+    }
+
+
+def prediction_identity_report(prediction_path: Path | str, sample_id: str) -> dict[str, Any]:
+    """Check that a persisted prediction is identifiable as belonging to *sample_id*.
+
+    The packaging step derives the submission's ``dataset`` column from the prediction
+    file's stem.  Under the ``<run>/<sample>/<method>.geff`` layout that stem is the
+    association method, so a structurally valid submission is emitted with
+    ``dataset=harmonic_v1`` and scores zero.  The sample id lives only in the parent
+    directory name, which packaging does not read.
+    """
+
+    stem = Path(prediction_path).stem
+    matches_sample = stem == sample_id or stem.startswith(f"{sample_id}")
+    return {
+        "prediction_path": str(prediction_path),
+        "stem": stem,
+        "sample_id": sample_id,
+        # What a stem-derived packaging step would actually write.
+        "submission_dataset_column": stem,
+        "identity_holds": matches_sample,
+    }
+
+
 def prediction_manifest_candidates(prediction_path: Path) -> dict[str, Path]:
     """Return the manifest locations that could describe *prediction_path*."""
 
@@ -204,6 +267,8 @@ __all__ = [
     "ReceiptAudit",
     "audit_receipt",
     "detector_invariance_report",
+    "device_audit",
     "method_sensitivity_report",
+    "prediction_identity_report",
     "prediction_manifest_candidates",
 ]
