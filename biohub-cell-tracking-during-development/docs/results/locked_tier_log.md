@@ -10,7 +10,7 @@ motivate a subsequent change; if it does, the sample is burned and becomes dev.
 
 | UTC timestamp | git SHA | sample_id | method id | reason for the touch | result reported |
 |---|---|---|---|---|---|
-| _(no touches logged under this protocol yet)_ | | | | | |
+| 2026-08-21 (pre-protocol) | Codex `panel_runs_0b_*` | `44b6_0b24845f` | all four | four-method detector-fixed race; run before this protocol existed | 39/9/10 → 0.62622 (official), 40/10/9 → 0.62747 (harmonic), 37/8/12 → 0.60938 (mutual), 35/8/14 → 0.58141 (motion) |
 
 ## Pre-existing touches (recorded for honesty, predate this protocol)
 
@@ -20,3 +20,13 @@ iterating on `44b6_0113de3b`. Those numbers were used to choose between
 association methods, so under P6 that sample is already burned as a validation
 signal. It is retained in the locked tier because it is a test movie, not
 because it is still uncontaminated.
+
+
+## Note on the 2026-08-21 touch
+
+`44b6_0b24845f` was raced before this protocol was written, so it is recorded rather than
+authorised. It is a leaderboard test movie. Its numbers are now part of the pooled
+three-sample evidence in §4.7 of the design doc, which means **the harmonic-vs-official
+verdict is partly built on a test movie**. Under P6 that sample is burned as an independent
+validation signal. The dev tier (`44b6_0c582fdc`, `44b6_0db75fae`, `44b6_12dfb391`) remains
+clean and should carry any future comparison.

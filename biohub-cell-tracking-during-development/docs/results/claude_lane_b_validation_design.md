@@ -25,6 +25,11 @@ All numbers below are measured, not estimated. Reproduction commands are in §8.
 | GT edges in all 5 local samples | **1,093** |
 | Best resolution obtainable from the entire 199-movie train set | **δ ≈ 0.0046 – 0.0081** |
 | Sample 2 (`44b6_0b24845f`, 49 edges): agreement licenses | **"consistent, still not separated"** — pooled McNemar p = 0.125 (§4.6) |
+| **UPDATE §4.7** — pre-registered H0 (2.60 of 6 sign agreements) vs observed | **6/6 twice; H0 rejected, LR 916×** |
+| Pooled 3-sample panel (169 edges): harmonic vs official | **p = 0.0078, CI [+0.011,+0.069] — passes, knife-edge** |
+| Reversed edges needed to overturn that verdict | **1** |
+| Pooled `harmonic_v1` score (not 0.9211) | **0.7802** |
+| Pooled score discarded to node over-prediction | **0.0220** (61% of the harmonic gain) |
 
 **The practical target is δ = 0.01, not 0.005.** A 0.005 difference sits at the very edge
 of what the whole published dataset can establish; treat any claim below 0.01 as
