@@ -69,12 +69,21 @@ def dataset(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     root = tmp_path_factory.mktemp("biohub-viewer")
     image = root / "image.zarr"
     prediction = root / "pred.geff"
+    alt_prediction = root / "pred_alt.geff"
     ground_truth = root / "gt.geff"
     _write_image(image)
     _write_geff(ground_truth, jitter=0.0, drop_edge=None)
     # The prediction is slightly offset and misses the (t=2, cell=1) link.
     _write_geff(prediction, jitter=0.3, drop_edge=(2, 1))
-    return {"image": image, "prediction": prediction, "ground_truth": ground_truth}
+    # A second, independent method: recovers the (t=2, cell=1) link the primary misses,
+    # but misses a different one instead - used to test multi-prediction switching.
+    _write_geff(alt_prediction, jitter=0.1, drop_edge=(1, 0))
+    return {
+        "image": image,
+        "prediction": prediction,
+        "alt_prediction": alt_prediction,
+        "ground_truth": ground_truth,
+    }
 
 
 def _build(dataset: dict[str, Path], **overrides: object) -> ViewerState:
@@ -129,6 +138,52 @@ def test_build_state_without_ground_truth_keeps_edges_unscored(dataset: dict[str
 
     assert state.metrics == {"num_pred_nodes": 2 * T}
     assert {edge.category for edge in state.edges} == {"prediction"}
+
+
+def test_build_state_scores_and_switches_between_multiple_predictions(
+    dataset: dict[str, Path],
+) -> None:
+    """A comparison session can hold several methods and switch overlays between them."""
+
+    state = _build(
+        dataset,
+        prediction_path=dataset["prediction"],
+        ground_truth_path=dataset["ground_truth"],
+        extra_prediction_paths={"alt": dataset["alt_prediction"]},
+        primary_name="primary",
+    )
+
+    assert state.primary_name == "primary"
+    assert set(state.extra_predictions) == {"alt"}
+
+    # The two methods drop a different GT edge (fixture: primary misses (t=2,cell=1),
+    # alt misses (t=1,cell=0)), so each must report a *different* FN edge - proving alt
+    # was scored independently against the shared ground truth, not just copied.
+    primary_fn = {(e.source_id, e.target_id) for e in state.edges if e.category == "fn"}
+    alt_fn = {
+        (e.source_id, e.target_id)
+        for e in state.extra_predictions["alt"]["edges"]
+        if e.category == "fn"
+    }
+    assert primary_fn and alt_fn and primary_fn != alt_fn
+
+    meta = state.meta()
+    assert meta["primary_prediction"] == "primary"
+    assert set(meta["predictions"]) == {"primary", "alt"}
+    assert meta["predictions"]["primary"] == state.metrics
+    assert meta["predictions"]["alt"] == state.extra_predictions["alt"]["metrics"]
+
+    # Overlay defaults to primary; passing the alt name serves the alt method's edges
+    # recombined with the (shared) ground-truth nodes instead of recomputing anything.
+    # t=1 is where the two methods diverge (see the FN check above).
+    default_overlay = state.overlay(t=1, z=3.0, z_radius=1.0)
+    alt_overlay = state.overlay(t=1, z=3.0, z_radius=1.0, prediction="alt")
+    assert default_overlay != alt_overlay
+    same_as_primary = state.overlay(t=1, z=3.0, z_radius=1.0, prediction="primary")
+    assert same_as_primary == default_overlay
+
+    with pytest.raises(ValueError, match="Unknown prediction"):
+        state.overlay(t=0, z=2.0, z_radius=2.0, prediction="does-not-exist")
 
 
 def test_http_endpoints_serve_real_dataset(dataset: dict[str, Path]) -> None:

@@ -72,6 +72,12 @@ class ViewerState:
     metrics: dict[str, int | float | None] = field(default_factory=dict)
     contrast_low: float | None = None
     contrast_high: float | None = None
+    # Name of the prediction backing `nodes`/`edges`/`metrics` above (the CLI's first
+    # --prediction). Additional --prediction sources, if any, live in `extra_predictions`
+    # keyed by name so several methods can be compared against the same ground truth in
+    # one viewer session without recomputing anything on each switch.
+    primary_name: str = "prediction"
+    extra_predictions: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.image = ensure_tzyx(self.image)
@@ -98,15 +104,32 @@ class ViewerState:
         )
         return encode_grayscale_png(normalized)
 
-    def overlay(self, *, t: int, z: float, z_radius: float) -> dict[str, list[dict[str, Any]]]:
+    def overlay(
+        self, *, t: int, z: float, z_radius: float, prediction: str | None = None
+    ) -> dict[str, list[dict[str, Any]]]:
         self._validated_indices(t, int(z))
-        return select_overlay(self.nodes, self.edges, t=t, z=z, z_radius=z_radius)
+        nodes, edges = self.nodes, self.edges
+        if prediction is not None and prediction != self.primary_name:
+            if prediction not in self.extra_predictions:
+                raise ValueError(
+                    f"Unknown prediction {prediction!r}; available: "
+                    f"{[self.primary_name, *self.extra_predictions]}"
+                )
+            extra = self.extra_predictions[prediction]
+            ground_truth_nodes = [node for node in self.nodes if node.kind == "ground_truth"]
+            nodes = ground_truth_nodes + extra["nodes"]
+            edges = extra["edges"]
+        return select_overlay(nodes, edges, t=t, z=z, z_radius=z_radius)
 
     def meta(self) -> dict[str, Any]:
+        predictions = {self.primary_name: self.metrics}
+        predictions.update({name: value["metrics"] for name, value in self.extra_predictions.items()})
         return {
             "dataset": self.dataset,
             "shape": list(self.shape),
             "metrics": self.metrics,
+            "predictions": predictions,
+            "primary_prediction": self.primary_name,
             "contrast": {"low": self.contrast_low, "high": self.contrast_high},
         }
 
@@ -167,7 +190,8 @@ class ViewerRequestHandler(BaseHTTPRequestHandler):
                 t = self._query_int(query, "t", 0)
                 z = self._query_float(query, "z", 0.0)
                 z_radius = self._query_float(query, "z_radius", 1.0)
-                self._send_json(self.server.state.overlay(t=t, z=z, z_radius=z_radius))
+                prediction = query.get("prediction", [None])[0]
+                self._send_json(self.server.state.overlay(t=t, z=z, z_radius=z_radius, prediction=prediction))
                 return
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except (ValueError, IndexError, TypeError) as error:
@@ -288,6 +312,24 @@ def _unscored_prediction_edges(graph: Any) -> list[EdgeRecord]:
     return [EdgeRecord(source_id=source, target_id=target, category="prediction") for source, target in _graph_edges(graph)]
 
 
+def _score_prediction(
+    prediction: Any,
+    ground_truth: Any | None,
+    *,
+    scale: tuple[float, float, float],
+    max_distance: float,
+) -> tuple[list[EdgeRecord], dict[str, int | float | None]]:
+    """Classify one prediction's edges, against *ground_truth* when available.
+
+    Shared by the primary ``--prediction`` and every extra one so a multi-method
+    comparison session scores each source identically and independently.
+    """
+
+    if ground_truth is not None:
+        return _evaluate_graphs(prediction, ground_truth, scale=scale, max_distance=max_distance)
+    return _unscored_prediction_edges(prediction), {"num_pred_nodes": int(prediction.num_nodes())}
+
+
 def _find_nested(mapping: Any, *path: str) -> Any:
     value = mapping
     for key in path:
@@ -330,7 +372,18 @@ def build_state(
     max_distance: float,
     contrast_low: float | None,
     contrast_high: float | None,
+    extra_prediction_paths: dict[str, Path] | None = None,
+    primary_name: str = "prediction",
 ) -> ViewerState:
+    """Build one viewer session.
+
+    ``prediction_path`` is the primary prediction (backward-compatible single-method
+    path). ``extra_prediction_paths`` optionally names additional ``.geff`` predictions
+    (e.g. ``{"harmonic_v1": Path(...), "mutual_confidence": Path(...)}``); each is scored
+    against the same *ground_truth_path* independently, so a session can hold several
+    methods side by side and switch between them without reloading.
+    """
+
     image, root = _open_zarr_image(image_path, array_key)
     source_array = getattr(image, "_source", image)
     inferred_low, inferred_high = _contrast_from_attrs(root, source_array)
@@ -349,16 +402,20 @@ def build_state(
     if ground_truth is not None:
         nodes.extend(_graph_nodes(ground_truth, "ground_truth"))
 
-    if prediction is not None and ground_truth is not None:
-        edges, metrics = _evaluate_graphs(
-            prediction,
-            ground_truth,
-            scale=scale,
-            max_distance=max_distance,
-         )
-    elif prediction is not None:
-        edges = _unscored_prediction_edges(prediction)
-        metrics = {"num_pred_nodes": int(prediction.num_nodes())}
+    if prediction is not None:
+        edges, metrics = _score_prediction(prediction, ground_truth, scale=scale, max_distance=max_distance)
+
+    extra_predictions: dict[str, dict[str, Any]] = {}
+    for name, path in (extra_prediction_paths or {}).items():
+        extra_graph = _load_geff(path)
+        extra_edges, extra_metrics = _score_prediction(
+            extra_graph, ground_truth, scale=scale, max_distance=max_distance
+        )
+        extra_predictions[name] = {
+            "nodes": _graph_nodes(extra_graph, "prediction"),
+            "edges": extra_edges,
+            "metrics": extra_metrics,
+        }
 
     return ViewerState(
         image=image,
@@ -368,6 +425,8 @@ def build_state(
         metrics=metrics,
         contrast_low=resolved_low,
         contrast_high=resolved_high,
+        primary_name=primary_name,
+        extra_predictions=extra_predictions,
     )
 
 
@@ -379,7 +438,18 @@ def _parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--image", type=Path, required=True, help="OME-Zarr image path")
-    parser.add_argument("--prediction", type=Path, default=None, help="Predicted .geff graph")
+    parser.add_argument(
+        "--prediction",
+        action="append",
+        default=[],
+        metavar="[NAME=]PATH",
+        help=(
+            "Predicted .geff graph. Repeatable to compare several methods in one "
+            "session (e.g. --prediction official_ilp=a.geff --prediction harmonic_v1=b.geff); "
+            "the first occurrence is primary. A bare PATH (no NAME=) uses the file stem as "
+            "its name."
+        ),
+    )
     parser.add_argument("--ground-truth", type=Path, default=None, help="Ground-truth .geff graph")
     parser.add_argument("--array-key", default="0", help="Zarr array key when --image is a group (default: 0)")
     parser.add_argument(
@@ -399,9 +469,26 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _parse_prediction_args(raw: Sequence[str]) -> list[tuple[str, Path]]:
+    """Parse repeated ``--prediction [NAME=]PATH`` values, first entry primary."""
+
+    parsed: list[tuple[str, Path]] = []
+    for entry in raw:
+        name, sep, path_str = entry.partition("=")
+        if sep:
+            parsed.append((name, Path(path_str)))
+        else:
+            parsed.append((Path(entry).stem, Path(entry)))
+    return parsed
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    for path in (args.image, args.prediction, args.ground_truth):
+    predictions = _parse_prediction_args(args.prediction)
+    primary_name, primary_path = predictions[0] if predictions else ("prediction", None)
+    extra_predictions = dict(predictions[1:])
+
+    for path in (args.image, primary_path, args.ground_truth, *extra_predictions.values()):
         if path is not None and not path.exists():
             print(f"Path does not exist: {path}", file=sys.stderr)
             return 2
@@ -414,13 +501,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     state = build_state(
         image_path=args.image,
-        prediction_path=args.prediction,
+        prediction_path=primary_path,
         ground_truth_path=args.ground_truth,
         array_key=args.array_key,
         scale=tuple(args.scale),
         max_distance=args.max_distance,
         contrast_low=args.contrast_low,
         contrast_high=args.contrast_high,
+        extra_prediction_paths=extra_predictions,
+        primary_name=primary_name,
     )
     server = create_server(state, host=args.host, port=args.port)
     browser_host = "127.0.0.1" if args.host in {"0.0.0.0", "::"} else args.host
@@ -428,7 +517,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Biohub Visual Inspector: {url}")
     print(f"Image shape: {state.shape}")
     if state.metrics:
-        print(json.dumps(state.metrics, ensure_ascii=False, indent=2))
+        print(f"[{state.primary_name}]", json.dumps(state.metrics, ensure_ascii=False, indent=2))
+    for name, value in state.extra_predictions.items():
+        print(f"[{name}]", json.dumps(value["metrics"], ensure_ascii=False, indent=2))
     if not args.no_browser:
         webbrowser.open(url)
     try:
