@@ -58,6 +58,7 @@ def fake_source_tree(tmp_path: Path) -> _FakeSourceTree:
         "LICENSE": b"Apache License\n",
         RECIPE_C_SOURCE.config_relative_path: b"inference:\n  detection_threshold: 0.96875\n",
         RECIPE_C_SOURCE.notebook_relative_path: b"fake notebook\n",
+        "source_code.py": b"value = 'clean'\n",
     }
     root = tmp_path / "source"
     commit = _git_checkout(root, payloads)
@@ -134,6 +135,40 @@ def test_source_contract_rejects_nested_checkout_root(fake_source_tree: _FakeSou
 
     with pytest.raises(ValueError, match=r"root|top-level"):
         validate_source_checkout(nested, contract=fake_source_tree.contract)
+
+
+def _index_marker(root: Path, relative: str) -> str:
+    output = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-v", "-z"],
+        check=True,
+        capture_output=True,
+    ).stdout.decode()
+    entry = next(item for item in output.split("\0") if item.endswith(f" {relative}"))
+    return entry[0]
+
+
+@pytest.mark.parametrize(
+    ("index_flag", "expected_marker"),
+    [("--assume-unchanged", "h"), ("--skip-worktree", "S")],
+)
+def test_source_contract_rejects_hidden_tracked_mutation_without_changing_index(
+    fake_source_tree: _FakeSourceTree,
+    index_flag: str,
+    expected_marker: str,
+) -> None:
+    source_file = fake_source_tree.root / "source_code.py"
+    subprocess.run(
+        ["git", "-C", str(fake_source_tree.root), "update-index", index_flag, "source_code.py"],
+        check=True,
+    )
+    before_marker = _index_marker(fake_source_tree.root, "source_code.py")
+    assert before_marker == expected_marker
+    source_file.write_text("value = 'tampered'\n")
+
+    with pytest.raises(ValueError, match=r"index|flag|assume|skip|clean"):
+        validate_source_checkout(fake_source_tree.root, contract=fake_source_tree.contract)
+
+    assert _index_marker(fake_source_tree.root, "source_code.py") == before_marker
 
 
 @pytest.mark.parametrize("field", ["license_sha256", "config_sha256", "notebook_sha256"])
@@ -307,6 +342,45 @@ def test_support_contract_rejects_predictor_hash_mismatch(
     )
 
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
+_CONTRACT_PATH_FIELDS = (
+    "license_relative_path",
+    "config_relative_path",
+    "notebook_relative_path",
+    "predictor_relative_path",
+    "primary_checkpoint_relative_path",
+    "secondary_checkpoint_relative_path",
+    "secondary_staging_relative_path",
+)
+_INVALID_CONTRACT_PATHS = ("/tmp/credential-leak", "../escape", "", ".")
+
+
+@pytest.mark.parametrize("field", _CONTRACT_PATH_FIELDS)
+@pytest.mark.parametrize("invalid_path", _INVALID_CONTRACT_PATHS)
+def test_source_contract_rejects_invalid_contract_paths(
+    fake_source_tree: _FakeSourceTree,
+    field: str,
+    invalid_path: str,
+) -> None:
+    contract = replace(fake_source_tree.contract, **{field: invalid_path})
+
+    with pytest.raises((ValueError, FileNotFoundError), match=r"path|relative|root|file"):
+        validate_source_checkout(fake_source_tree.root, contract=contract)
+
+
+@pytest.mark.parametrize("field", _CONTRACT_PATH_FIELDS)
+@pytest.mark.parametrize("invalid_path", _INVALID_CONTRACT_PATHS)
+def test_support_contract_rejects_invalid_contract_paths(
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+    field: str,
+    invalid_path: str,
+) -> None:
+    contract = replace(_fixture_support_contract(fake_primary, fake_secondary), **{field: invalid_path})
+
+    with pytest.raises((ValueError, FileNotFoundError), match=r"path|relative|root|file"):
         validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
 
 

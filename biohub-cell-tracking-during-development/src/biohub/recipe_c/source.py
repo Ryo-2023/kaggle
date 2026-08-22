@@ -36,6 +36,15 @@ CONFIG_SHA256 = "0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ce
 NOTEBOOK_SHA256 = "5adc99aef3b61f2d8c5da5253eb1df13262986e8879bf6f630b5c1b5fa345d9d"
 
 _HASH_CHUNK_SIZE = 1024 * 1024
+_CONTRACT_PATH_FIELDS = (
+    "license_relative_path",
+    "config_relative_path",
+    "notebook_relative_path",
+    "predictor_relative_path",
+    "primary_checkpoint_relative_path",
+    "secondary_checkpoint_relative_path",
+    "secondary_staging_relative_path",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +155,16 @@ def _artifact_file(root: Path, relative_path: str, label: str) -> Path:
     return resolved
 
 
+def _validate_contract_paths(contract: RecipeCSourceContract) -> None:
+    for field in _CONTRACT_PATH_FIELDS:
+        relative_path = getattr(contract, field)
+        if not isinstance(relative_path, str) or not relative_path.strip():
+            raise ValueError(f"contract {field} must be a non-empty relative path")
+        path = Path(relative_path)
+        if path.is_absolute() or not path.parts or ".." in path.parts:
+            raise ValueError(f"contract {field} must be a relative path under its root")
+
+
 def _validate_file(root: Path, relative_path: str, expected_sha256: str, label: str) -> str:
     path = _artifact_file(root, relative_path, label)
     actual_sha256 = _sha256(path)
@@ -185,6 +204,27 @@ def _git_checkout_root(root: Path) -> Path:
         )
 
     return expected_root
+
+
+def _require_normal_git_index(root: Path) -> None:
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-v", "-z"],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip() or "unable to inspect source checkout index"
+        raise ValueError(f"source checkout index could not be read: {detail}")
+    for entry in result.stdout.split(b"\0"):
+        if not entry:
+            continue
+        marker = chr(entry[0])
+        relative = entry[2:].decode(errors="replace")
+        if marker != "H":
+            raise ValueError(
+                "source checkout index flags are not allowed: "
+                f"{marker} {relative}",
+            )
 
 
 def _require_clean_git_checkout(root: Path) -> None:
@@ -248,6 +288,8 @@ def validate_source_checkout(
         raise ValueError(
             f"source commit mismatch: expected {contract.source_commit}, got {actual_commit}",
         )
+    _validate_contract_paths(contract)
+    _require_normal_git_index(root)
     _require_clean_git_checkout(root)
 
     license_sha256 = _validate_file(
@@ -310,6 +352,7 @@ def validate_support_artifacts(
 
     primary_root = Path(primary_root)
     secondary_root = Path(secondary_root)
+    _validate_contract_paths(contract)
     if primary_root.resolve() == secondary_root.resolve():
         raise ValueError("primary and secondary support artifacts must use distinct roots")
 
