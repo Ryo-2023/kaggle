@@ -5,7 +5,8 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-0.95 campaign技術計画の最新push: `de582ef`
+本レポート更新前に確認した0.95 campaignのremote commit: `976e87c`
+Task1実装完了時のコードHEAD: `17135f0`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
@@ -29,19 +30,20 @@
 
 ### 1.1 0.95 Performance Goalの現在地
 
-2026-08-22、固定5サンプルのvendored RoyerLab由来公式Final Score macroを `0.95` 以上にする目標を開始した。GTはprediction GEFFとmanifestの永続化・hash検証後の評価にだけ使用し、threshold、checkpoint、候補生成、手法選択へ戻さない。Kaggleへの外部submissionはこのcampaignに含めない。
+2026-08-22、固定5サンプルのvendored RoyerLab由来公式Final Score macroを `0.95` 以上にする目標を開始した。GTはprediction GEFFとmanifestを永続化・hash検証した後の公式評価とerror analysisに使用でき、完了済みの評価・error analysisは次の独立したmethod/model family選択に使用できる。ただし、推論、feature生成、cache生成、candidate生成、association input、parameter fitting、current-run branch調整へGTを戻すことは禁止する。Kaggleへの外部submissionはこのcampaignに含めない。
 
 | 項目 | 現在値 / 状態 |
 |---|---|
 | 固定panel | `0113`、`0b`、`0c`、`0db`、divisionを含む`12df`の5件。除外しない |
-| 既存実測best | `harmonic_v1` macro `0.7944143977140719` |
-| 目標差 | `+0.1555856022859281` |
+| macro target | `0.95` |
+| Current BestKnown（既存実測best） | `harmonic_v1` macro `0.7944143977140719` |
+| targetとの差 | `+0.1555856022859281` |
 | 第一候補 | 公開 `Recipe C` dual-seed、D4 TTA、ILP、gap/safe-division/track repair |
 | 一次source | `https://github.com/asapacsin/biohub-cell-tracking`、commit `843a47fdd531bdf7e6377673135519c54b69ae28`、Apache-2.0 |
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
 | source側5件参考macro | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。こちらの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | source/config/checkpoint契約のTDD実装開始前。設計・実装計画はcommit `de582ef`までpush済み |
+| 現在の作業 | Task1（source/config/checkpoint契約）は完了。次はTask2（protocol/selection lock） |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -58,10 +60,17 @@ Recipe Cは次の2つのKaggle assetを必要とする。primary packだけで�
 
 | asset | 内容 | 期待SHA-256 |
 |---|---|---|
-| `pilkwang/biohub-tracking-support-pack-50ep-v1` | predictor repo + primary `split_0` checkpoint | `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` |
-| `pilkwang/biohub-temporal-unet3d-seed314159-v1` | secondary seed checkpoint。run-localで`seed_314159` pathへstage | `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` |
+| `pilkwang/biohub-tracking-support-pack-50ep-v1` | predictor repo + primary `split_0` checkpoint、v10 / CC0 | predictor `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b`、primary checkpoint `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` |
+| `pilkwang/biohub-temporal-unet3d-seed314159-v1` | secondary seed checkpoint、v2 / CC0。run-localで`seed_314159` pathへstage | `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` |
+| 展開後の2 asset合計 | primary + secondary | 約711 MB |
 
 一次sourceの`run_prediction()`はCUDA未検出時に強制停止する。性能configや一次sourceを変えずにCPU/MPS互換を得るため、同sourceの`build_predict_command()`が生成したargvをadapterから実行し、copy済みrun-local predictorのdevice選択だけを `CUDA → MPS → CPU` にする。現在のLinux DockerはPyTorch CPU wheelのためCPU、NVIDIA desktopでは同じ`auto`指定でCUDA、macOS nativeの対応実行系ではMPSを優先する。ILP、GEFF I/O、公式metricはCPUのままとする。
+
+### 1.2 Task1完了と適応ループ
+
+Task1（Recipe Cのsource・config・checkpoint契約固定）は完了し、独立したLuna reviewは `APPROVED` だった。Task1の実装履歴は `2a60cc0`、`87cf762`、`6887576`、`17135f0` である。対象テストは `82 passed`、全リポジトリの確認は `416 passed, 9 skipped, 2 warnings`、Task1対象Ruffはpassだった。これは契約・provenance検証の完了であり、Recipe Cの5 sample公式評価や0.95到達を意味しない。
+
+今後の適応ループは、(1) 実験前にTask2のprotocol/selection lockへpanel、source、config、checkpoint、code commit、仮説、control、採否基準を固定し、(2) GT-freeで推論してprediction GEFFとmanifestを永続化・hash検証し、(3) その後に公式評価とerror analysisを行い、(4) 結果を次に検証する独立したmethod/model familyの選択へだけ使い、(5) 5 sampleの結果をappend-only ledgerへ記録する、という順序で進める。GTは現runの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整には使用しない。同一method familyで5回連続してBestKnownを更新できなければmicrotuningを停止してfailure analysisへ戻り、全family通算10実験以上でmeaningful improvementがなければarchitecture reviewと公開手法の再調査へ切り替える。
 
 ## 2. Done条件と実験範囲
 
@@ -79,7 +88,7 @@ Kaggle train image (.zarr)
   -> RoyerLab由来公式metric
 ```
 
-GT GEFFは、推論・cache・candidate生成・threshold決定には使用せず、評価コマンドのmetric phaseだけで開いた。
+GT GEFFは、推論・feature生成・cache・candidate生成・association input・parameter fitting・current-run branch調整には使用せず、prediction GEFFとmanifestを永続化・hash検証した後の公式評価で開いた。公式評価後のerror analysisと、次に検証する独立したmethod/model familyの選択には使用できるが、同じrunへ戻さない。
 
 ### 対象sample
 
@@ -358,13 +367,14 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 
 実測結果:
 
-- 最終full pytest: `199 passed, 2 warnings`（2026-08-22 JST）。warningはdivisionなしsplitでdivision termをdropする既知の公式metric警告2件である。
+- campaign前のdetector-fixed full pytestは `199 passed, 2 warnings`（2026-08-22 JST）。warningはdivisionなしsplitでdivision termをdropする既知の公式metric警告2件である。
+- Task1の最終full pytestは `416 passed, 9 skipped, 2 warnings`。Task1対象テストは `82 passed`、Task1対象Ruffはpassだった。
 - validation receipt実装はcommit `fbfbf26`。初回レビューの2件を修正し、fresh re-reviewは `APPROVED`。5 sample×4方式の実データ集約も完了した。
-- 最新のreport＋validation receipt限定テスト: `25 passed`、対象Ruff: `All checks passed!`（2026-08-22 JST）。
+- 既存のreport＋validation receipt限定テストは `25 passed`、対象Ruffは `All checks passed!`（2026-08-22 JST）。
 - detector-fixed関連確認: `12 passed in 3.83s`、対象Ruff `All checks passed!`
 - race対象Ruff: `All checks passed!`
 - report対象pytest: `4 passed`
-- full repository Ruff: 24件の既存問題（`src/biohub/official_metrics/metrics.py`、`src/biohub/visualizer/*`）が残る。今回の変更対象外のため修正していない。
+- campaign前のfull repository Ruffには24件の既存問題（`src/biohub/official_metrics/metrics.py`、`src/biohub/visualizer/*`）が残るという履歴がある。Task1の最終Ruff確認はpassであり、今回のTask1契約変更による失敗はない。
 
 ## 11. Commit・push・成果物
 
@@ -373,7 +383,10 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
 - historical race branch: `codex/biohub-multi-method-race`
 - current performance branch: `codex/biohub-095-performance`
-- 0.95 campaignの設計・計画commit: `de582ef`、push済み
+- 0.95 campaignの初期設計・計画commit: `de582ef`
+- 本レポート更新前に確認したremote commit: `976e87c`
+- Task1実装完了時のコードHEAD: `17135f0`
+- Task1完了履歴: `2a60cc0`、`87cf762`、`6887576`、`17135f0`
 - validation receipt実装commit: `fbfbf26`
 - current remote: `origin/codex/biohub-095-performance`
 - PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-095-performance>
@@ -440,13 +453,13 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 ### 次の一手
 
-1. 公開Recipe Cのsource/config/primary/secondary checkpoint契約をTDDで実装し、二つのasset SHA-256を検証する。
-2. GT-free 2-frame smokeを通し、manifest検証後にだけGTを開くofficial評価境界を確認する。
-3. configをselection lockへ固定し、5 sampleを除外なしで逐次推論・公式評価する。macro `>=0.95` の実receiptが得られるまで達成扱いにしない。
-4. 未達時だけRAM-safe診断でnode/candidate/oracle上限を分解し、GT診断結果を同configの選択へ戻さない。
+1. 次の作業はTask2のprotocol/selection lockを実装し、PANEL_V1、source/config/checkpoint、code commit、仮説、control、採否基準を実験前に固定する。
+2. GT-free 2-frame smokeを通し、prediction GEFFとmanifestの永続化・hash検証後にだけGTを開く公式評価境界を確認する。
+3. selection lockを変更せず5 sampleを除外なしで逐次推論・公式評価する。macro `>=0.95` の実receiptが得られるまで達成扱いにしない。
+4. 未達時だけRAM-safe診断でnode/candidate/oracle上限を分解する。診断結果はpersisted prediction後のerror analysisとして次の独立したmethod/model family選択に使用できるが、GTを推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
 5. `reverse_weight=0.10`、division weight `.6`、Lane F temperature候補は既存panel結果から採用しない。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。最終full pytestは通過したが、division対応は未解決である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1の契約固定は完了したがRecipe Cの本repo公式評価は未実施で、0.95は未達成扱いである。division対応も未解決である。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 

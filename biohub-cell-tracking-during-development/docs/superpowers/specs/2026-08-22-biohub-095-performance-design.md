@@ -6,7 +6,7 @@
 
 ## 1. 目的と判定基準
 
-既存の公式 `TemporalUNet3D + Node Transformer + ILP` detector-fixed pipelineを土台に、一次配布元を固定できる公開手法のグラフ修復をGT非依存で追加し、固定5サンプル `PANEL_V1` のRoyerLab由来公式Final Score macro平均を `0.95` 以上へ改善する。
+既存の公式 `TemporalUNet3D + Node Transformer + ILP` detector-fixed pipelineをCurrent BestKnown比較基準とし、一次配布元を固定できる公開Recipe Cを第一候補として、固定5サンプル `PANEL_V1` のRoyerLab由来公式Final Score macro平均を `0.95` 以上へ改善する。associationだけを前提にせず、persist済みpredictionのerror analysisが別のbottleneckを示した場合はdetector、feature、division、optimizer、postprocess、model familyを再設計してよい。
 
 `PANEL_V1` は次の5件から変更しない。
 
@@ -31,16 +31,17 @@ Done判定は次の全条件を必要とする。
 
 ### 2.1 GTを利用してよい境界
 
-GTは、完成済みprediction GEFFとmanifestのhash整合を検証した後、公式metric評価と失敗原因の事後診断でのみ開く。次には使用しない。
+GTは、完成済みprediction GEFFとmanifestのhash整合を検証した後、公式metric評価、失敗原因の事後診断、次実験のmethod/model family選択に使用してよい。次には使用しない。
 
 - detector推論
 - cache生成
 - candidate edge生成
-- threshold・weight・checkpoint・methodの選択
+- 同一runのthreshold・weight・parameter fitting
+- detector/association/model inputまたはsampleごとの推論条件分岐
 - graph repairの条件分岐
 - sample除外
 
-診断で得たGT対応edge、TP/FP/FN、oracle、per-edge rankは次のconfig選択へ入力しない。診断は到達可能上限と壊れている境界の説明に限定する。
+診断で得たGT対応edge、TP/FP/FN、oracle、per-edge rankは、次に検証する独立したmethod/model familyやsubsystem仮説の選択へ利用できる。ただしGT座標・対応edge・metric値を次runのmodel input、loss、threshold fitting、sample別parameterへ渡さない。各次実験は実行前に仮説、変更点、control、採否基準、prior evidenceをcommit済みexperiment lockへ固定する。
 
 ### 2.2 configの固定
 
@@ -51,11 +52,17 @@ GTは、完成済みprediction GEFFとmanifestのhash整合を検証した後、
 - image/cacheだけから計算する単位付き統計
 - 評価前にcommitされた機械可読selection lock
 
-公式metricを見た後のparameter sweep、best sample/seedの採用、低score sampleの除外を禁止する。既存 `PANEL_V1` は結果閲覧済みのretrospective benchmarkとして凍結し、新しいconfigを一度だけlocked confirmationする。
+同一runの公式metricを目的変数にしたparameter fitting/sweep、best sample/seedだけの採用、低score sampleの除外を禁止する。一方、完了済みexperimentの全5件error analysisを根拠に、次の独立したmethod/model familyやarchitecture仮説を選ぶ逐次研究は許可する。各experimentは5件を同じ固定configで再評価し、成功・失敗を含めappend-only ledgerへ残す。
 
 ### 2.3 補助panel
 
-既存5件がすべて `44b6_` である偏りを補うため、test IDと `PANEL_V1` を除外した `6bba_` train sampleから、sample IDのSHA-256順でscore非依存に `D_DEV` を固定する。`D_DEV` のGTもmodel selectionには使わず、完成configのdomain smoke/evaluationにだけ使う。将来一般化性能を主張する場合は、別の未見 `H_HOLDOUT` を評価前に固定する。
+既存5件がすべて `44b6_` である偏りを補うため、test IDと `PANEL_V1` を除外した `6bba_` train sampleから、sample IDのSHA-256順でscore非依存に `D_DEV` を固定する。`D_DEV` はdomain smoke/evaluationに使えるが、`PANEL_V1` の分母や0.95 gateと混ぜない。将来一般化性能を主張する場合は、別の未見 `H_HOLDOUT` を評価前に固定する。
+
+### 2.4 自律研究ledgerとBestKnown
+
+各experimentは実行前に `experiment_id`、method family、仮説、expected gain、cost、risk、novelty、変更点、control、固定config/hash、採否基準を記録する。評価後は5件すべてのFinal Score、macro、median、control勝率、worst-case harm、division TP/FP/FN/Jaccard、runtimeを追記する。
+
+BestKnownへ昇格できるのは、5/5 prediction/official receiptが揃い、固定panel・公式metric・macro算術を変えず、従来BestKnownよりmacroが高いexperimentだけである。単一sample改善だけでは昇格しない。同一method familyで5 experiment連続BestKnown更新がなければ微小parameter tuningを停止してfailure analysisをやり直す。全family通算10 experiment以上meaningful improvementがなければarchitecture-level reviewと公開手法再調査を実施する。
 
 ## 3. 採用する手法
 
@@ -82,10 +89,10 @@ source commit、license、notebookとrepositoryの対応、weightの取得元、
 
 Recipe Cの公開assetは1つではなく、次の2つを同時に必要とする。
 
-- primary/support tree: Kaggle dataset `pilkwang/biohub-tracking-support-pack-50ep-v1`。`repo/`とprimary `weights/unet_transformer/split_0/edge_predictor_best.pth` を含む。
-- secondary seed: Kaggle dataset `pilkwang/biohub-temporal-unet3d-seed314159-v1`。配布時は `weights/unet_transformer/split_0/edge_predictor_best.pth` だが、実行用stagingでは `weights/unet_transformer/seed_314159/edge_predictor_best.pth` として参照する。
+- primary/support tree: Kaggle dataset `pilkwang/biohub-tracking-support-pack-50ep-v1` version 10、CC0。`repo/`とprimary `weights/unet_transformer/split_0/edge_predictor_best.pth` を含む。
+- secondary seed: Kaggle dataset `pilkwang/biohub-temporal-unet3d-seed314159-v1` version 2、CC0。配布時は `weights/unet_transformer/split_0/edge_predictor_best.pth` だが、実行用stagingでは `weights/unet_transformer/seed_314159/edge_predictor_best.pth` として参照する。
 
-期待SHA-256はprimary `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771`、secondary `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` である。primary packだけを取得してsecondaryを欠いた状態では実行しない。
+期待SHA-256はpredictor `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`、primary checkpoint `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771`、secondary checkpoint `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` である。primary packだけを取得してsecondaryを欠いた状態では実行しない。
 
 `DualSeed / Frame Retention Guard` は次候補だが、追加checkpointのsource/schema/license/training splitを固定できるまで実行候補へ昇格させない。provenanceを閉じられない `DeepCenter`、opaque notebook、非公開weightは採用しない。
 
@@ -119,7 +126,9 @@ per-sample receipt + fixed-panel aggregation + Japanese report
 
 既存 `detector_fixed_race` cache schema、mmap、prediction manifest、official metric adapterを再利用する。vendored `src/biohub/official_metrics/metrics.py` と `division_metrics.py` は変更しない。
 
-一次sourceの `biohub_pipeline.inference.run_prediction()` はCUDAが利用できない環境を明示的に拒否する。本campaignはその関数内のCUDA gateを改変せず、同じ一次sourceの `build_predict_command()` で生成・固定したargvをadapterから `subprocess.run(..., shell=False)` で実行する。device互換変更はrun-localにcopyしたsupport predictorの選択式だけへ適用し、`CUDA → MPS → CPU` とする。一次sourceと配布assetはread-onlyで保持し、patch前後hashとこのorchestration adaptationをreceiptへ残す。
+一次sourceの `biohub_pipeline.inference.run_prediction()` はCUDAが利用できない環境を明示的に拒否する。本campaignはその関数内のCUDA gateを改変せず、同じ一次sourceの `build_predict_command()` で生成・固定したargvをadapterから `subprocess.run(..., cwd=staged_repo, env={..., PYTHONPATH: src}, shell=False, check=True)` で実行する。device互換変更はrun-localにcopyしたsupport predictorの選択式だけへ適用し、`CUDA → MPS → CPU` とする。一次sourceと配布assetはread-onlyで保持し、patch前後hashとこのorchestration adaptationをreceiptへ残す。
+
+`build_predict_command()` はsplit file作成とpredictor patchを伴う。特にedge-threshold patchは二回目の適用が失敗するため、各runは期待predictor hashから作る新しいpristine staged copyを一度だけ使用する。direct subprocess後は外部sourceと同じGEFF件数検証、`postprocessing.configure()`、`write_submission_from_geff()`、CSV integrity、out-degree診断を省略しない。Python 3.11で必要moduleのcompile/importは確認済みで、pandasを要求する外部fixed-8 evaluatorはこのinference経路へimportしない。
 
 グラフ修復はcache node、candidate score、予測graphだけを受け取り、image path、GT path、metric resultを引数に持たない。1-frame gapは既存cacheに `delta_t=2` candidateがないため、retained nodeのphysical positionとtrack velocityから新しい候補をGT-freeで生成し、生成理由とgateをreceiptへ残す。
 
@@ -155,9 +164,9 @@ source/checkpoint/config/device/seed/code commitをselection lockへ固定する
 
 `D_DEV` をdomain smokeとして完走し、configは変更せず `PANEL_V1` 5件を順次実行する。巨大cacheの `0b` と `12df` は同時実行しない。全predictionを公式metricで評価し、macroと各sampleの必須値を日本語レポートへ追記する。
 
-### Wave E — 未達時の診断
+### Wave E — 未達時の診断と次仮説
 
-locked Recipe Cが0.95未達、またはsource側参考値とofficial値がmaterialに不一致の場合だけ、mmap/chunked diagnosticsを実装する。診断結果は手法選択へ還流させず、未達境界の説明と次の独立した公開候補の判断材料に限定する。
+locked Recipe Cが0.95未達、またはsource側参考値とofficial値がmaterialに不一致の場合、mmap/chunked diagnosticsを実装する。診断結果は次に検証するmethod/model familyやsubsystem仮説の選択へ使えるが、GT edge/座標やmetric値を推論input・loss・threshold fittingへ渡さない。次experimentは実行前lockを作り、同じ5件で完走する。
 
 ## 7. deviceと計算資源
 
@@ -188,8 +197,9 @@ ILP、GEFF I/O、official metric、巨大mmapのstream処理はCPU処理を維�
 
 ## 9. 停止条件
 
-- GTが推論・cache・candidate生成・config選択へ入る経路を検出した場合はrunを無効化する。
+- GTが推論・cache・candidate生成・model input・parameter fittingへ入る経路を検出した場合はrunを無効化する。完了済みerror analysisから次method/model familyを選ぶこと自体は許可する。
 - source/checkpoint/provenanceを固定できない公開手法は採用しない。
 - OOM時は同じ巨大cacheを一括展開せず、mmap/chunk/逐次sampleへ切り替える。
 - official metricファイルを変更してスコアを上げない。
+- 同一method familyで5回連続BestKnown更新がなければ微小tuningを止め、10 experiment以上meaningful improvementがなければarchitecture-level reviewへ切り替える。
 - 0.95未達の数値を達成と表現せず、実測差と次の独立した公開候補を記録する。

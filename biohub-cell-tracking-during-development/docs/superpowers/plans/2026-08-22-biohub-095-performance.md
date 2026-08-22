@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 推論、cache、candidate生成、method/config/checkpoint選択へGTを渡さない。GTを開くのはprediction GEFFとmanifestを永続化・hash検証した後のofficial evaluationだけ。
+- 推論、cache、candidate生成、model input、parameter fittingへGTを渡さない。GTを開くのはprediction GEFFとmanifestを永続化・hash検証した後。完了済みofficial evaluation/error analysisは次experimentのmethod/model family選択へ使えるが、GT edge/座標/metricを次runのinput、loss、threshold fittingへ渡さない。
 - `PANEL_V1` は `44b6_0113de3b`、`44b6_0b24845f`、`44b6_0c582fdc`、`44b6_0db75fae`、`44b6_12dfb391` の5件で固定し、失敗・低score・divisionを理由に分母から除外しない。
 - Recipe Cはsource側の公開configをbyte-for-byteで固定する。本panelのmetricを見てthreshold、weight、postprocess、seedを変更しない。
 - source checkout、primary support repo、別配布secondary seed、primary/secondary checkpointは期待commit/SHA-256が一致しない限り実行しない。opaque/不足assetへfallbackしない。
@@ -25,6 +25,8 @@
 - 既存5sample dataは並行one-pass worktreeのread-only artifact `/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train` を参照し、コピー・変更しない。
 - Kaggleへの外部submission送信は行わない。大容量data/checkpoint/predictionはGit管理しない。
 - ユーザー向けreportはすべて日本語。性能主張は実測receiptに限定する。
+- 各experimentを実行前lockへ記録し、評価後に5sample macro/median/control勝率/worst-case harm/divisionをappend-only ledgerへ残す。単一sample改善ではBestKnownへ昇格しない。
+- 同一method familyで5 experiment連続BestKnown更新がなければ微小tuningを停止し、全family通算10 experiment以上meaningful improvementがなければarchitecture-level reviewと公開手法再調査へ切り替える。
 
 ---
 
@@ -37,14 +39,14 @@
 - Create: `tests/test_recipe_c_source.py`
 
 **Interfaces:**
-- `RecipeCSourceContract` はsource URL/commit、license/config/notebook hash、primary/secondary checkpoint relative pathとSHA-256を保持する。
+- `RecipeCSourceContract` はsource URL/commit、license/config/notebook hash、primary v10/secondary v2 dataset identity/CC0、predictor、primary/secondary checkpoint relative pathとSHA-256を保持する。
 - `validate_source_checkout(root: Path, contract: RecipeCSourceContract = RECIPE_C_SOURCE) -> dict[str, object]` はGit HEADと固定file hashを検証する。
 - `validate_support_artifacts(primary_root: Path, secondary_root: Path, contract: RecipeCSourceContract = RECIPE_C_SOURCE) -> dict[str, object]` はprimaryの`repo/scripts/predict_unet_transformer.py`、primary checkpoint、別artifactのsecondary checkpointを検証する。
 - primary relative pathは `weights/unet_transformer/split_0/edge_predictor_best.pth`。secondary配布時relative pathも同じだが、run-local stagingでは `weights/unet_transformer/seed_314159/edge_predictor_best.pth` へ配置する。
 - configはsource `configs/experiments/recipe_c_motion_off_edge_0_40_det0_96875.yaml` と同一内容、期待SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` とする。
-- checkpointはprimary `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771`、secondary `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f`。
+- predictorは `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`、checkpointはprimary `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771`、secondary `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f`。
 
-- [ ] **Step 1: hash不一致とasset不足の失敗テストを書く**
+- [x] **Step 1: hash不一致とasset不足の失敗テストを書く**
 
 ```python
 def test_source_contract_rejects_wrong_commit(tmp_path, fake_source_tree):
@@ -59,28 +61,30 @@ def test_support_contract_requires_both_distinct_checkpoints(tmp_path, fake_prim
         validate_support_artifacts(fake_primary.root, fake_secondary.root)
 ```
 
-- [ ] **Step 2: source testをREDで実行する**
+- [x] **Step 2: source testをREDで実行する**
 
 Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run pytest -q tests/test_recipe_c_source.py'`
 
 Expected: missing `biohub.recipe_c.source` でFAIL。
 
-- [ ] **Step 3: canonical SHA-256検証とconfigを最小実装する**
+- [x] **Step 3: canonical SHA-256検証とconfigを最小実装する**
 
 hashは1 MiB chunkで読み、manifestへabsolute credential pathを保存しない。source receiptにはsource commit、file hashes、license、config values、checkpoint hashesをcanonical JSONとして返す。
 
-- [ ] **Step 4: source testをGREENで実行する**
+- [x] **Step 4: source testをGREENで実行する**
 
 Run: Task 1 Step 2と同じ。
 
 Expected: 全テストPASS。
 
-- [ ] **Step 5: Task 1だけをcommitする**
+- [x] **Step 5: Task 1だけをcommitする**
 
 ```bash
 git add configs/biohub_095_recipe_c.yaml src/biohub/recipe_c tests/test_recipe_c_source.py
 git commit -m "Pin public Biohub Recipe C source and assets"
 ```
+
+実測: 初回REDはmodule欠落。review 3 roundのfail-closed hardening後、最終targeted `82 passed`、全repo `416 passed, 9 skipped, 2 warnings`、Ruff pass。実装range `976e87c..17135f0` は独立Luna reviewでAPPROVED（finding 0）。
 
 ### Task 2: immutable protocolとselection lockを機械化する
 
@@ -91,10 +95,11 @@ git commit -m "Pin public Biohub Recipe C source and assets"
 
 **Interfaces:**
 - `PANEL_V1: tuple[str, ...]` は固定5件を順序付きで公開する。
-- `build_selection_lock(source_receipt, config_path, code_commit, requested_device, result_visible_before_selection=True) -> dict[str, object]` はpanel/config/source/asset identityをcanonical hash化する。
-- `write_selection_lock(path: Path, payload: Mapping[str, object]) -> Path` は既存pathを上書きせず、`ground_truth_used_for_selection=false` と `panel_status=retrospective_locked_confirmation` を必須にする。
-- `validate_selection_lock(path: Path) -> dict[str, object]` はlock ID、5件の順序、config/source/checkpoint hash、GT境界を再検証する。
-- `scripts/run_biohub_095.py freeze` は `artifacts/biohub_095/selection_lock.json` を作る。
+- `ExperimentSpec` はfrozenな事前登録として、`experiment_id`、`method_family`、仮説、expected gain、cost、risk、novelty、変更点、control ID、採否基準、prior evidence receipt hashを保持し、空値・非finite値を拒否する。
+- `build_selection_lock(source_receipt, config_path, code_commit, requested_device, experiment: ExperimentSpec, prior_evaluation_receipts=()) -> dict[str, object]` はpanel/config/source/asset/experiment/prior evidence identityをcanonical hash化する。
+- `write_selection_lock(path: Path, payload: Mapping[str, object]) -> Path` はexclusive createで既存file/directory/symlinkを上書きせず、`ground_truth_used_for_prediction=false`、`ground_truth_used_for_parameter_fitting=false`、`panel_status=retrospective_adaptive_research` を必須にする。
+- `validate_selection_lock(path: Path) -> dict[str, object]` はlock IDをpayloadから再計算し、5件のexact順序、config bytes、source/predictor/checkpoint identity、clean code HEAD、device policy、GT境界を直接キーで再検証する。旧receiptのfield alias探索や動的panel選択は使わない。
+- `scripts/run_biohub_095.py freeze` は `artifacts/biohub_095/selection_lock.json` を作る。prior evaluationを使った場合はreceipt hash、`ground_truth_used_for_method_family_selection=true`、`ground_truth_usage_scope=post_prediction_analysis_only`を記録する。
 
 - [ ] **Step 1: panel変更・GT選択・lock上書きの失敗テストを書く**
 
@@ -109,6 +114,27 @@ def test_selection_lock_is_write_once(tmp_path, valid_lock):
     path = write_selection_lock(tmp_path / "selection_lock.json", valid_lock)
     with pytest.raises(FileExistsError):
         write_selection_lock(path, valid_lock)
+
+
+@pytest.mark.parametrize(
+    "field", ("ground_truth_used_for_prediction", "ground_truth_used_for_parameter_fitting")
+)
+def test_selection_lock_rejects_forbidden_gt_usage(valid_lock, field):
+    valid_lock["ground_truth_usage"][field] = True
+    with pytest.raises(ValueError, match="ground truth|GT"):
+        validate_selection_lock_payload(valid_lock)
+
+
+def test_selection_lock_rejects_reordered_panel(valid_lock):
+    valid_lock["panel"]["sample_ids"] = list(reversed(PANEL_V1))
+    with pytest.raises(ValueError, match="PANEL_V1"):
+        validate_selection_lock_payload(valid_lock)
+
+
+def test_selection_lock_recomputes_id(valid_lock):
+    valid_lock["experiment"]["hypothesis"] = "post-hoc mutation"
+    with pytest.raises(ValueError, match="selection_lock_id"):
+        validate_selection_lock_payload(valid_lock)
 ```
 
 - [ ] **Step 2: protocol testをREDで実行する**
@@ -119,7 +145,9 @@ Expected: missing protocol symbolsでFAIL。
 
 - [ ] **Step 3: canonical lockとfreeze CLIを実装する**
 
-既存Claude receipt auditorのfield aliasは再利用するが、今回のlockは`selection_lock_id`、`source_commit`、`config_sha256`、両checkpoint SHA、`requested_device`、`ground_truth_used_for_selection=false`を直接必須化する。
+`validate_source_checkout()`と`validate_support_artifacts()`の認証済みreceiptをfreeze前に作り、今回のlockは`selection_lock_id`、`experiment_id`、`source_commit`、license/notebook/config SHA、predictor/両checkpoint SHA、dataset version/license、`requested_device`、`ground_truth_used_for_prediction=false`、`ground_truth_used_for_parameter_fitting=false`を直接必須化する。configはparse/re-dumpせず実bytesをhash化し、source identityは`RECIPE_C_SOURCE`と照合する。lock IDは `selection_lock_id` を除くpayloadのcanonical JSON SHA-256として再計算する。JSON NaN/Inf、未知field、absolute/credential/GT path、40桁lowercase SHA-1でないcode commit、dirty checkoutを拒否する。
+
+prior evidenceが空ならmethod-family selection flagはfalse、非空ならtrueかつscopeは`post_prediction_analysis_only`でなければならない。prior receipt本体やGT edge/座標/metricをlockへコピーせず、強いGT ordering evidenceを持つreceiptのcanonical file hashと用途だけを保存する。writeはvalidation後に`open(..., "x")`相当で排他的に作成し、書込み後の再読・canonical bytes・lock ID検証まで行う。
 
 - [ ] **Step 4: protocol/CLI testをGREENで実行する**
 
@@ -143,7 +171,7 @@ git commit -m "Add immutable Biohub 0.95 selection lock"
 - Modify: `scripts/run_biohub_095.py`（`dry-run` subcommand）
 
 **Interfaces:**
-- `stage_recipe_c_runtime(source_root, primary_support_root, secondary_support_root, destination, selection_lock) -> RuntimeStage` はsourceと両supportを検証してから、primaryの `repo/`だけを新規run directoryへcopyする。primary/secondary checkpointはread-only元pathを指すsymlinkとして、staged support treeのsource期待pathへ配置する。
+- `stage_recipe_c_runtime(source_root, primary_support_root, secondary_support_root, destination, selection_lock) -> RuntimeStage` はsourceと両supportを検証してから、期待predictor hashを持つprimaryのpristine `repo/`だけを新規run directoryへcopyする。primary/secondary checkpointはread-only元pathを指すsymlinkとして、staged support treeのsource期待pathへ配置する。
 - `apply_device_fallback_patch(predictor_path: Path) -> bool` はsupport scriptの `cuda if available else cpu` preimageを `cuda → mps → cpu` へ置換し、二回目はno-op、未知preimageは失敗する。
 - `RuntimeStage` はstaged repo、weights root、source root、config、patch前後SHA、resolved device候補を保持する。
 - 元source/primary support/secondary supportのdirectory digestがstaging前後で一致しなければ失敗する。
@@ -176,7 +204,7 @@ Expected: missing staging/device patchでFAIL。
 
 - [ ] **Step 3: immutable stagingとstrict source patchを実装する**
 
-copy先が存在する場合は削除・上書きせず`FileExistsError`。external sourceのD4、dual-seed、edge-threshold patchはpinned `biohub_pipeline.inference` をimportしてstaged predictorへ適用する。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへstagingし、元artifactは変更しない。
+copy先が存在する場合は削除・上書きせず`FileExistsError`。各runはpristine predictorから一度だけstageする。external sourceのD4、dual-seed、edge-threshold patchはpinned `biohub_pipeline.inference` をimportしてstaged predictorへ適用し、edge-threshold patchを同じstageへ二回適用しない。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへstagingし、元artifactは変更しない。
 
 - [ ] **Step 4: staging/source/protocol testをGREENで実行する**
 
@@ -203,7 +231,7 @@ git commit -m "Stage Recipe C runtime without mutating upstream"
 **Interfaces:**
 - `run_recipe_c_inference(image_root, sample_ids, runtime_stage, selection_lock, output_root, max_frames=None) -> InferenceReceipt` はimageとlocked configだけを受け取り、GT path/metric/result引数を持たない。
 - external `build_predict_command()` を使い、dual-seed、D4、threshold `.96875/.40`、ILP weights、sample splitをcommandへ固定する。
-- external `run_prediction()` はCUDA未検出時の強制停止を含むため呼ばない。`build_predict_command()` が返すargvをadapterが `subprocess.run(argv, shell=False, check=True)` で実行し、staged predictorのdevice patchにより `CUDA → MPS → CPU` を選ぶ。
+- external `run_prediction()` はCUDA未検出時の強制停止を含むため呼ばない。`build_predict_command()` が返すargvをadapterが `subprocess.run(argv, cwd=stage.repo_dir, env={**os.environ, "PYTHONPATH": "src"}, shell=False, check=True)` で実行し、staged predictorのdevice patchにより `CUDA → MPS → CPU` を選ぶ。
 - raw GEFFを外部 `write_submission_from_geff()` でpostprocessし、`postprocessed_csv_to_geffs()` がsampleごとのreload可能GEFFへ変換する。
 - GEFF nodeは `(t,z,y,x)`、edgeはdirected source→target、in-degree `<=1`、out-degree `<=2`、隣接frameを検証する。
 - 各GEFFにper-prediction manifestを作り、`selection_lock_id`、source/config/checkpoint/patch hash、resolved device、runtime、node/edge/fork count、`ground_truth_included=false`を保存する。
@@ -247,7 +275,7 @@ Expected: missing runner/bridgeでFAIL。
 
 - [ ] **Step 4: external source orchestrationとGEFF writerを最小実装する**
 
-subprocessはargument listで実行し、shell interpolationを使わない。一次sourceのCUDA-only wrapper bypassはalgorithm変更ではなくdevice/orchestration互換adaptationとして、wrapper source hash、生成argv、device patch前後hashをreceiptへ記録する。途中失敗時はpartial directoryに`FAILED.json`を残し、valid manifestを作らない。GEFF writerはtracksdataの既存attribute contractを使い、postprocess algorithm自体は外部sourceを呼ぶ。
+subprocessはargument listで実行し、shell interpolationを使わない。一次sourceのCUDA-only wrapper bypassはalgorithm変更ではなくdevice/orchestration互換adaptationとして、wrapper source hash、生成argv、split path、patch flags、device patch前後hashをreceiptへ記録する。predict完了後は期待GEFF数を検証し、外部 `postprocessing.configure()` → `write_submission_from_geff()` → CSV integrity/out-degree診断を同じ順で実行する。pandasを要求する外部`fixed8_cv`/`evaluation`はimportしない。途中失敗時はpartial directoryに`FAILED.json`を残し、valid manifestを作らない。GEFF writerはtracksdataの既存attribute contractを使い、postprocess algorithm自体は外部sourceを呼ぶ。
 
 - [ ] **Step 5: runner/bridge関連testをGREENで実行する**
 
@@ -271,9 +299,10 @@ git commit -m "Run pinned Recipe C and persist prediction GEFFs"
 
 **Interfaces:**
 - `evaluate_locked_prediction(prediction, gt, selection_lock, output) -> dict[str, object]` は既存 `mint_prediction_token()` / `open_ground_truth()` とvendored official evaluatorを再利用する。
-- `aggregate_panel_receipts(receipts, selection_lock) -> dict[str, object]` は5件のexact set/order、共通config/source/checkpoint/lock、成功statusを検証し、5で割るunweighted macroを計算する。
-- aggregateはper-sample Edge/Division TP/FP/FN、Edge/Adjusted/Division Jaccard、Final Score、node/edge/fork count、runtime/device/path/hashを保持する。
+- `aggregate_panel_receipts(receipts, selection_lock, control_receipt=None) -> dict[str, object]` は5件のexact set/order、共通config/source/checkpoint/lock、成功statusを検証し、5で割るunweighted macroを計算する。
+- aggregateはper-sample Edge/Division TP/FP/FN、Edge/Adjusted/Division Jaccard、Final Score、node/edge/fork count、runtime/device/path/hashに加え、macro、median、control勝率、worst-case harm、division performanceを保持する。
 - 1件でも欠損・失敗・NaN Final Scoreならgate statusは`INCOMPLETE`で、成功sampleだけのmacroを出さない。
+- `compare_with_best_known(candidate, best_known) -> dict[str, object]` はcandidate/best双方のexact panel順序、公式metric identity/version/hash、5件の成功prediction/evaluation receipt、selection lock/source/config/checkpoint整合、finite score、unweighted macro算術を再検証する。candidate macroが厳密に高く、事前登録したcontrol勝率・worst-case harm・division guardrailも満たす場合だけ`promoted=true`とし、同点・欠損・単一sample win・未定義guardrailは昇格させない。
 
 - [ ] **Step 1: GT open順序と5件固定の失敗テストを書く**
 
@@ -332,11 +361,11 @@ Expected: `validate_source_checkout` がcommit/license/config/notebook SHAをPAS
 - [ ] **Step 2: Kaggle support artifactを必要範囲だけ取得する**
 
 ```bash
-kaggle datasets download -d pilkwang/biohub-tracking-support-pack-50ep-v1 -p artifacts/biohub_095/support/primary --unzip
-kaggle datasets download -d pilkwang/biohub-temporal-unet3d-seed314159-v1 -p artifacts/biohub_095/support/secondary --unzip
+kaggle datasets download pilkwang/biohub-tracking-support-pack-50ep-v1/10 -p artifacts/biohub_095/support/primary --unzip
+kaggle datasets download pilkwang/biohub-temporal-unet3d-seed314159-v1/2 -p artifacts/biohub_095/support/secondary --unzip
 ```
 
-Expected: primary/support repoとprimary checkpoint、別配布secondary checkpointが存在し、それぞれ期待SHA-256と一致。credential/tokenをlog/reportへ保存しない。
+Expected: primary/support repoとprimary checkpoint、別配布secondary checkpointが存在し、predictor `c44e771b...`、primary `12f688...`、secondary `9bac2f...` と一致。両asset合計の展開量は約711 MB、version/licenseはv10/v2・CC0。credential/tokenをlog/reportへ保存しない。
 
 - [ ] **Step 3: selection lockとdry-runを作る**
 
@@ -406,7 +435,7 @@ git add docs/results/biohub_095_performance.md
 git commit -m "Record locked five-sample Recipe C evaluation"
 ```
 
-### Task 8: 未達時だけRAM-safe診断を実装する
+### Task 8: 未達時にRAM-safe診断と次experiment選択を実装する
 
 **Condition:** Task 7でofficial macro `< 0.95`、またはsource側参考値とofficial値にmaterialな不一致がある場合だけ実行する。達成時は理由付きでskipする。
 
@@ -419,13 +448,16 @@ git commit -m "Record locked five-sample Recipe C evaluation"
 - prediction manifest/cache hashをGT open前に検証する。
 - node coverage、candidate coverage、true-edge score/rank、detector-fixed edge-perfect oracle、postfilter renormalizationを分離する。
 - 1,000,000行chunkと既存`candidate_edges.mmap`を使い、E長array/Python listを作らない。
+- 診断後はexpected gain/cost/risk/noveltyで複数仮説を順位付けし、次experimentのmethod/model familyをlockする。GTをmodel input/parameter fittingへ渡さない。
 
 - [ ] **Step 1: orientation、one-to-one matching、coverage欠損理由、oracle、chunk境界の失敗テストを書く**
 - [ ] **Step 2: `tests/test_detector_fixed_diagnostics.py` をREDで確認する**
 - [ ] **Step 3: GTを推論へ返さない診断を最小実装する**
 - [ ] **Step 4: 診断testをGREENで確認する**
-- [ ] **Step 5: 失敗sampleだけを診断し、config変更には使わず日本語で原因を記録する**
+- [ ] **Step 5: 全5 sampleを診断し、次method/model familyの仮説選択へ使うが、GT parameter fittingには使わず日本語で原因を記録する**
 - [ ] **Step 6: Task 8だけをcommitする**
+
+Task 7以降も未達なら、各experimentを事前lock→GT-free prediction persist→公式評価→BestKnown判定の順で反復する。同一family 5回連続未更新でfailure analysisへ戻り、全family通算10回meaningful improvementなしでarchitecture-level reviewと外部published method再調査へ切り替える。
 
 ### Task 9: 日本語ChatGPT統合レポート、全検証、push
 
