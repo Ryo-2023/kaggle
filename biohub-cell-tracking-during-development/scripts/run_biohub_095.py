@@ -168,6 +168,37 @@ def _dry_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _infer(args: argparse.Namespace) -> int:
+    """Run the GT-free Recipe C adapter against a fresh runtime stage."""
+
+    from dataclasses import asdict
+
+    from biohub.recipe_c.runner import run_recipe_c_inference
+
+    stage = stage_recipe_c_runtime(
+        _resolve_project_path(args.source),
+        _resolve_project_path(args.primary_support),
+        _resolve_project_path(args.secondary_support),
+        _resolve_project_path(args.stage_destination),
+        _resolve_project_path(args.selection_lock),
+    )
+    try:
+        receipt = run_recipe_c_inference(
+            _resolve_project_path(args.image_root),
+            tuple(args.sample_id),
+            stage,
+            _resolve_project_path(args.selection_lock),
+            _resolve_project_path(args.output_root),
+            args.max_frames,
+        )
+        print(json.dumps(asdict(receipt), sort_keys=True))
+        return 0
+    finally:
+        # The runner owns the live lease through READY/FAILED finalization;
+        # close is idempotent for the preflight-error path as well.
+        stage.close()
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Freeze the Biohub 0.95 Recipe C selection lock.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -206,6 +237,17 @@ def _build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("--selection-lock", type=Path, required=True)
     dry_run.add_argument("--destination", type=Path, required=True)
     dry_run.set_defaults(handler=_dry_run)
+    infer = subparsers.add_parser("infer", help="run GT-free Recipe C inference and persist GEFF predictions")
+    infer.add_argument("--source", type=Path, required=True)
+    infer.add_argument("--primary-support", type=Path, required=True)
+    infer.add_argument("--secondary-support", type=Path, required=True)
+    infer.add_argument("--selection-lock", type=Path, required=True)
+    infer.add_argument("--stage-destination", type=Path, required=True)
+    infer.add_argument("--image-root", type=Path, required=True)
+    infer.add_argument("--output-root", type=Path, required=True)
+    infer.add_argument("--sample-id", action="append", default=[])
+    infer.add_argument("--max-frames", type=int)
+    infer.set_defaults(handler=_infer)
     return parser
 
 
