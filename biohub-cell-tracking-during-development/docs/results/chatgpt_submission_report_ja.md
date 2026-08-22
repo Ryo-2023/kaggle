@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新直前の0.95 campaign remote HEAD: `8abf8d5`
+本レポート更新直前の0.95 campaign remote HEAD: `49674c4`
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
@@ -673,3 +673,10 @@ primary supportはKaggle version `10`を明示指定して取得した`repo/` ru
 取得量はsupport合計約16.4 MiB、source clone約4.2 MiBであり、必要なruntimeとcheckpointだけを取得した。Kaggleのlatest fallbackは使わず、primary v10・secondary v2を固定した。credential/tokenの内容やpathはreportへ出していない。
 
 この更新はreportとignored artifactの確認だけであり、GT境界、既存metric数値、0.95の判定を変更しない。本repoの0.95 campaignは引き続き**未評価・未達成**であり、Task3のstaging/device実装と、GT-free推論後の公式評価が残っている。
+
+## 21. Task3 staging/device の現在地（2026-08-23追記）
+
+- Task3 initial は `b8b895d`、hardening は `49674c4`。hardening commitはremoteへpush済みで、現在のremote HEADも `49674c4` である。
+- 全確認結果は `570 passed, 9 skipped, 2 warnings`。実asset stagingは **READY** で、source/supportのdigestは不変である。この更新範囲ではGT、推論、metric評価を実行していない。
+- Task3の初回reviewは `APPROVED` だったが、厳格race reviewでP1-1/P1-2/P1-3/P2-1を再現し、現在修正中である。そのためTask3は最終承認前であり、修正完了とは扱わない。
+- 0.95目標は引き続き**未評価・未達成**である。次はTask4のfd-backed consumer修正後に、2-frameのGT-free smokeを実施する。
