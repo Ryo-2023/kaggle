@@ -36,3 +36,8 @@ graphify-out/.graphify_*
 # Local scratch
 scratch/
 tmp/
+
+# Lane F: per-column memmap sidecars are a regenerable derivative of the cache
+artifacts/lane_f/edge_columns/
+# Lane F: prediction GEFFs are regenerable outputs (AGENTS.md section 8); receipts are tracked
+artifacts/lane_f/**/*.geff/
