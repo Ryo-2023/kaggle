@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新直前の0.95 campaign remote HEAD: `49674c4`
+本レポート更新直前の0.95 campaign remote HEAD: `66fd517`
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
@@ -44,7 +44,7 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
 | source側5件参考macro | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。こちらの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | Task1（source/config/checkpoint契約）とTask2（protocol/selection lock）は完了。次はTask3（staging/device） |
+| 現在の作業 | Task1/Task2完了、Task3（staging/device）は最終承認済み。次はTask3.5 prerequisite確認後のTask4 2-frame GT-free smoke |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -672,11 +672,12 @@ primary supportはKaggle version `10`を明示指定して取得した`repo/` ru
 
 取得量はsupport合計約16.4 MiB、source clone約4.2 MiBであり、必要なruntimeとcheckpointだけを取得した。Kaggleのlatest fallbackは使わず、primary v10・secondary v2を固定した。credential/tokenの内容やpathはreportへ出していない。
 
-この更新はreportとignored artifactの確認だけであり、GT境界、既存metric数値、0.95の判定を変更しない。本repoの0.95 campaignは引き続き**未評価・未達成**であり、Task3のstaging/device実装と、GT-free推論後の公式評価が残っている。
+この更新時点ではreportとignored artifactの確認だけであり、GT境界、既存metric数値、0.95の判定を変更しない。Task3の最終承認と後続の現在地は次節に追記した。本repoの0.95 campaignは引き続き**未評価・未達成**である。
 
-## 21. Task3 staging/device の現在地（2026-08-23追記）
+## 21. Task3 staging/device 最終承認（2026-08-23更新）
 
-- Task3 initial は `b8b895d`、hardening は `49674c4`。hardening commitはremoteへpush済みで、現在のremote HEADも `49674c4` である。
-- 全確認結果は `570 passed, 9 skipped, 2 warnings`。実asset stagingは **READY** で、source/supportのdigestは不変である。この更新範囲ではGT、推論、metric評価を実行していない。
-- Task3の初回reviewは `APPROVED` だったが、厳格race reviewでP1-1/P1-2/P1-3/P2-1を再現し、現在修正中である。そのためTask3は最終承認前であり、修正完了とは扱わない。
-- 0.95目標は引き続き**未評価・未達成**である。次はTask4のfd-backed consumer修正後に、2-frameのGT-free smokeを実施する。
+Task3の履歴は initial `b8b895d`、hardening `49674c4`、race修正 `afb8517`、receipt failure-atomic修正 `2724a66` / `4848075` / `66fd517` である。最終remote HEADは `66fd517`。P1-1/P1-2/P1-3/P2-1のpath race、P1-4のcached fd lifetime、P1-5のREADY+FAILED、P2-2のtemp fd cleanup、P1-6のreceipt partial write/fsync/cleanup failureは、同一攻撃注入と回帰テストでclosureした。Task3 final reviewは **APPROVED** である。
+
+最終検証は targeted `49 passed`、full `585 passed, 9 skipped, 2 warnings`、変更対象Ruff pass、`git diff --check` passだった。実assetのstaging-only smokeは **READY**。source/support digestは不変で、primary/secondary checkpointは外部元pathへのsymlinkではなく、staged tree内のregular fileへcopyされることを確認した。device候補順は `CUDA → MPS → CPU`（現Dockerの実解決はCPU）である。
+
+このTask3検証ではGTを開かず、inferenceとmetric評価も実行していない。Task3.5 prerequisite（consumer側fd-backed契約の確認）を先に満たし、次にTask4の2-frame GT-free smokeへ進む。0.95目標は引き続き **未評価・未達成** であり、source側参考macro `0.9560`を本repoの達成値として扱わない。

@@ -173,13 +173,13 @@ git commit -m "Add immutable Biohub 0.95 selection lock"
 - Modify: `scripts/run_biohub_095.py`（`dry-run` subcommand）
 
 **Interfaces:**
-- `stage_recipe_c_runtime(source_root, primary_support_root, secondary_support_root, destination, selection_lock) -> RuntimeStage` はsourceと両supportを検証してから、期待predictor hashを持つprimaryのpristine `repo/`だけを新規run directoryへcopyする。primary/secondary checkpointはread-only元pathを指すsymlinkとして、staged support treeのsource期待pathへ配置する。
-- `apply_device_fallback_patch(predictor_path: Path) -> bool` はregular-file support scriptのexact `cuda if available else cpu` preimageが一箇所だけある場合に `cuda → mps → cpu` へ置換する。exact postimageはbytes不変で`False`、未知・複数preimage・symlinkは書込み前に失敗し、patch後compileを必須にする。
+- `stage_recipe_c_runtime(source_root, primary_support_root, secondary_support_root, destination, selection_lock) -> RuntimeStage` はsourceと両supportを検証してから、期待predictor hashを持つprimaryのpristine `repo/`だけを新規run directoryへcopyする。primary/secondary checkpointはread-only元pathへのsymlinkではなく、source期待pathへregular fileとしてcopyし、staged bytes/hashを再検証する。
+- `prepare_device_fallback_patch(source: bytes) -> tuple[bytes, bool]` はregular-file support scriptのexact `cuda if available else cpu` preimageが一箇所だけある場合に `cuda → mps → cpu` へ変換する。公開書込みAPIは`publish_device_fallback_patch_at(source_root_descriptor, source_relative_path, destination_root_descriptor, destination_relative_path) -> PublishedDevicePatch` とし、dirfd/O_NOFOLLOW、fresh no-clobber publication、patch後compile、open fd上のdigest再検証を必須にする。exact postimageはbytes不変で`changed=False`、未知・複数preimage・symlinkは書込み前に失敗する。
 - `RuntimeStage` はstaged `repo_dir`、`weights_root`、orchestration `source_root`、staged config、selection lock ID、predictor patch前後SHA、resolved device候補、role-relative receipt identityを保持する。credential/absolute source pathはreceiptへ保存しない。
 - destinationのfile/directory/dangling symlinkと親symlinkを拒否し、dirfd/O_NOFOLLOWでatomicに所有権を確保する。失敗した自分のpartial stageは`FAILED.json`で再利用不能にし、既存pathを削除・上書きしない。
 - 元source/primary support/secondary supportはsymlink-aware snapshotをstaging前後で比較する。source/support内の外部・dangling symlink、copy中のinode/size変化、primary/secondary target同一性、staged predictor/checkpoint hash不一致を拒否する。
 
-- [ ] **Step 1: 元artifact不変・patch idempotence・fallback順序の失敗テストを書く**
+- [x] **Step 1: 元artifact不変・patch idempotence・fallback順序の失敗テストを書く**
 
 ```python
 def test_staging_never_mutates_source_or_support(tmp_path, fake_source, fake_primary, fake_secondary, valid_lock):
@@ -190,13 +190,13 @@ def test_staging_never_mutates_source_or_support(tmp_path, fake_source, fake_pri
     assert digest_trees(fake_source.root, fake_primary.root, fake_secondary.root) == before
 
 
-def test_device_patch_contains_cuda_mps_cpu_order(tmp_path, predictor_preimage):
-    path = tmp_path / "predict.py"
-    path.write_text(predictor_preimage)
-    assert apply_device_fallback_patch(path) is True
-    text = path.read_text()
+def test_device_patch_contains_cuda_mps_cpu_order(predictor_preimage):
+    patched, changed = prepare_device_fallback_patch(predictor_preimage.encode())
+    assert changed is True
+    text = patched.decode()
     assert text.index("cuda") < text.index("mps") < text.index("cpu")
-    assert apply_device_fallback_patch(path) is False
+    repatched, changed_again = prepare_device_fallback_patch(patched)
+    assert (repatched, changed_again) == (patched, False)
 
 
 def test_staging_rejects_existing_or_symlink_destination(tmp_path, valid_inputs, valid_lock):
@@ -211,34 +211,36 @@ def test_device_patch_rejects_unknown_or_multiple_preimage_without_write(tmp_pat
     path.write_text("unknown preimage")
     before = path.read_bytes()
     with pytest.raises(ValueError, match="preimage"):
-        apply_device_fallback_patch(path)
+        prepare_device_fallback_patch(before)
     assert path.read_bytes() == before
 ```
 
-- [ ] **Step 2: staging testをREDで実行する**
+- [x] **Step 2: staging testをREDで実行する**
 
 Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run pytest -q tests/test_recipe_c_staging.py'`
 
 Expected: missing staging/device patchでFAIL。
 
-- [ ] **Step 3: immutable stagingとstrict source patchを実装する**
+- [x] **Step 3: immutable stagingとstrict source patchを実装する**
 
-copy先が存在する場合は削除・上書きしない。各runはprimary v10 `repo/` 13/13 filesとpristine predictorから一度だけstageする。Task 3ではdevice互換patchだけを適用し、external D4/dual-seed/edge-threshold/margin/pairwise patchは適用しない。これらはTask 4でpinned `biohub_pipeline.inference`から一度だけ実行し、非idempotent edge-threshold patchの二重適用を防ぐ。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへstageし、元artifactは変更しない。
+copy先が存在する場合は削除・上書きしない。各runはprimary v10 `repo/` 13/13 filesとpristine predictorから一度だけstageする。Task 3ではdevice互換patchだけを適用し、external D4/dual-seed/edge-threshold/margin/pairwise patchは適用しない。これらはTask 4でpinned `biohub_pipeline.inference`から一度だけ実行し、非idempotent edge-threshold patchの二重適用を防ぐ。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへregular copyとしてstageし、元artifactは変更しない。device publicationは`publish_device_fallback_patch_at(...)`のfd-backed safe APIだけを使う。
 
 実assetは`artifacts/biohub_095/`へ取得済み。source commit `843a47f...`はclean、primary v10 `repo/`はKaggle file list 13/13、controlled import/compile pass、predictor `c44e771b...`、primary `12f6881...`、secondary v2 `9bac2fa...` はTask 1 validatorでも一致した。
 
-- [ ] **Step 4: staging/source/protocol testをGREENで実行する**
+- [x] **Step 4: staging/source/protocol testをGREENで実行する**
 
 Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run pytest -q tests/test_recipe_c_staging.py tests/test_recipe_c_source.py tests/test_recipe_c_protocol.py'`
 
 Expected: 全テストPASS、元tree digest不変。
 
-- [ ] **Step 5: Task 3だけをcommitする**
+- [x] **Step 5: Task 3だけをcommitする**
 
 ```bash
 git add src/biohub/recipe_c/staging.py src/biohub/recipe_c/device_patch.py tests/test_recipe_c_staging.py scripts/run_biohub_095.py
 git commit -m "Stage Recipe C runtime without mutating upstream"
 ```
+
+実測: Task3の実装・hardening・race修正・receipt failure-atomic修正commitは `b8b895d`、`49674c4`、`afb8517`、`2724a66`、`4848075`、`66fd517`。最終Docker検証は targeted `49 passed`、full `585 passed, 9 skipped, 2 warnings`、対象Ruffと`git diff --check`はpassした。実asset staging-onlyは `READY`、source/support digestは不変で、primary/secondary checkpointはsymlinkではなくstaged regular copyである。device候補順は `CUDA → MPS → CPU`。このTask3検証ではGT、inference、metric評価を実行していない。race findings P1-1/P1-2/P1-3/P2-1/P1-4/P1-5/P2-2/P1-6は同一注入と回帰テストでclosureし、最終reviewは`APPROVED`。0.95 campaign自体は未評価・未達成のままとする。
 
 ### Task 4: GT-free Recipe C inferenceとpostprocessed GEFF bridgeを実装する
 
