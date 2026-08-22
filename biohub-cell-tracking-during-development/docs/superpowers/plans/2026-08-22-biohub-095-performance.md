@@ -463,4 +463,3 @@ git push -u origin codex/biohub-095-performance
 - [ ] **Step 7: userへ日本語成果物リンクと未解決事項を報告する**
 
 Done claimはTask 7 gate実測とTask 9 verificationが両方揃った場合だけ行う。
-
