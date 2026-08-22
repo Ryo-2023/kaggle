@@ -1,0 +1,49 @@
+[
+  {
+    "cache_hash": "2bd90bee3abf0afb07abdc971bfb45235a33bb931feaf6bfb3b884759682f748",
+    "config": {
+      "candidate_edge_count": 31164,
+      "edge_threshold": 0.5,
+      "ilp": {
+        "appearance_weight": 0.1,
+        "disappearance_weight": 0.1,
+        "division_weight": 1.0,
+        "edge_weight": -1.0
+      },
+      "method_id": "harmonic_v1",
+      "motion_alpha": 0.05,
+      "motion_gate_um": 12.0,
+      "mutual_threshold": 0.5,
+      "reverse_weight": 0.2,
+      "selected_edge_count": 29176
+    },
+    "method_id": "harmonic_v1",
+    "metrics": {
+      "adjusted_edge_jaccard": 0.8022386963904503,
+      "division_fn": 0,
+      "division_fp": 0,
+      "division_jaccard": null,
+      "division_tp": 0,
+      "edge_fn": 8,
+      "edge_fp": 6,
+      "edge_jaccard": 0.8157894736842105,
+      "edge_tp": 62,
+      "final_score": 0.8022386963904503,
+      "node_recall": 1.0,
+      "prediction_edge_count": 29176,
+      "prediction_manifest_directory_sha256": "4f10a7ce3f4b8516cde2673200c51a14604d55b78575048833a97c4b32540a31",
+      "prediction_manifest_path": "artifacts/detector_fixed_race/panel_runs_0c_harmonic/44b6_0c582fdc/prediction_manifest.json",
+      "prediction_manifest_validated_at": "2026-08-21T06:17:41.073147+00:00",
+      "prediction_manifest_validated_before_gt": true,
+      "prediction_manifest_validation_action": "validated persisted prediction manifest before opening ground truth",
+      "prediction_node_count": 32602,
+      "total_node_ratio": 0.16610630231060877
+    },
+    "prediction_edge_count": 29176,
+    "prediction_manifest_path": "artifacts/detector_fixed_race/panel_runs_0c_harmonic/44b6_0c582fdc/prediction_manifest.json",
+    "prediction_node_count": 32602,
+    "prediction_path": "artifacts/detector_fixed_race/panel_runs_0c_harmonic/44b6_0c582fdc/harmonic_v1.geff",
+    "sample_id": "44b6_0c582fdc",
+    "selected_edge_count": 29176
+  }
+]

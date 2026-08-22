@@ -1,0 +1,37 @@
+{
+  "acquisition": {
+    "api": "KaggleApi.kernels.get_kernel",
+    "api_version_label": "v18",
+    "source_format": "Kaggle notebook JSON",
+    "source_sha256": "dd3819cff82851b491d9cbeb6f5f0fc36e8da3c5e9ca90a8b0d5284785a250d"
+  },
+  "compatibility": {
+    "checkpoint_sha256": "347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235",
+    "checkpoint_path": "artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth",
+    "upstream_commit": "075fc5f5a52d11077f9dc2b074644618f26939e2",
+    "upstream_edge_api": "model.predict_edges(feat_src, feat_tgt, coords_src, coords_tgt, pos_feat_src, pos_feat_tgt, mask_src, mask_tgt)"
+  },
+  "formula_evidence": {
+    "alignment": "reverse_native_logits.transpose(1, 2); reverse_scale_ratio=(forward_scale/reverse_scale).clamp(0.5, 2.0); reverse_aligned=(reverse-reverse_center)*reverse_scale_ratio+forward_center",
+    "forward_probability": "forward_prob=torch.softmax(forward_logits.float(), dim=1).clamp_min(1e-8)",
+    "reverse_probability": "reverse_prob=torch.softmax(reverse_aligned.float(), dim=1).clamp_min(1e-8)",
+    "harmonic_probability": "harmonic_prob=1/((1-reverse_weight)/forward_prob + reverse_weight/reverse_prob); normalize over dim=1",
+    "weight": 0.2,
+    "published_source_location": "notebook cell 11 runtime patch"
+  },
+  "license": {
+    "declared": "This Notebook has been released under the Apache 2.0 open source license.",
+    "spdx": "Apache-2.0",
+    "evidence_url": "https://www.kaggle.com/code/yusuketogashi/no-hack-biohub-cell-another-approch-3rd/versions/18"
+  },
+  "source": {
+    "author": "Yusuke Togashi",
+    "notebook_slug": "no-hack-biohub-cell-another-approch-3rd",
+    "owner": "yusuketogashi",
+    "script_version_id": 338569479,
+    "title": "No-Hack | Biohub Cell Another Approch 3rd",
+    "url": "https://www.kaggle.com/code/yusuketogashi/no-hack-biohub-cell-another-approch-3rd?scriptVersionId=338569479",
+    "version_number": 18,
+    "version_url": "https://www.kaggle.com/code/yusuketogashi/no-hack-biohub-cell-another-approch-3rd/versions/18"
+  }
+}

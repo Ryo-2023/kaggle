@@ -1,0 +1,21 @@
+{
+  "adjusted_edge_jaccard": 0.9211200215044129,
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_jaccard": null,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 2,
+  "edge_jaccard": 0.9230769230769231,
+  "edge_tp": 48,
+  "final_score": 0.9211200215044129,
+  "node_recall": 1.0,
+  "prediction_edge_count": 24205,
+  "prediction_manifest_directory_sha256": "6163e0643d27062854a32fcf102fde24aa2ead55384a0afb965af1f589307fbc",
+  "prediction_manifest_path": "artifacts/strong_baseline_v1/harmonic_ilp/prediction_manifest.json",
+  "prediction_manifest_validated_at": "2026-08-20T01:30:36.279208+00:00",
+  "prediction_manifest_validated_before_gt": true,
+  "prediction_manifest_validation_action": "validated persisted prediction manifest before opening ground truth",
+  "prediction_node_count": 26301,
+  "total_node_ratio": 0.021199767035527083
+}
