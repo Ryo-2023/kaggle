@@ -4,7 +4,7 @@
 
 **Goal:** 公開Recipe C dual-seed pipelineを一次sourceとcheckpoint hashへ固定し、GT-free実画像推論からpostprocessed prediction GEFFを生成して、固定5サンプルのvendored official Final Score macro平均 `>= 0.95` を再現する。
 
-**Architecture:** Apache-2.0の公開repositoryをartifactとしてpinned checkoutし、関数を再実装せずadapterから呼ぶ。run-local support treeだけへD4/dual-seed/edge-threshold/device patchを適用し、画像推論とpostprocessをGT-freeで完了する。selection lockを参照するprediction manifestを永続化した後、既存ground-truth ordering guardを通してofficial metricを実行する。
+**Architecture:** Apache-2.0の公開repositoryをartifactとしてpinned checkoutし、関数を再実装せずadapterから呼ぶ。primary support packと別配布secondary seedをhash検証し、run-local support treeだけへD4/dual-seed/edge-threshold/device patchを適用する。一次sourceのCUDA-only wrapperは呼ばず、同sourceが生成したargvを互換adapterで実行して画像推論とpostprocessをGT-freeで完了する。selection lockを参照するprediction manifestを永続化した後、既存ground-truth ordering guardを通してofficial metricを実行する。
 
 **Tech Stack:** Python 3.11、PyTorch、NumPy、SciPy、PyYAML、tracksdata/GEFF、pyscipopt/ILP、Zarr、pytest、ruff、Docker Compose `biohub-dev`。外部source commit `843a47fdd531bdf7e6377673135519c54b69ae28`。
 
@@ -15,9 +15,9 @@
 - 推論、cache、candidate生成、method/config/checkpoint選択へGTを渡さない。GTを開くのはprediction GEFFとmanifestを永続化・hash検証した後のofficial evaluationだけ。
 - `PANEL_V1` は `44b6_0113de3b`、`44b6_0b24845f`、`44b6_0c582fdc`、`44b6_0db75fae`、`44b6_12dfb391` の5件で固定し、失敗・低score・divisionを理由に分母から除外しない。
 - Recipe Cはsource側の公開configをbyte-for-byteで固定する。本panelのmetricを見てthreshold、weight、postprocess、seedを変更しない。
-- source checkout、support repo、primary/secondary checkpointは期待commit/SHA-256が一致しない限り実行しない。opaque/不足assetへfallbackしない。
+- source checkout、primary support repo、別配布secondary seed、primary/secondary checkpointは期待commit/SHA-256が一致しない限り実行しない。opaque/不足assetへfallbackしない。
 - 外部sourceのpostprocessingをコピー改変・同名再実装しない。pinned checkoutからimportして使用し、互換adapterだけを本repoへ追加する。
-- 元のsupport artifactと既存official upstreamを変更しない。patchはrun-local staged copyへだけ適用する。
+- 元のprimary/secondary support artifactと既存official upstreamを変更しない。patchはrun-local staged copyへだけ適用する。
 - device `auto` はPyTorch inferenceで `CUDA → MPS → CPU`。ILP、GEFF I/O、official metricはCPUのまま。resolved deviceをreceiptへ保存する。
 - 大規模runはsample単位に逐次実行し、`0b` と `12df` を並列実行しない。OOM時は一括配列展開をやめ、既存mmap/chunk契約へfallbackする。
 - vendored `src/biohub/official_metrics/metrics.py` と `division_metrics.py` は変更しない。
@@ -39,7 +39,8 @@
 **Interfaces:**
 - `RecipeCSourceContract` はsource URL/commit、license/config/notebook hash、primary/secondary checkpoint relative pathとSHA-256を保持する。
 - `validate_source_checkout(root: Path, contract: RecipeCSourceContract = RECIPE_C_SOURCE) -> dict[str, object]` はGit HEADと固定file hashを検証する。
-- `validate_support_artifact(root: Path, contract: RecipeCSourceContract = RECIPE_C_SOURCE) -> dict[str, object]` は`repo/scripts/predict_unet_transformer.py`と2 checkpointを検証する。
+- `validate_support_artifacts(primary_root: Path, secondary_root: Path, contract: RecipeCSourceContract = RECIPE_C_SOURCE) -> dict[str, object]` はprimaryの`repo/scripts/predict_unet_transformer.py`、primary checkpoint、別artifactのsecondary checkpointを検証する。
+- primary relative pathは `weights/unet_transformer/split_0/edge_predictor_best.pth`。secondary配布時relative pathも同じだが、run-local stagingでは `weights/unet_transformer/seed_314159/edge_predictor_best.pth` へ配置する。
 - configはsource `configs/experiments/recipe_c_motion_off_edge_0_40_det0_96875.yaml` と同一内容、期待SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` とする。
 - checkpointはprimary `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771`、secondary `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f`。
 
@@ -52,10 +53,10 @@ def test_source_contract_rejects_wrong_commit(tmp_path, fake_source_tree):
         validate_source_checkout(fake_source_tree.root)
 
 
-def test_support_contract_requires_both_distinct_checkpoints(tmp_path, fake_support):
-    fake_support.secondary.unlink()
+def test_support_contract_requires_both_distinct_checkpoints(tmp_path, fake_primary, fake_secondary):
+    fake_secondary.checkpoint.unlink()
     with pytest.raises(FileNotFoundError, match="seed_314159"):
-        validate_support_artifact(fake_support.root)
+        validate_support_artifacts(fake_primary.root, fake_secondary.root)
 ```
 
 - [ ] **Step 2: source testをREDで実行する**
@@ -133,7 +134,7 @@ git add src/biohub/recipe_c/protocol.py tests/test_recipe_c_protocol.py scripts/
 git commit -m "Add immutable Biohub 0.95 selection lock"
 ```
 
-### Task 3: run-local source/support stagingとdevice fallbackを実装する
+### Task 3: run-local source/dual-support stagingとdevice fallbackを実装する
 
 **Files:**
 - Create: `src/biohub/recipe_c/staging.py`
@@ -142,18 +143,20 @@ git commit -m "Add immutable Biohub 0.95 selection lock"
 - Modify: `scripts/run_biohub_095.py`（`dry-run` subcommand）
 
 **Interfaces:**
-- `stage_recipe_c_runtime(source_root, support_root, destination, selection_lock) -> RuntimeStage` はsource/supportを検証してから、support `repo/`だけを新規run directoryへcopyする。checkpointはread-only元pathを参照する。
+- `stage_recipe_c_runtime(source_root, primary_support_root, secondary_support_root, destination, selection_lock) -> RuntimeStage` はsourceと両supportを検証してから、primaryの `repo/`だけを新規run directoryへcopyする。primary/secondary checkpointはread-only元pathを指すsymlinkとして、staged support treeのsource期待pathへ配置する。
 - `apply_device_fallback_patch(predictor_path: Path) -> bool` はsupport scriptの `cuda if available else cpu` preimageを `cuda → mps → cpu` へ置換し、二回目はno-op、未知preimageは失敗する。
 - `RuntimeStage` はstaged repo、weights root、source root、config、patch前後SHA、resolved device候補を保持する。
-- 元source/supportのdirectory digestがstaging前後で一致しなければ失敗する。
+- 元source/primary support/secondary supportのdirectory digestがstaging前後で一致しなければ失敗する。
 
 - [ ] **Step 1: 元artifact不変・patch idempotence・fallback順序の失敗テストを書く**
 
 ```python
-def test_staging_never_mutates_source_or_support(tmp_path, fake_source, fake_support, valid_lock):
-    before = digest_trees(fake_source.root, fake_support.root)
-    stage_recipe_c_runtime(fake_source.root, fake_support.root, tmp_path / "stage", valid_lock)
-    assert digest_trees(fake_source.root, fake_support.root) == before
+def test_staging_never_mutates_source_or_support(tmp_path, fake_source, fake_primary, fake_secondary, valid_lock):
+    before = digest_trees(fake_source.root, fake_primary.root, fake_secondary.root)
+    stage_recipe_c_runtime(
+        fake_source.root, fake_primary.root, fake_secondary.root, tmp_path / "stage", valid_lock
+    )
+    assert digest_trees(fake_source.root, fake_primary.root, fake_secondary.root) == before
 
 
 def test_device_patch_contains_cuda_mps_cpu_order(tmp_path, predictor_preimage):
@@ -173,7 +176,7 @@ Expected: missing staging/device patchでFAIL。
 
 - [ ] **Step 3: immutable stagingとstrict source patchを実装する**
 
-copy先が存在する場合は削除・上書きせず`FileExistsError`。external sourceのD4、dual-seed、edge-threshold patchはpinned `biohub_pipeline.inference` をimportしてstaged predictorへ適用する。本repoはalgorithm patchを再実装しない。
+copy先が存在する場合は削除・上書きせず`FileExistsError`。external sourceのD4、dual-seed、edge-threshold patchはpinned `biohub_pipeline.inference` をimportしてstaged predictorへ適用する。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへstagingし、元artifactは変更しない。
 
 - [ ] **Step 4: staging/source/protocol testをGREENで実行する**
 
@@ -200,6 +203,7 @@ git commit -m "Stage Recipe C runtime without mutating upstream"
 **Interfaces:**
 - `run_recipe_c_inference(image_root, sample_ids, runtime_stage, selection_lock, output_root, max_frames=None) -> InferenceReceipt` はimageとlocked configだけを受け取り、GT path/metric/result引数を持たない。
 - external `build_predict_command()` を使い、dual-seed、D4、threshold `.96875/.40`、ILP weights、sample splitをcommandへ固定する。
+- external `run_prediction()` はCUDA未検出時の強制停止を含むため呼ばない。`build_predict_command()` が返すargvをadapterが `subprocess.run(argv, shell=False, check=True)` で実行し、staged predictorのdevice patchにより `CUDA → MPS → CPU` を選ぶ。
 - raw GEFFを外部 `write_submission_from_geff()` でpostprocessし、`postprocessed_csv_to_geffs()` がsampleごとのreload可能GEFFへ変換する。
 - GEFF nodeは `(t,z,y,x)`、edgeはdirected source→target、in-degree `<=1`、out-degree `<=2`、隣接frameを検証する。
 - 各GEFFにper-prediction manifestを作り、`selection_lock_id`、source/config/checkpoint/patch hash、resolved device、runtime、node/edge/fork count、`ground_truth_included=false`を保存する。
@@ -243,7 +247,7 @@ Expected: missing runner/bridgeでFAIL。
 
 - [ ] **Step 4: external source orchestrationとGEFF writerを最小実装する**
 
-subprocessはargument listで実行し、shell interpolationを使わない。途中失敗時はpartial directoryに`FAILED.json`を残し、valid manifestを作らない。GEFF writerはtracksdataの既存attribute contractを使い、postprocess algorithm自体は外部sourceを呼ぶ。
+subprocessはargument listで実行し、shell interpolationを使わない。一次sourceのCUDA-only wrapper bypassはalgorithm変更ではなくdevice/orchestration互換adaptationとして、wrapper source hash、生成argv、device patch前後hashをreceiptへ記録する。途中失敗時はpartial directoryに`FAILED.json`を残し、valid manifestを作らない。GEFF writerはtracksdataの既存attribute contractを使い、postprocess algorithm自体は外部sourceを呼ぶ。
 
 - [ ] **Step 5: runner/bridge関連testをGREENで実行する**
 
@@ -314,7 +318,7 @@ git commit -m "Evaluate locked Recipe C with the official metric"
 
 **Files:**
 - Create: `docs/results/biohub_095_performance.md`
-- Artifacts only: `artifacts/biohub_095/source/`, `artifacts/biohub_095/support/`, `artifacts/biohub_095/smoke/`
+- Artifacts only: `artifacts/biohub_095/source/`, `artifacts/biohub_095/support/primary/`, `artifacts/biohub_095/support/secondary/`, `artifacts/biohub_095/smoke/`
 
 - [ ] **Step 1: sourceを固定commitへ取得して検証する**
 
@@ -328,20 +332,21 @@ Expected: `validate_source_checkout` がcommit/license/config/notebook SHAをPAS
 - [ ] **Step 2: Kaggle support artifactを必要範囲だけ取得する**
 
 ```bash
-kaggle datasets download -d pilkwang/biohub-tracking-support-pack-50ep-v1 -p artifacts/biohub_095/support --unzip
+kaggle datasets download -d pilkwang/biohub-tracking-support-pack-50ep-v1 -p artifacts/biohub_095/support/primary --unzip
+kaggle datasets download -d pilkwang/biohub-temporal-unet3d-seed314159-v1 -p artifacts/biohub_095/support/secondary --unzip
 ```
 
-Expected: primary/secondary checkpointが両方存在し、期待SHA-256と一致。credential/tokenをlog/reportへ保存しない。
+Expected: primary/support repoとprimary checkpoint、別配布secondary checkpointが存在し、それぞれ期待SHA-256と一致。credential/tokenをlog/reportへ保存しない。
 
 - [ ] **Step 3: selection lockとdry-runを作る**
 
-Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py freeze --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --config configs/biohub_095_recipe_c.yaml --output artifacts/biohub_095/selection_lock.json --device auto'`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py freeze --source artifacts/biohub_095/source/clean_v106 --primary-support artifacts/biohub_095/support/primary --secondary-support artifacts/biohub_095/support/secondary --config configs/biohub_095_recipe_c.yaml --output artifacts/biohub_095/selection_lock.json --device auto'`
 
 Expected: write-once lock、両checkpoint hash一致、resolved backend情報あり。
 
 - [ ] **Step 4: train実画像の2-frame smokeをGT-freeで実行する**
 
-Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --image-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --sample 44b6_0113de3b --max-frames 2 --output artifacts/biohub_095/smoke'`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --primary-support artifacts/biohub_095/support/primary --secondary-support artifacts/biohub_095/support/secondary --image-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --sample 44b6_0113de3b --max-frames 2 --output artifacts/biohub_095/smoke'`
 
 Expected: raw/postprocessed GEFFとmanifestを生成、reload成功、GT access 0、device fallback receiptあり。
 
@@ -373,7 +378,7 @@ Expected: 5/5 imageが存在。GTは存在だけを確認し、推論processへp
 - [ ] **Step 2: sample単位にGT-free full inferenceを逐次実行する**
 
 ```bash
-docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer-panel --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --image-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --output artifacts/biohub_095/panel_runs --device auto'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer-panel --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --primary-support artifacts/biohub_095/support/primary --secondary-support artifacts/biohub_095/support/secondary --image-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --output artifacts/biohub_095/panel_runs --device auto'
 ```
 
 Expected: 5/5 prediction GEFF/manifest。CUDAならCUDA、Mac native実行でMPS、現Linux DockerではCPU。resolved deviceをsampleごとに記録。

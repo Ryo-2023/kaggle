@@ -80,6 +80,13 @@ source側の記録値はfixed-8 `0.9181439782806684`、holdout-8 `0.964672618858
 
 source commit、license、notebookとrepositoryの対応、weightの取得元、checkpoint SHA-256、training splitは実行前にreceiptへ固定する。確認不能な部品は同名の自作代用品で埋めず、確認できた公開コードだけを最小adapterで再利用する。
 
+Recipe Cの公開assetは1つではなく、次の2つを同時に必要とする。
+
+- primary/support tree: Kaggle dataset `pilkwang/biohub-tracking-support-pack-50ep-v1`。`repo/`とprimary `weights/unet_transformer/split_0/edge_predictor_best.pth` を含む。
+- secondary seed: Kaggle dataset `pilkwang/biohub-temporal-unet3d-seed314159-v1`。配布時は `weights/unet_transformer/split_0/edge_predictor_best.pth` だが、実行用stagingでは `weights/unet_transformer/seed_314159/edge_predictor_best.pth` として参照する。
+
+期待SHA-256はprimary `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771`、secondary `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` である。primary packだけを取得してsecondaryを欠いた状態では実行しない。
+
 `DualSeed / Frame Retention Guard` は次候補だが、追加checkpointのsource/schema/license/training splitを固定できるまで実行候補へ昇格させない。provenanceを閉じられない `DeepCenter`、opaque notebook、非公開weightは採用しない。
 
 ## 4. アーキテクチャ
@@ -90,6 +97,8 @@ OME-Zarr image
     ├─ device auto: CUDA → MPS → CPU
     ▼
 pinned detector / node transformer
+    │ primary support + separately pinned secondary seed
+    │ staged predictorだけへD4/ensemble/threshold/device互換patch
     │
     ▼
 GT-free detector cache + mmap + provenance
@@ -109,6 +118,8 @@ per-sample receipt + fixed-panel aggregation + Japanese report
 ```
 
 既存 `detector_fixed_race` cache schema、mmap、prediction manifest、official metric adapterを再利用する。vendored `src/biohub/official_metrics/metrics.py` と `division_metrics.py` は変更しない。
+
+一次sourceの `biohub_pipeline.inference.run_prediction()` はCUDAが利用できない環境を明示的に拒否する。本campaignはその関数内のCUDA gateを改変せず、同じ一次sourceの `build_predict_command()` で生成・固定したargvをadapterから `subprocess.run(..., shell=False)` で実行する。device互換変更はrun-localにcopyしたsupport predictorの選択式だけへ適用し、`CUDA → MPS → CPU` とする。一次sourceと配布assetはread-onlyで保持し、patch前後hashとこのorchestration adaptationをreceiptへ残す。
 
 グラフ修復はcache node、candidate score、予測graphだけを受け取り、image path、GT path、metric resultを引数に持たない。1-frame gapは既存cacheに `delta_t=2` candidateがないため、retained nodeのphysical positionとtrack velocityから新しい候補をGT-freeで生成し、生成理由とgateをreceiptへ残す。
 
@@ -130,11 +141,11 @@ Recipe Cのlocked official evaluationが0.95未達、またはsource側参考値
 
 ### Wave A — 評価分離とsource契約
 
-source/checkpoint/config契約、protocol/selection-lock receipt、GT open順序guardをTDDで追加する。ここでは性能configを変更しない。
+source/checkpoint/config契約、2つのsupport asset契約、protocol/selection-lock receipt、GT open順序guardをTDDで追加する。ここでは性能configを変更しない。
 
 ### Wave B — 公開V106/Recipe C系のGT-free修復
 
-一次sourceを固定し、公開コードを再実装せずpinned checkoutから呼ぶadapterを作る。V106 defaultをprovenance control、Recipe Cを第一性能候補とする。dual-seed checkpointが両方とも期待SHA-256と一致しない限りfull runを開始しない。synthetic graphでtopologyと座標単位を検証する。
+一次sourceを固定し、公開コードを再実装せずpinned checkoutから呼ぶadapterを作る。V106 defaultをprovenance control、Recipe Cを第一性能候補とする。primary/support packと別配布secondary seedの両checkpointが期待SHA-256と一致しない限りfull runを開始しない。synthetic graphでtopologyと座標単位を検証する。
 
 ### Wave C — 評価前固定
 
@@ -150,7 +161,7 @@ locked Recipe Cが0.95未達、またはsource側参考値とofficial値がmater
 
 ## 7. deviceと計算資源
 
-PyTorch inferenceの既定device選択は `CUDA → MPS → CPU` とする。現在のmacOS DockerはLinux containerなのでApple MPSを利用できず、CUDAもpassthroughされていないためCPUへfallbackする。NVIDIA desktop移行時は同じ `--device auto` でCUDAを選び、checkpoint/device identityをreceiptへ記録する。
+PyTorch inferenceの既定device選択は `CUDA → MPS → CPU` とする。現在のmacOS DockerはLinux containerなのでApple MPSを利用できず、CUDAもpassthroughされていないためCPUへfallbackする。一次sourceのCUDA-only `run_prediction()` は呼ばず、同sourceが組み立てたcommandを互換adapterから実行する。NVIDIA desktop移行時は同じ `--device auto` でCUDAを選び、checkpoint/device identityをreceiptへ記録する。
 
 ILP、GEFF I/O、official metric、巨大mmapのstream処理はCPU処理を維持する。GPUへ転送するとI/O・solver支配部分では逆に不利なので、行列演算を含むPyTorch detector/edge modelだけをGPU対象とする。
 
