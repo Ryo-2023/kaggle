@@ -104,8 +104,9 @@ OME-Zarr image
     ├─ device auto: CUDA → MPS → CPU
     ▼
 pinned detector / node transformer
-    │ primary support + separately pinned secondary seed
-    │ staged predictorだけへD4/ensemble/threshold/device互換patch
+    │ primary v10 support repo + separately pinned secondary v2 seed
+    │ immutable stagingではdevice互換patchだけ
+    │ 実行時に一次sourceからD4/ensemble/thresholdを一度だけ適用
     │
     ▼
 GT-free detector cache + mmap + provenance
@@ -129,6 +130,8 @@ per-sample receipt + fixed-panel aggregation + Japanese report
 一次sourceの `biohub_pipeline.inference.run_prediction()` はCUDAが利用できない環境を明示的に拒否する。本campaignはその関数内のCUDA gateを改変せず、同じ一次sourceの `build_predict_command()` で生成・固定したargvをadapterから `subprocess.run(..., cwd=staged_repo, env={..., PYTHONPATH: src}, shell=False, check=True)` で実行する。device互換変更はrun-localにcopyしたsupport predictorの選択式だけへ適用し、`CUDA → MPS → CPU` とする。一次sourceと配布assetはread-onlyで保持し、patch前後hashとこのorchestration adaptationをreceiptへ残す。
 
 `build_predict_command()` はsplit file作成とpredictor patchを伴う。特にedge-threshold patchは二回目の適用が失敗するため、各runは期待predictor hashから作る新しいpristine staged copyを一度だけ使用する。direct subprocess後は外部sourceと同じGEFF件数検証、`postprocessing.configure()`、`write_submission_from_geff()`、CSV integrity、out-degree診断を省略しない。Python 3.11で必要moduleのcompile/importは確認済みで、pandasを要求する外部fixed-8 evaluatorはこのinference経路へimportしない。
+
+staging先はdirfd/O_NOFOLLOWで親symlinkと既存file/directory/dangling symlinkを拒否して所有権を確保する。primary v10 `repo/` 13/13 filesをpristine copyし、predictorはregular fileかつ期待hash、primary/secondary checkpointは別実体かつ期待hashでなければならない。元source/supportはsymlink-aware snapshotを前後比較し、copy中のinode/size変化や元artifactへの書込みを失敗扱いにする。receiptはrole-relative identityとhashだけを保持し、credential pathや絶対source rootを保存しない。
 
 グラフ修復はcache node、candidate score、予測graphだけを受け取り、image path、GT path、metric resultを引数に持たない。1-frame gapは既存cacheに `delta_t=2` candidateがないため、retained nodeのphysical positionとtrack velocityから新しい候補をGT-freeで生成し、生成理由とgateをreceiptへ残す。
 

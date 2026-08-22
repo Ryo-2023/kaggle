@@ -1,12 +1,13 @@
 # Biohub Cell Tracking — ChatGPT報告用・全結果統合版
 
 初版作成日: 2026-08-21（JST）
-最終更新日: 2026-08-22（JST）
+最終更新日: 2026-08-23（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新前に確認した0.95 campaignのremote commit: `976e87c`
+本レポート更新直前の0.95 campaign remote HEAD: `8abf8d5`
 Task1実装完了時のコードHEAD: `17135f0`
+Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
@@ -43,7 +44,7 @@ Task1実装完了時のコードHEAD: `17135f0`
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
 | source側5件参考macro | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。こちらの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | Task1（source/config/checkpoint契約）は完了。次はTask2（protocol/selection lock） |
+| 現在の作業 | Task1（source/config/checkpoint契約）とTask2（protocol/selection lock）は完了。次はTask3（staging/device） |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -62,7 +63,7 @@ Recipe Cは次の2つのKaggle assetを必要とする。primary packだけで�
 |---|---|---|
 | `pilkwang/biohub-tracking-support-pack-50ep-v1` | predictor repo + primary `split_0` checkpoint、v10 / CC0 | predictor `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b`、primary checkpoint `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` |
 | `pilkwang/biohub-temporal-unet3d-seed314159-v1` | secondary seed checkpoint、v2 / CC0。run-localで`seed_314159` pathへstage | `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` |
-| 展開後の2 asset合計 | primary + secondary | 約711 MB |
+| ignored artifactの取得量 | primary v10 runtime 13/13 + primary checkpoint + secondary v2 checkpoint。full datasetは未取得 | support合計 約16.4 MiB、source cloneは別に約4.2 MiB |
 
 一次sourceの`run_prediction()`はCUDA未検出時に強制停止する。性能configや一次sourceを変えずにCPU/MPS互換を得るため、同sourceの`build_predict_command()`が生成したargvをadapterから実行し、copy済みrun-local predictorのdevice選択だけを `CUDA → MPS → CPU` にする。現在のLinux DockerはPyTorch CPU wheelのためCPU、NVIDIA desktopでは同じ`auto`指定でCUDA、macOS nativeの対応実行系ではMPSを優先する。ILP、GEFF I/O、公式metricはCPUのままとする。
 
@@ -658,3 +659,17 @@ prediction GEFF、manifest、receipt、runtime、GT、cacheは次の場所にあ
 harmonicは5/5 sampleでofficial ILPを上回った。developmentの旧runは4方式が単一出力ディレクトリを共有し、最後の方式が`prediction_manifest.json`を上書きしていたため、validation receiptの初回集約で`prediction_path mismatch`を検出した。detector cacheの再計算は行わず、`panel_runs_dev_official/`、`panel_runs_dev_harmonic/`、`panel_runs_dev_mutual/`、`panel_runs_dev_motion/`へ個別再生してmanifestを修復した。修復後の各`race_receipt.json`は方式固有のprediction path・cache hashを持ち、validation receiptの該当recordが`prediction_manifest_validated_before_gt=true`と評価metricを記録する。最終`validation_receipt.json`は`failed_samples=[]`となった。
 
 最終full pytestは `199 passed, 2 warnings`、report＋validation receipt限定テストは `25 passed`、対象Ruffは `All checks passed!` だった。full repository Ruffには既存問題が残る。
+
+## 20. Task2完了とTask3 staging/deviceへの移行（2026-08-23更新）
+
+Task2のimmutable protocol/selection lockは完了した。panel、source、config、checkpoint、code commit、仮説、control、採否基準を実験前に固定し、selection lockの同一性と改変不能性を検証できる状態にした。実装commitは `0449c7e`、`3b46eb1`、`e1416e4` である。
+
+最終review roundは `APPROVED`、blocking issueは `0` だった。Task2のtargeted suiteは `143 passed`、full suiteは `536 passed, 9 skipped, 2 warnings`、Task2対象Ruffはpassした。Task1 validatorも、固定したsource/config/checkpoint契約に対して実通過している。
+
+次の作業はTask3のstaging/deviceである。公開Recipe Cのsourceと必要assetは、コード・docsとは分離したignored artifactへ取得済みである。一次sourceはApache-2.0、commit `843a47fdd531bdf7e6377673135519c54b69ae28`、`artifacts/biohub_095/source` に保持し、support側のrepoとは混在させていない。
+
+primary supportはKaggle version `10`を明示指定して取得した`repo/` runtime 13/13で、`artifacts/biohub_095/support/primary/repo` に配置した。predictorのcontrolled importは実推論・GT読み込みなしで通過している。predictorは26,008 bytes、SHA-256は `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`、primary checkpointはSHA-256 `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` である。secondaryはKaggle version `2`のcheckpointを `artifacts/biohub_095/support/secondary` に保持し、SHA-256は `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` である。両Kaggle assetはCC0-1.0である。
+
+取得量はsupport合計約16.4 MiB、source clone約4.2 MiBであり、必要なruntimeとcheckpointだけを取得した。Kaggleのlatest fallbackは使わず、primary v10・secondary v2を固定した。credential/tokenの内容やpathはreportへ出していない。
+
+この更新はreportとignored artifactの確認だけであり、GT境界、既存metric数値、0.95の判定を変更しない。本repoの0.95 campaignは引き続き**未評価・未達成**であり、Task3のstaging/device実装と、GT-free推論後の公式評価が残っている。

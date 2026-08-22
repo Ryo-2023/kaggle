@@ -101,7 +101,7 @@ git commit -m "Pin public Biohub Recipe C source and assets"
 - `validate_selection_lock(path: Path) -> dict[str, object]` はlock IDをpayloadから再計算し、5件のexact順序、config bytes、source/predictor/checkpoint identity、clean code HEAD、device policy、GT境界を直接キーで再検証する。旧receiptのfield alias探索や動的panel選択は使わない。
 - `scripts/run_biohub_095.py freeze` は `artifacts/biohub_095/selection_lock.json` を作る。prior evaluationを使った場合はreceipt hash、`ground_truth_used_for_method_family_selection=true`、`ground_truth_usage_scope=post_prediction_analysis_only`を記録する。
 
-- [ ] **Step 1: panel変更・GT選択・lock上書きの失敗テストを書く**
+- [x] **Step 1: panel変更・GT選択・lock上書きの失敗テストを書く**
 
 ```python
 def test_selection_lock_rejects_changed_panel(valid_lock):
@@ -137,30 +137,32 @@ def test_selection_lock_recomputes_id(valid_lock):
         validate_selection_lock_payload(valid_lock)
 ```
 
-- [ ] **Step 2: protocol testをREDで実行する**
+- [x] **Step 2: protocol testをREDで実行する**
 
 Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run pytest -q tests/test_recipe_c_protocol.py'`
 
 Expected: missing protocol symbolsでFAIL。
 
-- [ ] **Step 3: canonical lockとfreeze CLIを実装する**
+- [x] **Step 3: canonical lockとfreeze CLIを実装する**
 
 `validate_source_checkout()`と`validate_support_artifacts()`の認証済みreceiptをfreeze前に作り、今回のlockは`selection_lock_id`、`experiment_id`、`source_commit`、license/notebook/config SHA、predictor/両checkpoint SHA、dataset version/license、`requested_device`、`ground_truth_used_for_prediction=false`、`ground_truth_used_for_parameter_fitting=false`を直接必須化する。configはparse/re-dumpせず実bytesをhash化し、source identityは`RECIPE_C_SOURCE`と照合する。lock IDは `selection_lock_id` を除くpayloadのcanonical JSON SHA-256として再計算する。JSON NaN/Inf、未知field、absolute/credential/GT path、40桁lowercase SHA-1でないcode commit、dirty checkoutを拒否する。
 
 prior evidenceが空ならmethod-family selection flagはfalse、非空ならtrueかつscopeは`post_prediction_analysis_only`でなければならない。prior receipt本体やGT edge/座標/metricをlockへコピーせず、強いGT ordering evidenceを持つreceiptのcanonical file hashと用途だけを保存する。writeはvalidation後に`open(..., "x")`相当で排他的に作成し、書込み後の再読・canonical bytes・lock ID検証まで行う。
 
-- [ ] **Step 4: protocol/CLI testをGREENで実行する**
+- [x] **Step 4: protocol/CLI testをGREENで実行する**
 
 Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run pytest -q tests/test_recipe_c_protocol.py tests/test_recipe_c_source.py'`
 
 Expected: 全テストPASS。
 
-- [ ] **Step 5: Task 2だけをcommitする**
+- [x] **Step 5: Task 2だけをcommitする**
 
 ```bash
 git add src/biohub/recipe_c/protocol.py tests/test_recipe_c_protocol.py scripts/run_biohub_095.py
 git commit -m "Add immutable Biohub 0.95 selection lock"
 ```
+
+実測: initial REDはmodule欠落、review fix roundは`11 failed`、final integrity roundは`25 failed`。最終targeted `143 passed`、全repo `536 passed, 9 skipped, 2 warnings`、Task 2対象Ruffと`git diff --check`はpass。実装commit `0449c7e`、`3b46eb1`、`e1416e4` はfresh Luna最終reviewで`APPROVED`（blocking finding 0）。dirfd/O_NOFOLLOW、atomic no-clobber、directory fsync、実prediction/manifest再hash、hidden Git flag拒否まで確認した。
 
 ### Task 3: run-local source/dual-support stagingとdevice fallbackを実装する
 
@@ -172,9 +174,10 @@ git commit -m "Add immutable Biohub 0.95 selection lock"
 
 **Interfaces:**
 - `stage_recipe_c_runtime(source_root, primary_support_root, secondary_support_root, destination, selection_lock) -> RuntimeStage` はsourceと両supportを検証してから、期待predictor hashを持つprimaryのpristine `repo/`だけを新規run directoryへcopyする。primary/secondary checkpointはread-only元pathを指すsymlinkとして、staged support treeのsource期待pathへ配置する。
-- `apply_device_fallback_patch(predictor_path: Path) -> bool` はsupport scriptの `cuda if available else cpu` preimageを `cuda → mps → cpu` へ置換し、二回目はno-op、未知preimageは失敗する。
-- `RuntimeStage` はstaged repo、weights root、source root、config、patch前後SHA、resolved device候補を保持する。
-- 元source/primary support/secondary supportのdirectory digestがstaging前後で一致しなければ失敗する。
+- `apply_device_fallback_patch(predictor_path: Path) -> bool` はregular-file support scriptのexact `cuda if available else cpu` preimageが一箇所だけある場合に `cuda → mps → cpu` へ置換する。exact postimageはbytes不変で`False`、未知・複数preimage・symlinkは書込み前に失敗し、patch後compileを必須にする。
+- `RuntimeStage` はstaged `repo_dir`、`weights_root`、orchestration `source_root`、staged config、selection lock ID、predictor patch前後SHA、resolved device候補、role-relative receipt identityを保持する。credential/absolute source pathはreceiptへ保存しない。
+- destinationのfile/directory/dangling symlinkと親symlinkを拒否し、dirfd/O_NOFOLLOWでatomicに所有権を確保する。失敗した自分のpartial stageは`FAILED.json`で再利用不能にし、既存pathを削除・上書きしない。
+- 元source/primary support/secondary supportはsymlink-aware snapshotをstaging前後で比較する。source/support内の外部・dangling symlink、copy中のinode/size変化、primary/secondary target同一性、staged predictor/checkpoint hash不一致を拒否する。
 
 - [ ] **Step 1: 元artifact不変・patch idempotence・fallback順序の失敗テストを書く**
 
@@ -194,6 +197,22 @@ def test_device_patch_contains_cuda_mps_cpu_order(tmp_path, predictor_preimage):
     text = path.read_text()
     assert text.index("cuda") < text.index("mps") < text.index("cpu")
     assert apply_device_fallback_patch(path) is False
+
+
+def test_staging_rejects_existing_or_symlink_destination(tmp_path, valid_inputs, valid_lock):
+    destination = tmp_path / "stage"
+    destination.symlink_to(tmp_path / "missing")
+    with pytest.raises((FileExistsError, ValueError), match="symlink|exists"):
+        stage_recipe_c_runtime(*valid_inputs, destination, valid_lock)
+
+
+def test_device_patch_rejects_unknown_or_multiple_preimage_without_write(tmp_path):
+    path = tmp_path / "predict.py"
+    path.write_text("unknown preimage")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="preimage"):
+        apply_device_fallback_patch(path)
+    assert path.read_bytes() == before
 ```
 
 - [ ] **Step 2: staging testをREDで実行する**
@@ -204,7 +223,9 @@ Expected: missing staging/device patchでFAIL。
 
 - [ ] **Step 3: immutable stagingとstrict source patchを実装する**
 
-copy先が存在する場合は削除・上書きせず`FileExistsError`。各runはpristine predictorから一度だけstageする。external sourceのD4、dual-seed、edge-threshold patchはpinned `biohub_pipeline.inference` をimportしてstaged predictorへ適用し、edge-threshold patchを同じstageへ二回適用しない。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへstagingし、元artifactは変更しない。
+copy先が存在する場合は削除・上書きしない。各runはprimary v10 `repo/` 13/13 filesとpristine predictorから一度だけstageする。Task 3ではdevice互換patchだけを適用し、external D4/dual-seed/edge-threshold/margin/pairwise patchは適用しない。これらはTask 4でpinned `biohub_pipeline.inference`から一度だけ実行し、非idempotent edge-threshold patchの二重適用を防ぐ。本repoはalgorithm patchを再実装しない。secondaryは配布元の`split_0`からsource期待の`seed_314159` pathへstageし、元artifactは変更しない。
+
+実assetは`artifacts/biohub_095/`へ取得済み。source commit `843a47f...`はclean、primary v10 `repo/`はKaggle file list 13/13、controlled import/compile pass、predictor `c44e771b...`、primary `12f6881...`、secondary v2 `9bac2fa...` はTask 1 validatorでも一致した。
 
 - [ ] **Step 4: staging/source/protocol testをGREENで実行する**
 
