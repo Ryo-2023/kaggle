@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新直前の0.95 campaign remote HEAD: `66fd517`
+本レポート更新直前の0.95 campaign remote HEAD: `e56e561`（`02a0b7f` derived fd publisher + `e56e561` same-inode same-size post-fsync verification fix、push済み）
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
@@ -44,7 +44,7 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
 | source側5件参考macro | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。こちらの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | Task1/Task2完了、Task3（staging/device）は最終承認済み。次はTask3.5 prerequisite確認後のTask4 2-frame GT-free smoke |
+| 現在の作業 | Task1〜Task3.5完了。Task4 GT-free runner/GEFF bridgeをTDD実装中。実画像smokeはTask4 reviewとclean selection lock後に実施 |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -385,7 +385,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - historical race branch: `codex/biohub-multi-method-race`
 - current performance branch: `codex/biohub-095-performance`
 - 0.95 campaignの初期設計・計画commit: `de582ef`
-- 本レポート更新前に確認したremote commit: `976e87c`
+- 本レポート更新前に確認したremote commit: `e56e561`
 - Task1実装完了時のコードHEAD: `17135f0`
 - Task1完了履歴: `2a60cc0`、`87cf762`、`6887576`、`17135f0`
 - validation receipt実装commit: `fbfbf26`
@@ -454,13 +454,13 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 ### 次の一手
 
-1. 次の作業はTask2のprotocol/selection lockを実装し、PANEL_V1、source/config/checkpoint、code commit、仮説、control、採否基準を実験前に固定する。
-2. GT-free 2-frame smokeを通し、prediction GEFFとmanifestの永続化・hash検証後にだけGTを開く公式評価境界を確認する。
-3. selection lockを変更せず5 sampleを除外なしで逐次推論・公式評価する。macro `>=0.95` の実receiptが得られるまで達成扱いにしない。
-4. 未達時だけRAM-safe診断でnode/candidate/oracle上限を分解する。診断結果はpersisted prediction後のerror analysisとして次の独立したmethod/model family選択に使用できるが、GTを推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
-5. `reverse_weight=0.10`、division weight `.6`、Lane F temperature候補は既存panel結果から採用しない。
+1. Task4のGT-free runner/GEFF bridgeをTDDで実装し、Task4 reviewで契約・テストを確認する。
+2. Task4 review後にclean commitを選び、PANEL_V1、source/config/checkpoint、code commit、仮説、control、採否基準を含むselection lockを確定する。
+3. clean lockを変更せず、2-frame GT-free smokeを実行する。
+4. Task5でprediction GEFF/manifestの永続化・hash検証後にGTを開くofficial metric boundaryを確認する。GTは同じrunの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
+5. Task5 boundary確認後、5 sampleを除外なしで逐次推論・公式評価する。macro `>=0.95` の実receiptが得られるまで未評価・未達成扱いにする。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1の契約固定は完了したがRecipe Cの本repo公式評価は未実施で、0.95は未達成扱いである。division対応も未解決である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証は完了したが、Task4実装中でRecipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -676,8 +676,16 @@ primary supportはKaggle version `10`を明示指定して取得した`repo/` ru
 
 ## 21. Task3 staging/device 最終承認（2026-08-23更新）
 
-Task3の履歴は initial `b8b895d`、hardening `49674c4`、race修正 `afb8517`、receipt failure-atomic修正 `2724a66` / `4848075` / `66fd517` である。最終remote HEADは `66fd517`。P1-1/P1-2/P1-3/P2-1のpath race、P1-4のcached fd lifetime、P1-5のREADY+FAILED、P2-2のtemp fd cleanup、P1-6のreceipt partial write/fsync/cleanup failureは、同一攻撃注入と回帰テストでclosureした。Task3 final reviewは **APPROVED** である。
+Task3の履歴は initial `b8b895d`、hardening `49674c4`、race修正 `afb8517`、receipt failure-atomic修正 `2724a66` / `4848075` / `66fd517` である。Task3 final review時点のremote HEADは `66fd517`。P1-1/P1-2/P1-3/P2-1のpath race、P1-4のcached fd lifetime、P1-5のREADY+FAILED、P2-2のtemp fd cleanup、P1-6のreceipt partial write/fsync/cleanup failureは、同一攻撃注入と回帰テストでclosureした。Task3 final reviewは **APPROVED** である。
 
 最終検証は targeted `49 passed`、full `585 passed, 9 skipped, 2 warnings`、変更対象Ruff pass、`git diff --check` passだった。実assetのstaging-only smokeは **READY**。source/support digestは不変で、primary/secondary checkpointは外部元pathへのsymlinkではなく、staged tree内のregular fileへcopyされることを確認した。device候補順は `CUDA → MPS → CPU`（現Dockerの実解決はCPU）である。
 
-このTask3検証ではGTを開かず、inferenceとmetric評価も実行していない。Task3.5 prerequisite（consumer側fd-backed契約の確認）を先に満たし、次にTask4の2-frame GT-free smokeへ進む。0.95目標は引き続き **未評価・未達成** であり、source側参考macro `0.9560`を本repoの達成値として扱わない。
+このTask3検証ではGTを開かず、inferenceとmetric評価も実行していない。Task3.5の最終承認と後続の現在地は次節に記録する。0.95目標は引き続き **未評価・未達成** であり、source側参考macro `0.9560`を本repoの達成値として扱わない。
+
+## 22. Task3.5 派生asset publish boundary 最終承認（2026-08-23更新）
+
+Task3.5は、`02a0b7f` の fd-backed derived publisher に、同一inode・同一sizeの内容改変をpost-fsync後に再検証する `e56e561` のfixを加えた状態で完了した。remote HEADは `e56e561` までpush済み。fresh re-reviewは P1-1 **ADDRESSED**、新規blocking issue `0`、最終判定 **APPROVED** だった。
+
+実際のDocker `biohub-dev` と virtiofs mount上のfresh ignored stageで、派生predictorとPANEL_V1 splitsをpublishし、readback、SHA-256、receiptのdevice/inode/size/fsyncedを確認した。同一roleの再publishはno-clobberで拒否され、canonical predictor/config/checkpointとsource/support treeは不変、stage内symlinkは0、close後のfd/read/publish/cached view APIは拒否された。実assetを用いたstaging-only functional smokeも **APPROVED** である。
+
+root fresh verificationは source/protocol/staging combined `211 passed`、同時進行中のTask4 testsを明示除外したfull相当 `604 passed, 9 skipped, 2 warnings`、Ruff/compile passだった。今回のpayloadはcompileable smoke predictorとexact PANEL_V1 splitsであり、GT、画像/Zarr、実推論、official metric、Task4 full runnerは実行していない。したがって0.95は引き続き **未評価・未達成** である。
