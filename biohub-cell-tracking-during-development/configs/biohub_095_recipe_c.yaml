@@ -1,0 +1,109 @@
+inference:
+  detection_threshold: 0.96875
+  ensemble_alpha: 0.5
+  ensemble_weights_relative: weights/unet_transformer/seed_314159/edge_predictor_best.pth
+  ilp_appearance_weight: 0.0
+  ilp_disappearance_weight: 1.575
+  ilp_division_weight: 1.0
+  ilp_edge_weight: -1.0
+  method: unet_transformer
+  prediction_script: scripts/predict_unet_transformer.py
+  spatial_d4_tta: true
+  support_artifact: pilkwang/biohub-tracking-support-pack-50ep-v1
+  unet_batch_size: 4
+  use_ilp: true
+  weights_relative: weights/unet_transformer/split_0/edge_predictor_best.pth
+  edge_threshold: 0.4
+local_cv:
+  enabled_for_submission_run: false
+  fixed_dataset_count: 8
+  max_match_um: 7.0
+  note: Full local CV requires competition train Zarr/GEFF stores and the support
+    artifact.
+postprocessing:
+  adaptive_short_track_rescue: true
+  deepcenter_checkpoint_default: ''
+  deepcenter_expected_epoch: 0
+  deepcenter_gap_confirm_min_span_um: 8.0
+  deepcenter_gap_threshold: 0.2
+  deepcenter_gap_veto: false
+  deepcenter_manifest_default: ''
+  deepcenter_relative: weights/full_frame_center/checkpoint_last.pt
+  deepcenter_safe_div_threshold: 0.12
+  deepcenter_safe_div_veto: false
+  deepcenter_score_cache_max_frames: 8
+  deepcenter_score_win_yx: 2
+  deepcenter_score_win_z: 1
+  div_drop_to_single_if_bad: true
+  div_parent_max_um: 10.5
+  div_sister_max_um: 8.0
+  gap2_frame_frac_cap: 0.006
+  gap2_max_links_abs: 180
+  gap2_max_links_frac: 0.0045
+  gap2_max_step_um: 4.4
+  gap2_max_total_um: 10.2
+  gap2_require_context: true
+  gap_close_max_added_abs: 2000
+  gap_close_max_added_frac: 0.05
+  gap_close_max_gap: 2
+  gap_close_reuse_existing: true
+  gap_close_reuse_um: 3.2
+  gap_close_um: 5.8
+  gap_density_adaptive: true
+  gap_density_gain: 0.04
+  gap_density_max_step_delta_um: 0.125
+  gap_density_neighbors: 3
+  gap_density_reference_um: 6.5
+  gap_refine_max_shift_um: 3.2
+  gap_refine_synthetic: true
+  gap_refine_win_yx: 3
+  gap_refine_win_z: 1
+  motion_relink_learned_bonus: 1.0
+  motion_relink_max_frame_nodes: 2600
+  motion_relink_relaxed_um: 9.5
+  motion_relink_tight_um: 6.0
+  motion_relink_velocity_weight: 0.5
+  output_division_geometry_filter: false
+  output_edge_max_um: 14.0
+  output_enforce_next_frame: true
+  output_filter_short_tracks: true
+  output_gap2_recovery: false
+  output_gap_close: true
+  output_keep_division_components: true
+  output_linefit_smooth: true
+  output_linefit_weight: 0.8
+  output_linefit_window: 2
+  output_min_track_len: 6
+  output_motion_relink: false
+  output_prune_isolated: true
+  output_safe_divisions: true
+  output_single_child_repair: false
+  output_single_parent_repair: true
+  require_deepcenter_veto: false
+  safe_div_existing_child_max_um: 7.65
+  safe_div_frame_frac_cap: 0.0076
+  safe_div_global_frac_cap: 0.00375
+  safe_div_max_um: 4.66
+  safe_div_sister_max_um: 8.5
+  short_track_rescue_max_mean_edge_dist_um: 2.75
+  short_track_rescue_max_nodes_abs: 60
+  short_track_rescue_max_nodes_frac: 0.006
+  short_track_rescue_min_len: 5
+  short_track_rescue_min_mean_edge_prob: 0.9
+  short_track_rescue_trigger_removed_frac: 0.1
+  use_deepcenter_veto: false
+  voxel_scale_um:
+  - 1.625
+  - 0.40625
+  - 0.40625
+source:
+  author: Yusuke Togashi
+  best_score: 0.908
+  best_score_version: 96
+  license: Apache-2.0
+  public_score: 0.908
+  slug: yusuketogashi/clean-approach-lightweight-local-cv-no-hack
+  title: Clean Approach + Lightweight Local CV | No Hack
+  url: https://www.kaggle.com/code/yusuketogashi/clean-approach-lightweight-local-cv-no-hack
+  version: 106
+  note: short-track control reproduce det=0.96875
