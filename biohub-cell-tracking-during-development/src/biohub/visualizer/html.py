@@ -21,8 +21,11 @@ VIEWER_HTML = r'''<!doctype html>
     .panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .panel { min-width: 0; background: #111821; border: 1px solid #27313d; border-radius: 10px; overflow: hidden; }
     .panel-title { padding: 9px 12px; border-bottom: 1px solid #27313d; color: #c7d2df; font-size: 13px; font-weight: 650; }
-    .canvas-wrap { position: relative; display: grid; place-items: center; min-height: 320px; background: #05080c; overflow: auto; }
-    canvas { max-width: 100%; height: auto; image-rendering: pixelated; }
+    .canvas-wrap { position: relative; display: grid; place-items: center start; min-height: 320px; max-height: 78vh; background: #05080c; overflow: auto; }
+    .canvas-stack { position: relative; width: 100%; }
+    canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+    /* Overlay marks are sized in screen pixels, so this layer is never pixelated. */
+    #overlay-canvas { position: absolute; left: 0; top: 0; height: 100%; image-rendering: auto; }
     .controls { display: grid; gap: 10px; background: #111821; border: 1px solid #27313d; border-radius: 10px; padding: 12px; }
     .row { display: grid; grid-template-columns: 88px 1fr 64px; gap: 10px; align-items: center; }
     input[type="range"] { width: 100%; }
@@ -53,7 +56,12 @@ VIEWER_HTML = r'''<!doctype html>
     </article>
     <article class="panel">
       <div class="panel-title">Model output overlay</div>
-      <div class="canvas-wrap"><canvas id="output-canvas"></canvas></div>
+      <div class="canvas-wrap">
+        <div class="canvas-stack">
+          <canvas id="output-canvas"></canvas>
+          <canvas id="overlay-canvas"></canvas>
+        </div>
+      </div>
     </article>
   </section>
   <section class="controls">
@@ -79,7 +87,8 @@ VIEWER_HTML = r'''<!doctype html>
       <label><input type="checkbox" data-layer="tp" checked><span class="swatch tp"></span>TP links</label>
       <label><input type="checkbox" data-layer="fp" checked><span class="swatch fp"></span>FP links</label>
       <label><input type="checkbox" data-layer="fn" checked><span class="swatch fn"></span>FN links</label>
-      <label><input type="checkbox" data-layer="prediction-edge"><span class="swatch pred"></span>Unscored links</label>
+      <label><input type="checkbox" data-layer="prediction-edge" checked>
+        <span class="swatch pred"></span>Unscored links</label>
     </div>
     <div class="muted">The left panel is the raw input. The right panel uses the same slice and draws model nodes and outgoing t→t+1 motion vectors. When ground truth is available, link colors follow the official metric's TP/FP/FN classification.</div>
   </section>
@@ -89,8 +98,30 @@ VIEWER_HTML = r'''<!doctype html>
   const state = { meta: null, t: 0, z: 0, radius: 1, playing: false, timer: null };
   const inputCanvas = document.getElementById('input-canvas');
   const outputCanvas = document.getElementById('output-canvas');
+  const overlayCanvas = document.getElementById('overlay-canvas');
   const inputCtx = inputCanvas.getContext('2d');
   const outputCtx = outputCanvas.getContext('2d');
+  const overlayCtx = overlayCanvas.getContext('2d');
+  let lastOverlay = null;
+  let renderToken = 0;
+
+  // Overlay marks are sized in screen pixels, not image pixels: a 2048 px wide
+  // frame is displayed at roughly a third of that, so image-pixel sized marks
+  // would shrink below one screen pixel and disappear on real data.
+  const NODE_RADIUS_CSS = { prediction: 4.5, ground_truth: 6.5 };
+  const EDGE_WIDTH_CSS = 2.2;
+
+  function syncOverlay() {
+    const rect = outputCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(rect.width * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
+    if (overlayCanvas.width !== width) overlayCanvas.width = width;
+    if (overlayCanvas.height !== height) overlayCanvas.height = height;
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    // Maps one image pixel onto the overlay layer's device pixels.
+    return { k: outputCanvas.width ? overlayCanvas.width / outputCanvas.width : 1, dpr };
+  }
   const layerEnabled = category => {
     const boxes = [...document.querySelectorAll(`[data-layer="${category}"]`)];
     return boxes.some(box => box.checked);
@@ -125,59 +156,83 @@ VIEWER_HTML = r'''<!doctype html>
     return response.json();
   }
 
-  async function loadImage() {
+  async function loadFrame(t, z) {
+    // `image.decode()` is deferred indefinitely while the document is hidden,
+    // which would leave a background tab blank forever; `load` always fires.
     const image = new Image();
-    image.src = `/api/frame?t=${state.t}&z=${state.z}&_=${Date.now()}`;
-    await image.decode();
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error(`Could not load frame t=${t} z=${z}`));
+      image.src = `/api/frame?t=${t}&z=${z}&_=${Date.now()}`;
+    });
+    return image;
+  }
+
+  function drawArrow(ctx, edge, color, view) {
+    const { k, dpr } = view;
+    const x1 = edge.x1 * k, y1 = edge.y1 * k, x2 = edge.x2 * k, y2 = edge.y2 * k;
+    const dx = x2 - x1, dy = y2 - y1;
+    const length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length, uy = dy / length;
+    const head = Math.min(11 * dpr, Math.max(6 * dpr, length * 0.28));
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = EDGE_WIDTH_CSS * dpr;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * head - uy * head * 0.55, y2 - uy * head + ux * head * 0.55);
+    ctx.lineTo(x2 - ux * head + uy * head * 0.55, y2 - uy * head - ux * head * 0.55);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawNode(ctx, node, view) {
+    const layer = node.kind === 'prediction' ? 'prediction-node' : 'ground-truth-node';
+    if (!layerEnabled(layer)) return;
+    const { k, dpr } = view;
+    const color = categoryColor[node.kind];
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = (node.kind === 'ground_truth' ? 2 : 2.4) * dpr;
+    ctx.beginPath();
+    ctx.arc(node.x * k, node.y * k, NODE_RADIUS_CSS[node.kind] * dpr, 0, Math.PI * 2);
+    ctx.stroke();
+    if (node.kind === 'prediction') {
+      ctx.globalAlpha = 0.28; ctx.fill(); ctx.globalAlpha = 1;
+    }
+  }
+
+  function paintOverlay() {
+    if (!lastOverlay) return;
+    const view = syncOverlay();
+    for (const edge of lastOverlay.edges) {
+      const layer = edge.category === 'prediction' ? 'prediction-edge' : edge.category;
+      if (layerEnabled(layer)) drawArrow(overlayCtx, edge, categoryColor[edge.category], view);
+    }
+    for (const node of lastOverlay.nodes) drawNode(overlayCtx, node, view);
+  }
+
+  // A 2048 px frame takes far longer to fetch than a slider emits events, so
+  // every render claims a token and a stale response never repaints the view.
+  async function render() {
+    const token = ++renderToken;
+    const { t, z, radius } = state;
+    const image = await loadFrame(t, z);
+    if (token !== renderToken) return;
     for (const canvas of [inputCanvas, outputCanvas]) {
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
     }
     inputCtx.drawImage(image, 0, 0);
     outputCtx.drawImage(image, 0, 0);
-  }
 
-  function drawArrow(ctx, edge, color) {
-    const dx = edge.x2 - edge.x1;
-    const dy = edge.y2 - edge.y1;
-    const length = Math.hypot(dx, dy) || 1;
-    const ux = dx / length, uy = dy / length;
-    const head = Math.min(8, Math.max(4, length * 0.2));
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(edge.x1, edge.y1); ctx.lineTo(edge.x2, edge.y2); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(edge.x2, edge.y2);
-    ctx.lineTo(edge.x2 - ux * head - uy * head * 0.55, edge.y2 - uy * head + ux * head * 0.55);
-    ctx.lineTo(edge.x2 - ux * head + uy * head * 0.55, edge.y2 - uy * head - ux * head * 0.55);
-    ctx.closePath(); ctx.fill();
-  }
-
-  function drawNode(ctx, node) {
-    const layer = node.kind === 'prediction' ? 'prediction-node' : 'ground-truth-node';
-    if (!layerEnabled(layer)) return;
-    const color = categoryColor[node.kind];
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = node.kind === 'ground_truth' ? 2 : 2.5;
-    ctx.beginPath(); ctx.arc(node.x, node.y, node.kind === 'ground_truth' ? 5 : 4, 0, Math.PI * 2); ctx.stroke();
-    if (node.kind === 'prediction') {
-      ctx.globalAlpha = 0.28; ctx.fill(); ctx.globalAlpha = 1;
-    }
-  }
-
-  async function render() {
-    await loadImage();
-    const overlay = await fetchJson(`/api/overlay?t=${state.t}&z=${state.z}&z_radius=${state.radius}`);
-    for (const edge of overlay.edges) {
-      const layer = edge.category === 'prediction' ? 'prediction-edge' : edge.category;
-      if (layerEnabled(layer)) drawArrow(outputCtx, edge, categoryColor[edge.category]);
-    }
-    for (const node of overlay.nodes) drawNode(outputCtx, node);
-    document.getElementById('time-value').textContent = `t=${state.t}`;
-    document.getElementById('z-value').textContent = `z=${state.z}`;
-    document.getElementById('radius-value').textContent = `±${state.radius}`;
+    const overlay = await fetchJson(`/api/overlay?t=${t}&z=${z}&z_radius=${radius}`);
+    if (token !== renderToken) return;
+    lastOverlay = overlay;
+    paintOverlay();
+    document.getElementById('time-value').textContent = `t=${t}`;
+    document.getElementById('z-value').textContent = `z=${z}`;
+    document.getElementById('radius-value').textContent = `±${radius}`;
   }
 
   function bindRange(id, field) {
@@ -202,16 +257,36 @@ VIEWER_HTML = r'''<!doctype html>
     bindRange('time-slider', 't');
     bindRange('z-slider', 'z');
     bindRange('radius-slider', 'radius');
-    for (const box of document.querySelectorAll('[data-layer]')) box.addEventListener('change', () => render().catch(showError));
-    document.getElementById('play-button').addEventListener('click', event => {
-      state.playing = !state.playing;
-      event.currentTarget.textContent = state.playing ? '❚❚ Pause' : '▶ Play';
-      clearInterval(state.timer);
-      if (state.playing) state.timer = setInterval(() => {
-        state.t = (state.t + 1) % state.meta.shape[0];
-        timeSlider.value = state.t;
-        render().catch(showError);
-      }, 350);
+    // Layer visibility is a pure repaint - no need to refetch the slice.
+    for (const box of document.querySelectorAll('[data-layer]')) box.addEventListener('change', paintOverlay);
+    window.addEventListener('resize', paintOverlay);
+    const playButton = document.getElementById('play-button');
+    function stopPlayback() {
+      state.playing = false;
+      clearTimeout(state.timer);
+      state.timer = null;
+      playButton.textContent = '▶ Play';
+    }
+    // Self-scheduling instead of setInterval: a fixed interval would stack up
+    // renders whenever a frame takes longer than the tick to load.
+    async function playStep() {
+      if (!state.playing) return;
+      state.t = (state.t + 1) % state.meta.shape[0];
+      timeSlider.value = state.t;
+      try {
+        await render();
+      } catch (error) {
+        showError(error);
+        stopPlayback();
+        return;
+      }
+      if (state.playing) state.timer = setTimeout(playStep, 120);
+    }
+    playButton.addEventListener('click', () => {
+      if (state.playing) { stopPlayback(); return; }
+      state.playing = true;
+      playButton.textContent = '❚❚ Pause';
+      playStep();
     });
     await render();
   }

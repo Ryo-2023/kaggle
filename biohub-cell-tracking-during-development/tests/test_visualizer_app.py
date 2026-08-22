@@ -67,3 +67,34 @@ def test_server_exposes_meta_frame_and_overlay_endpoints() -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_evaluate_graphs_never_hardcodes_the_matched_node_id_string() -> None:
+    """Regression guard for a real, previously-shipped bug.
+
+    The last-committed `feat/biohub-bootstrap` version of ``_evaluate_graphs`` called
+    ``prediction.node_attrs(attr_keys=["node_id", "matched_node_id"])`` with a hardcoded
+    key name. tracksdata's actual attribute key
+    (``td.DEFAULT_ATTR_KEYS.MATCHED_NODE_ID``) is ``"match_node_id"`` (no "ed"), so that
+    line raised, for every real prediction/ground-truth pair:
+
+        KeyError: "node attribute key(s) ['matched_node_id'] not found. Available node
+        attribute keys: ['match_node_id', 'match_score', 'node_id', 't', 'x', 'y', 'z']"
+
+    Reproduced against real CODEX prediction GEFFs by temporarily restoring the old
+    file content; see docs/results/claude_lane_c_error_analysis.md and
+    tests/test_visualizer_integration.py::test_build_state_scores_prediction_against_ground_truth
+    for the behavioral (tracksdata-backed) regression coverage. This test pins the
+    narrower, dependency-light source-level contract: the lookup key must always be
+    resolved through ``td.DEFAULT_ATTR_KEYS``, never a literal string, so a future
+    rename in tracksdata cannot silently reintroduce the same crash.
+    """
+    import inspect
+
+    from biohub.visualizer import app
+
+    source = inspect.getsource(app._evaluate_graphs)
+    assert '"matched_node_id"' not in source
+    assert "'matched_node_id'" not in source
+    assert "DEFAULT_ATTR_KEYS.MATCHED_NODE_ID" in source
+    assert "DEFAULT_ATTR_KEYS.NODE_ID" in source
