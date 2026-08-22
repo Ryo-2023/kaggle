@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -33,11 +34,14 @@ from biohub.recipe_c.source import (  # noqa: E402
 
 def _git_commit_and_clean() -> str:
     common = ["git", "-C", str(PROJECT_ROOT)]
+    environment = os.environ.copy()
+    environment["GIT_OPTIONAL_LOCKS"] = "0"
     head = subprocess.run(
         [*common, "rev-parse", "HEAD"],
         check=False,
         capture_output=True,
         text=True,
+        env=environment,
     )
     if head.returncode != 0 or not head.stdout.strip():
         raise ValueError("the campaign checkout HEAD could not be read")
@@ -46,12 +50,29 @@ def _git_commit_and_clean() -> str:
         check=False,
         capture_output=True,
         text=True,
+        env=environment,
     )
     if status.returncode != 0:
         raise ValueError("the campaign checkout status could not be read")
     if status.stdout.strip():
         raise ValueError("the campaign checkout must be clean before freeze")
+    index = subprocess.run(
+        [*common, "ls-files", "-v", "-z"],
+        check=False,
+        capture_output=True,
+        env=environment,
+    )
+    if index.returncode != 0:
+        raise ValueError("the campaign checkout index could not be read")
+    for entry in index.stdout.split(b"\0"):
+        if entry and chr(entry[0]) != "H":
+            relative = entry[2:].decode(errors="replace")
+            raise ValueError(f"the campaign checkout index has hidden flags: {relative}")
     return head.stdout.strip()
+
+
+def _resolve_project_path(path: Path) -> Path:
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def _experiment_from_args(args: argparse.Namespace) -> ExperimentSpec:
@@ -66,13 +87,22 @@ def _experiment_from_args(args: argparse.Namespace) -> ExperimentSpec:
         changes=args.changes,
         control_id=args.control_id,
         acceptance_criteria=args.acceptance_criteria,
+        prior_evidence_receipt_hash=args.prior_evidence_receipt_hash,
     )
 
 
 def _freeze(args: argparse.Namespace) -> int:
     code_commit = _git_commit_and_clean()
-    source_receipt = validate_source_checkout(args.source)
-    support_receipt = validate_support_artifacts(args.primary_support, args.secondary_support)
+    source_path = _resolve_project_path(args.source)
+    primary_support_path = _resolve_project_path(args.primary_support)
+    secondary_support_path = _resolve_project_path(args.secondary_support)
+    config_path = _resolve_project_path(args.config)
+    output_path = _resolve_project_path(args.output)
+    prior_receipts = [_resolve_project_path(path) for path in args.prior_evaluation_receipt]
+    if prior_receipts and args.prior_evidence_receipt_hash is None:
+        raise ValueError("--prior-evidence-receipt-hash is required with prior receipts")
+    source_receipt = validate_source_checkout(source_path)
+    support_receipt = validate_support_artifacts(primary_support_path, secondary_support_path)
     # Both validators emit the same direct contract field names.  Merging only
     # those receipts keeps the protocol independent of artifact filesystem paths.
     merged_receipt = dict(source_receipt)
@@ -95,13 +125,13 @@ def _freeze(args: argparse.Namespace) -> int:
             merged_receipt[key] = support_receipt[key]
     payload = build_selection_lock(
         merged_receipt,
-        args.config,
+        config_path,
         code_commit,
         args.requested_device,
         _experiment_from_args(args),
-        args.prior_evaluation_receipt,
+        prior_receipts,
     )
-    output = write_selection_lock(args.output, payload)
+    output = write_selection_lock(output_path, payload)
     print(
         json.dumps(
             {"selection_lock_id": payload["selection_lock_id"], "output": output.name},
@@ -118,26 +148,29 @@ def _build_parser() -> argparse.ArgumentParser:
     freeze.add_argument("--source", type=Path, required=True)
     freeze.add_argument("--primary-support", type=Path, required=True)
     freeze.add_argument("--secondary-support", type=Path, required=True)
-    freeze.add_argument("--config", type=Path, required=True)
-    freeze.add_argument("--output", type=Path, default=Path("artifacts/biohub_095/selection_lock.json"))
+    freeze.add_argument(
+        "--config",
+        type=Path,
+        default=PROJECT_ROOT / "configs" / "biohub_095_recipe_c.yaml",
+    )
+    freeze.add_argument(
+        "--output",
+        type=Path,
+        default=PROJECT_ROOT / "artifacts" / "biohub_095" / "selection_lock.json",
+    )
     freeze.add_argument("--device", "--requested-device", dest="requested_device", default="auto")
     freeze.add_argument("--prior-evaluation-receipt", type=Path, action="append", default=[])
-    freeze.add_argument("--experiment-id", default="recipe_c_v1")
-    freeze.add_argument("--method-family", default="recipe_c_unet_transformer_ilp")
-    freeze.add_argument(
-        "--hypothesis",
-        default="the pinned public dual-seed Recipe C improves temporal edge calibration",
-    )
-    freeze.add_argument("--expected-gain", type=float, default=0.0)
-    freeze.add_argument("--cost", default="one fixed five-sample panel run")
-    freeze.add_argument("--risk", default="runtime cost without a macro-score gain")
-    freeze.add_argument("--novelty", default="public Recipe C adaptation")
-    freeze.add_argument("--changes", default="use the two separately pinned public checkpoints")
-    freeze.add_argument("--control-id", default="recipe_c_control_v1")
-    freeze.add_argument(
-        "--acceptance-criteria",
-        default="all five PANEL_V1 samples complete and the official macro gate improves",
-    )
+    freeze.add_argument("--prior-evidence-receipt-hash")
+    freeze.add_argument("--experiment-id", required=True)
+    freeze.add_argument("--method-family", required=True)
+    freeze.add_argument("--hypothesis", required=True)
+    freeze.add_argument("--expected-gain", type=float, required=True)
+    freeze.add_argument("--cost", required=True)
+    freeze.add_argument("--risk", required=True)
+    freeze.add_argument("--novelty", required=True)
+    freeze.add_argument("--changes", required=True)
+    freeze.add_argument("--control-id", required=True)
+    freeze.add_argument("--acceptance-criteria", required=True)
     freeze.set_defaults(handler=_freeze)
     return parser
 

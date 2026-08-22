@@ -12,9 +12,12 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
+from datetime import datetime
 from pathlib import Path, PureWindowsPath
 
 from .source import RECIPE_C_SOURCE
@@ -44,6 +47,35 @@ _DEVICE_POLICIES = {
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 _HASH_CHUNK_SIZE = 1024 * 1024
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_PRIOR_RECEIPT_REQUIRED_FIELDS = frozenset(
+    {
+        "schema_version",
+        "receipt_type",
+        "panel",
+        "ground_truth_used_for_prediction",
+        "ground_truth_used_for_parameter_fitting",
+        "ground_truth_usage_scope",
+        "gt_guard",
+    },
+)
+_PRIOR_RECEIPT_OPTIONAL_FIELDS = frozenset({"metrics", "selection_lock_id"})
+_GT_GUARD_FIELDS = frozenset(
+    {
+        "sample_id",
+        "prediction_directory_sha256",
+        "prediction_files",
+        "prediction_total_bytes",
+        "prediction_manifest_created_at",
+        "prediction_persisted_at",
+        "ground_truth_opened_at",
+        "ordering_enforced_by",
+    },
+)
+_GT_GUARD_OPTIONAL_FIELDS = frozenset(
+    {"prediction_path", "prediction_manifest_path", "ground_truth_path", "ordering_evidence"},
+)
+_GT_GUARD_ORDERING_TOKEN = "biohub.reproducibility.gt_guard.open_ground_truth"
 
 _SOURCE_FIELDS: tuple[str, ...] = (
     "source_url",
@@ -258,6 +290,21 @@ def _require_exact_keys(payload: Mapping[str, object], expected: frozenset[str],
         raise ValueError(f"{label} contains unknown field(s): {', '.join(sorted(unknown))}")
 
 
+def _require_required_keys(
+    payload: Mapping[str, object],
+    required: frozenset[str],
+    optional: frozenset[str],
+    label: str,
+) -> None:
+    actual = set(payload)
+    missing = required - actual
+    unknown = actual - required - optional
+    if missing:
+        raise ValueError(f"{label} missing required field(s): {', '.join(sorted(missing))}")
+    if unknown:
+        raise ValueError(f"{label} contains unknown field(s): {', '.join(sorted(unknown))}")
+
+
 def _require_hash(value: object, label: str) -> str:
     if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
         raise ValueError(f"{label} must be a lowercase SHA-256")
@@ -274,23 +321,68 @@ def _require_relative_path(value: object, label: str) -> str:
 
 
 def _looks_absolute_path(value: str) -> bool:
-    return Path(value).is_absolute() or PureWindowsPath(value).is_absolute()
+    return (
+        Path(value).is_absolute()
+        or PureWindowsPath(value).is_absolute()
+        or value.startswith(("~/", "~\\"))
+    )
+
+
+def _normalized_key(key: object) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(key).lower())
+
+
+_GT_PATH_KEYS = frozenset(
+    {
+        "groundtruth",
+        "groundtruthpath",
+        "groundtruthroot",
+        "groundtruthfile",
+        "gt",
+        "gtpath",
+        "gtroot",
+        "gtfile",
+    },
+)
+_ALLOWED_GT_USAGE_KEYS = frozenset(
+    {
+        "ground_truth_used_for_prediction",
+        "ground_truth_used_for_parameter_fitting",
+        "ground_truth_used_for_method_family_selection",
+        "ground_truth_usage_scope",
+    },
+)
 
 
 def _assert_no_forbidden_paths(value: object, location: str = "lock") -> None:
     """Reject absolute, credential, and ground-truth paths recursively."""
 
+    if isinstance(value, str):
+        lowered = value.lower()
+        if _looks_absolute_path(value):
+            raise ValueError(f"absolute path is forbidden in {location}")
+        if ".kaggle" in lowered or "kaggle.json" in lowered or "credential" in lowered:
+            raise ValueError(f"credential path is forbidden in {location}")
+        return
     if isinstance(value, Mapping):
         for key, item in value.items():
             key_text = str(key).lower()
+            normalized_key = _normalized_key(key)
             child = f"{location}.{key}"
+            if normalized_key in _GT_PATH_KEYS and str(key) not in _ALLOWED_GT_USAGE_KEYS:
+                raise ValueError(f"ground truth path/value is forbidden in {child}")
             if isinstance(item, str):
                 lowered = item.lower()
                 if _looks_absolute_path(item):
                     raise ValueError(f"absolute path is forbidden in {child}")
-                if ".kaggle" in lowered or "kaggle.json" in lowered or "credential" in lowered:
+                if (
+                    ".kaggle" in lowered
+                    or "kaggle.json" in lowered
+                    or "credential" in lowered
+                    or normalized_key in {"secret", "secretpath", "kaggledir", "kagglepath"}
+                ):
                     raise ValueError(f"credential path is forbidden in {child}")
-                if ("ground_truth" in key_text or key_text in {"gt", "gt_path"}) and key_text not in {
+                if ("ground_truth" in key_text or normalized_key in _GT_PATH_KEYS) and str(key) not in {
                     "ground_truth_usage_scope",
                 }:
                     raise ValueError(f"ground truth path/value is forbidden in {child}")
@@ -323,37 +415,53 @@ def _safe_config_label(path: Path) -> str:
     """Retain only a repository-relative label; never persist an absolute path."""
 
     if path.is_absolute():
-        return path.name
+        resolved = path.resolve(strict=False)
+        try:
+            return resolved.relative_to(_PROJECT_ROOT).as_posix()
+        except ValueError:
+            return path.name
     if not path.parts or ".." in path.parts:
         raise ValueError("config path must not escape its relative root")
     return path.as_posix()
 
 
 def _load_prior_receipt(receipt: object, index: int) -> Mapping[str, object]:
-    if isinstance(receipt, Path):
-        try:
-            payload = json.loads(receipt.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ValueError(f"prior receipt {index} could not be read as JSON") from exc
-    elif isinstance(receipt, Mapping):
-        payload = dict(receipt)
-    else:
-        raise ValueError(f"prior receipt {index} must be a mapping or JSON path")
+    if isinstance(receipt, str):
+        receipt = Path(receipt)
+    if not isinstance(receipt, Path):
+        raise ValueError(f"prior receipt {index} must be a persisted JSON path")
+    if receipt.is_symlink() or not receipt.is_file():
+        raise ValueError(f"prior receipt {index} must be a regular persisted file")
+    try:
+        raw = receipt.read_bytes()
+        payload = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"prior receipt {index} could not be read as JSON") from exc
     if not isinstance(payload, Mapping):
         raise ValueError(f"prior receipt {index} must contain a JSON object")
     try:
-        _canonical_json_mapping(payload)
+        canonical = _canonical_json_mapping(payload)
     except ValueError as exc:
         raise ValueError(f"prior receipt {index} is not canonical JSON-safe") from exc
+    if raw.decode("utf-8") != canonical:
+        raise ValueError(f"prior receipt {index} is not persisted as canonical JSON")
     return payload
 
 
 def _validate_strong_prior_receipt(receipt: Mapping[str, object], index: int) -> str:
-    """Require enough schema/order evidence before accepting a prior receipt."""
+    """Require persisted schema, exact panel order, and GT-guard timestamps."""
 
     schema_version = receipt.get("schema_version")
-    if isinstance(schema_version, bool) or not isinstance(schema_version, int) or schema_version < 1:
+    if schema_version != LOCK_SCHEMA_VERSION:
         raise ValueError(f"prior receipt {index} has no strong schema_version")
+    if receipt.get("receipt_type") != "panel_evaluation":
+        raise ValueError(f"prior receipt {index} has no strong receipt_type")
+    allowed_fields = _PRIOR_RECEIPT_REQUIRED_FIELDS | _PRIOR_RECEIPT_OPTIONAL_FIELDS
+    missing = _PRIOR_RECEIPT_REQUIRED_FIELDS - set(receipt)
+    unknown = set(receipt) - allowed_fields
+    if missing or unknown:
+        detail = ", ".join(sorted(missing or unknown))
+        raise ValueError(f"prior receipt {index} schema is incomplete or unknown: {detail}")
     panel = receipt.get("panel")
     if not isinstance(panel, Mapping):
         raise ValueError(f"prior receipt {index} has no strong PANEL_V1 ordering evidence")
@@ -368,6 +476,47 @@ def _validate_strong_prior_receipt(receipt: Mapping[str, object], index: int) ->
     scope = receipt.get("ground_truth_usage_scope")
     if scope != GROUND_TRUTH_POST_ANALYSIS_SCOPE:
         raise ValueError(f"prior receipt {index} has no post-prediction ground truth usage scope")
+    guard = receipt.get("gt_guard")
+    if not isinstance(guard, list) or len(guard) != len(_PANEL_V1_FIXED):
+        raise ValueError(f"prior receipt {index} gt_guard must cover all five PANEL_V1 samples")
+    for guard_index, item in enumerate(guard):
+        if not isinstance(item, Mapping):
+            raise ValueError(f"prior receipt {index} gt_guard[{guard_index}] is not an object")
+        _require_required_keys(
+            item,
+            _GT_GUARD_FIELDS,
+            _GT_GUARD_OPTIONAL_FIELDS,
+            f"prior receipt {index} gt_guard[{guard_index}]",
+        )
+        if item["sample_id"] != _PANEL_V1_FIXED[guard_index]:
+            raise ValueError(f"prior receipt {index} gt_guard sample order is not PANEL_V1")
+        _require_hash(item["prediction_directory_sha256"], f"prior receipt {index} gt_guard digest")
+        for field in ("prediction_files", "prediction_total_bytes"):
+            number = item[field]
+            if isinstance(number, bool) or not isinstance(number, int) or number < 0:
+                raise ValueError(f"prior receipt {index} gt_guard {field} is invalid")
+        if item["prediction_files"] < 1:
+            raise ValueError(f"prior receipt {index} gt_guard prediction directory is empty")
+        if item["ordering_enforced_by"] != _GT_GUARD_ORDERING_TOKEN:
+            raise ValueError(f"prior receipt {index} gt_guard ordering token is invalid")
+        timestamps: list[datetime] = []
+        for field in (
+            "prediction_manifest_created_at",
+            "prediction_persisted_at",
+            "ground_truth_opened_at",
+        ):
+            timestamp = item[field]
+            if not isinstance(timestamp, str):
+                raise ValueError(f"prior receipt {index} gt_guard {field} is not a timestamp")
+            try:
+                parsed = datetime.fromisoformat(timestamp)
+            except ValueError as exc:
+                raise ValueError(f"prior receipt {index} gt_guard {field} is invalid") from exc
+            if parsed.tzinfo is None:
+                raise ValueError(f"prior receipt {index} gt_guard {field} must include timezone")
+            timestamps.append(parsed)
+        if not timestamps[0] < timestamps[1] < timestamps[2]:
+            raise ValueError(f"prior receipt {index} gt_guard timestamps violate prediction-before-GT order")
     selection_lock_id = receipt.get("selection_lock_id")
     if selection_lock_id is not None:
         _require_hash(selection_lock_id, f"prior receipt {index} selection_lock_id")
@@ -417,6 +566,8 @@ def build_selection_lock(
     config_sha256 = _sha256_file(config_path)
     if not _SHA256_RE.fullmatch(config_sha256):  # defensive; hashlib always returns this form
         raise ValueError("config bytes did not produce a lowercase SHA-256")
+    if config_sha256 != RECIPE_C_SOURCE.config_sha256:
+        raise ValueError("config bytes do not match the pinned RECIPE_C_SOURCE config")
     if not isinstance(code_commit, str) or not _SHA1_RE.fullmatch(code_commit):
         raise ValueError("code_commit must be a 40-character lowercase SHA-1")
     if not isinstance(requested_device, str) or requested_device not in _ALLOWED_DEVICES:
@@ -561,6 +712,8 @@ def validate_selection_lock_payload(payload: Mapping[str, object]) -> dict[str, 
         "config_sha256",
     ):
         _require_hash(value[field], field)
+    if value["config_sha256"] != RECIPE_C_SOURCE.config_sha256:
+        raise ValueError("config_sha256 does not match the pinned RECIPE_C_SOURCE config")
     if not isinstance(value["code_commit"], str) or not _SHA1_RE.fullmatch(value["code_commit"]):
         raise ValueError("code_commit must be a 40-character lowercase SHA-1")
     if value["code_commit_clean"] is not True:
@@ -622,7 +775,7 @@ def validate_selection_lock_payload(payload: Mapping[str, object]) -> dict[str, 
 
 def _config_candidates(lock_path: Path, config_relative_path: str) -> list[Path]:
     relative = Path(config_relative_path)
-    candidates = [lock_path.parent / relative, Path.cwd() / relative]
+    candidates = [lock_path.parent / relative, _PROJECT_ROOT / relative]
     seen: set[Path] = set()
     result: list[Path] = []
     for candidate in candidates:
@@ -665,23 +818,63 @@ def validate_selection_lock(path: Path) -> dict[str, object]:
     return validated
 
 
+def _ensure_safe_parent(path: Path) -> None:
+    """Create missing parents without traversing an existing symlink."""
+
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(f"selection lock target already exists: {path.name}")
+    parent = path.parent
+    absolute_parent = parent if parent.is_absolute() else Path.cwd() / parent
+    current = Path(absolute_parent.anchor)
+    for part in absolute_parent.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"selection lock parent symlink is forbidden: {current.name}")
+        if current.exists():
+            if not current.is_dir():
+                raise ValueError(f"selection lock parent is not a directory: {current.name}")
+            continue
+        current.mkdir()
+        if current.is_symlink():
+            raise ValueError(f"selection lock parent symlink appeared during creation: {current.name}")
+
+
 def write_selection_lock(path: Path, payload: Mapping[str, object]) -> Path:
-    """Create a selection lock exactly once and verify the written bytes."""
+    """Create a selection lock exactly once using a failure-atomic publication."""
 
     path = Path(path)
     validated = validate_selection_lock_payload(payload)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() or path.is_symlink():
-        raise FileExistsError(f"selection lock target already exists: {path.name}")
+    _ensure_safe_parent(path)
     encoded = canonical_lock_json(validated).encode("utf-8")
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
     try:
-        with path.open("xb") as handle:
+        temporary_path.unlink()
+        with temporary_path.open("xb") as handle:
             handle.write(encoded)
-    except FileExistsError:
+            handle.flush()
+            os.fsync(handle.fileno())
+        prepublish = validate_selection_lock(temporary_path)
+        if canonical_lock_json(prepublish) != encoded.decode("utf-8"):
+            raise ValueError("selection lock prepublish canonical bytes changed")
+        # Hard-link publication is atomic and refuses to replace an existing
+        # final file, unlike os.replace().
+        os.link(temporary_path, path)
+        temporary_path.unlink()
+        reread = validate_selection_lock(path)
+        if canonical_lock_json(reread) != encoded.decode("utf-8"):
+            raise ValueError("selection lock post-write canonical bytes changed")
+    except BaseException:
+        if temporary_path.exists() or temporary_path.is_symlink():
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
+        # A valid final artifact is never removed after publication; this
+        # preserves write-once semantics when post-publication verification
+        # fails for an external reason.
         raise
-    reread = validate_selection_lock(path)
-    if canonical_lock_json(reread) != encoded.decode("utf-8"):
-        raise ValueError("selection lock post-write canonical bytes changed")
     return path
 
 
