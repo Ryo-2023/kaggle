@@ -783,6 +783,142 @@ def test_directory_fsync_failure_is_not_treated_as_success(
         stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
 
 
+def test_cached_fd_backed_path_rejects_fd_reuse_after_stage_close(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    cached_payload = stage.stage_root / "payload.txt"
+    reused_descriptor = cached_payload.root_descriptor
+    stage.close()
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "payload.txt").write_bytes(b"attacker")
+    held: list[int] = []
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        while True:
+            descriptor = os.open(outside, flags)
+            held.append(descriptor)
+            if descriptor == reused_descriptor:
+                break
+        with pytest.raises(ValueError, match="runtime stage is closed"):
+            cached_payload.read_bytes()
+    finally:
+        for descriptor in reversed(held):
+            os.close(descriptor)
+
+
+def test_all_cached_fd_backed_views_share_stage_close_lease(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    cached_views = (
+        stage.stage_root,
+        stage.repo_dir,
+        stage.source_root,
+        stage.staged_config,
+        stage.predictor_path,
+        stage.primary_checkpoint_path,
+        stage.secondary_checkpoint_path,
+        stage.receipt_path,
+    )
+    stage.close()
+
+    for view in cached_views:
+        with pytest.raises(ValueError, match="runtime stage is closed"):
+            view.exists()
+
+
+def test_staging_does_not_leave_ready_receipt_after_final_validation_failure(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    original_assert = staging_module._assert_published_predictor_at
+    calls = 0
+
+    def fail_after_receipt_would_have_been_written(
+        root_descriptor: int,
+        relative_path: Path,
+        published: object,
+    ) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise RuntimeError("synthetic final validation failure")
+        original_assert(root_descriptor, relative_path, published)
+
+    monkeypatch.setattr(
+        staging_module,
+        "_assert_published_predictor_at",
+        fail_after_receipt_would_have_been_written,
+    )
+    destination = tmp_path / "stage"
+    with pytest.raises(RuntimeError, match="final validation"):
+        stage_recipe_c_runtime(source, primary, secondary, destination, lock)
+
+    assert calls == 3
+    assert not (destination / "receipt.json").exists()
+    failed = json.loads((destination / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["status"] == "FAILED"
+    assert failed["reusable"] is False
+
+
+def test_device_patch_closes_temp_fd_when_cleanup_raises_without_masking_publish_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import biohub.recipe_c.device_patch as device_patch_module
+
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    (source_root / "predict.py").write_bytes(DEVICE_PREIMAGE.encode("utf-8"))
+    destination_root = tmp_path / "destination"
+    destination_root.mkdir()
+    original_open = device_patch_module._open_anonymous_temp
+    opened_descriptor: int | None = None
+
+    def capture_open(parent_descriptor: int) -> tuple[int, str | None, tuple[int, int]]:
+        nonlocal opened_descriptor
+        result = original_open(parent_descriptor)
+        opened_descriptor = result[0]
+        return result
+
+    def fail_link(_descriptor: int, _parent_descriptor: int, _name: str) -> None:
+        raise OSError("synthetic publish failure")
+
+    def fail_cleanup(_parent_descriptor: int, _name: str, _owner: tuple[int, int]) -> bool:
+        raise OSError("synthetic cleanup failure")
+
+    monkeypatch.setattr(device_patch_module, "_O_TMPFILE", 0)
+    monkeypatch.setattr(device_patch_module, "_open_anonymous_temp", capture_open)
+    monkeypatch.setattr(device_patch_module, "_link_anonymous", fail_link)
+    monkeypatch.setattr(device_patch_module, "_cleanup_owned_temp", fail_cleanup)
+    source_fd = staging_module._open_directory_path(source_root, "source")
+    destination_fd = staging_module._open_directory_path(destination_root, "destination")
+    try:
+        with pytest.raises(OSError, match="publish failure"):
+            publish_device_fallback_patch_at(
+                source_fd,
+                Path("predict.py"),
+                destination_fd,
+                Path("predict.py"),
+            )
+        assert opened_descriptor is not None
+        with pytest.raises(OSError):
+            os.fstat(opened_descriptor)
+        assert list(destination_root.glob(".recipe-c-anonymous.*"))
+    finally:
+        os.close(source_fd)
+        os.close(destination_fd)
+
+
 @pytest.mark.parametrize(
     "field",
     [

@@ -314,6 +314,7 @@ def _publish_fresh_at(
     temporary_name: str | None = None
     temporary_owner: tuple[int, int] | None = None
     published = False
+    primary_error: BaseException | None = None
     try:
         temporary_descriptor, temporary_name, temporary_owner = _open_anonymous_temp(
             destination_parent_descriptor,
@@ -365,15 +366,32 @@ def _publish_fresh_at(
             sha256=digest,
             changed=changed,
         )
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
         if temporary_descriptor is not None and not published:
+            cleanup_error: BaseException | None = None
             if temporary_name is not None and temporary_owner is not None:
-                _cleanup_owned_temp(
-                    destination_parent_descriptor,
-                    temporary_name,
-                    temporary_owner,
-                )
-            os.close(temporary_descriptor)
+                try:
+                    if not _cleanup_owned_temp(
+                        destination_parent_descriptor,
+                        temporary_name,
+                        temporary_owner,
+                    ):
+                        raise OSError("device patch temporary ownership changed during cleanup")
+                except BaseException as exc:
+                    cleanup_error = exc
+            try:
+                os.close(temporary_descriptor)
+            except BaseException as exc:
+                if cleanup_error is None:
+                    cleanup_error = exc
+            if cleanup_error is not None:
+                if primary_error is not None:
+                    primary_error.add_note(f"temporary cleanup failed: {cleanup_error!r}")
+                else:
+                    raise cleanup_error
 
 
 def publish_device_fallback_patch_at(

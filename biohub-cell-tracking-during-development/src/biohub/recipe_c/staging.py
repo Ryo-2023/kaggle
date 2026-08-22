@@ -14,6 +14,7 @@ import os
 import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 
 from biohub.device import DEVICE_SELECTION_ORDER
@@ -33,6 +34,18 @@ _RECEIPT_FILENAME = "receipt.json"
 _FAILED_FILENAME = "FAILED.json"
 
 
+@dataclass(slots=True)
+class _FdLease:
+    closed: bool = False
+
+    def ensure_open(self) -> None:
+        if self.closed:
+            raise ValueError("runtime stage is closed")
+
+    def close(self) -> None:
+        self.closed = True
+
+
 @dataclass(frozen=True, slots=True)
 class FdBackedPath:
     """A path-shaped view whose filesystem operations stay anchored to an fd."""
@@ -43,11 +56,17 @@ class FdBackedPath:
     pinned_descriptor: int | None = None
     expected_identity: tuple[int, int, int] | None = None
     expected_sha256: str | None = None
+    _lease: _FdLease = dataclass_field(default_factory=_FdLease, repr=False, compare=False)
 
-    def __fspath__(self) -> str:
+    def _ensure_open(self) -> None:
+        self._lease.ensure_open()
         descriptor = self.pinned_descriptor if self.pinned_descriptor is not None else self.root_descriptor
         if descriptor < 0:
             raise ValueError("runtime stage is closed")
+
+    def __fspath__(self) -> str:
+        self._ensure_open()
+        descriptor = self.pinned_descriptor if self.pinned_descriptor is not None else self.root_descriptor
         if descriptor >= 0 and os.path.exists("/proc/self/fd"):
             if self.pinned_descriptor is not None:
                 return f"/proc/self/fd/{descriptor}"
@@ -56,13 +75,16 @@ class FdBackedPath:
         return str(self.logical_path)
 
     def __str__(self) -> str:
+        self._ensure_open()
         return str(self.logical_path)
 
     def __repr__(self) -> str:
         return f"FdBackedPath({self.logical_path!r})"
 
     def __eq__(self, other: object) -> bool:
+        self._ensure_open()
         if isinstance(other, FdBackedPath):
+            other._ensure_open()
             return self.logical_path == other.logical_path
         try:
             return self.logical_path == Path(other)  # type: ignore[arg-type]
@@ -70,33 +92,33 @@ class FdBackedPath:
             return False
 
     def __truediv__(self, other: str | Path) -> FdBackedPath:
+        self._ensure_open()
         relative = Path(other)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError("fd-backed path traversal is forbidden")
         parts = self.relative_parts + tuple(part for part in relative.parts if part not in {"", "."})
-        return FdBackedPath(self.logical_path / relative, self.root_descriptor, parts, None)
+        return FdBackedPath(self.logical_path / relative, self.root_descriptor, parts, _lease=self._lease)
 
     @property
     def name(self) -> str:
+        self._ensure_open()
         return self.logical_path.name
 
     @property
     def parent(self) -> FdBackedPath:
+        self._ensure_open()
         if not self.relative_parts:
             return self
         return FdBackedPath(
             self.logical_path.parent,
             self.root_descriptor,
             self.relative_parts[:-1],
-            None,
+            _lease=self._lease,
         )
 
     def _stat(self) -> os.stat_result:
-        if self.root_descriptor < 0:
-            raise ValueError("runtime stage is closed")
+        self._ensure_open()
         if self.pinned_descriptor is not None:
-            if self.pinned_descriptor < 0:
-                raise ValueError("runtime stage is closed")
             metadata = os.fstat(self.pinned_descriptor)
             if self.expected_identity is not None and _identity(metadata) != self.expected_identity:
                 raise ValueError("fd-backed file identity changed")
@@ -117,9 +139,10 @@ class FdBackedPath:
         return self._stat()
 
     def exists(self) -> bool:
+        self._ensure_open()
         try:
             self._stat()
-        except (FileNotFoundError, ValueError):
+        except FileNotFoundError:
             return False
         return True
 
@@ -133,9 +156,8 @@ class FdBackedPath:
         return stat.S_ISLNK(self._stat().st_mode)
 
     def read_bytes(self) -> bytes:
+        self._ensure_open()
         if self.pinned_descriptor is not None:
-            if self.pinned_descriptor < 0:
-                raise ValueError("runtime stage is closed")
             payload, metadata = _read_descriptor_stable(self.pinned_descriptor, "fd-backed file")
             if self.expected_identity is not None and _identity(metadata) != self.expected_identity:
                 raise ValueError("fd-backed file identity changed")
@@ -161,6 +183,7 @@ class FdBackedPath:
     def resolve(self, strict: bool = False) -> Path:
         """Return a lexical label; never resolve through the mutable pathname."""
 
+        self._ensure_open()
         if strict and not self.exists():
             raise FileNotFoundError(self.logical_path)
         return self.logical_path
@@ -187,10 +210,15 @@ class RuntimeStage:
     predictor_sha256_after: str
     resolved_device_candidates: tuple[str, ...]
     receipt: dict[str, object]
+    _lease: _FdLease = dataclass_field(default_factory=_FdLease, repr=False, compare=False)
+
+    def _ensure_open(self) -> None:
+        self._lease.ensure_open()
 
     @property
     def stage_root(self) -> FdBackedPath:
-        return FdBackedPath(self._stage_root_path, self.stage_descriptor, ())
+        self._ensure_open()
+        return FdBackedPath(self._stage_root_path, self.stage_descriptor, (), _lease=self._lease)
 
     @property
     def destination(self) -> FdBackedPath:
@@ -198,18 +226,22 @@ class RuntimeStage:
 
     @property
     def repo_dir(self) -> FdBackedPath:
-        return FdBackedPath(self.stage_root.logical_path / "repo", self.repo_descriptor, ())
+        self._ensure_open()
+        return FdBackedPath(self._stage_root_path / "repo", self.repo_descriptor, (), _lease=self._lease)
 
     @property
     def weights_root(self) -> FdBackedPath:
+        self._ensure_open()
         return self.repo_dir / "weights"
 
     @property
     def source_root(self) -> FdBackedPath:
-        return FdBackedPath(self._source_root_path, self.source_descriptor, ())
+        self._ensure_open()
+        return FdBackedPath(self._source_root_path, self.source_descriptor, (), _lease=self._lease)
 
     @property
     def staged_config(self) -> FdBackedPath:
+        self._ensure_open()
         return self.stage_root / Path(*self._config_relative)
 
     @property
@@ -218,36 +250,45 @@ class RuntimeStage:
 
     @property
     def predictor_path(self) -> FdBackedPath:
+        self._ensure_open()
         return FdBackedPath(
-            self.repo_dir.logical_path / Path(*self._predictor_relative),
+            self._stage_root_path / "repo" / Path(*self._predictor_relative),
             self.repo_descriptor,
             self._predictor_relative,
             self.predictor_descriptor,
             self.predictor_identity,
             self.predictor_sha256_after,
+            self._lease,
         )
 
     @property
     def primary_checkpoint_path(self) -> FdBackedPath:
+        self._ensure_open()
         return FdBackedPath(
-            self.weights_root.logical_path / Path(*self._primary_checkpoint_relative),
+            self._stage_root_path / "repo" / "weights" / Path(*self._primary_checkpoint_relative),
             self.repo_descriptor,
             ("weights", *self._primary_checkpoint_relative),
+            _lease=self._lease,
         )
 
     @property
     def secondary_checkpoint_path(self) -> FdBackedPath:
+        self._ensure_open()
         return FdBackedPath(
-            self.weights_root.logical_path / Path(*self._secondary_checkpoint_relative),
+            self._stage_root_path / "repo" / "weights" / Path(*self._secondary_checkpoint_relative),
             self.repo_descriptor,
             ("weights", *self._secondary_checkpoint_relative),
+            _lease=self._lease,
         )
 
     @property
     def receipt_path(self) -> FdBackedPath:
+        self._ensure_open()
         return self.stage_root / _RECEIPT_FILENAME
 
     def close(self) -> None:
+        self._lease.close()
+        first_error: BaseException | None = None
         for field in (
             "predictor_descriptor",
             "repo_descriptor",
@@ -256,11 +297,18 @@ class RuntimeStage:
             "parent_descriptor",
         ):
             descriptor = getattr(self, field)
+            object.__setattr__(self, field, -1)
             if descriptor >= 0:
-                os.close(descriptor)
-                object.__setattr__(self, field, -1)
+                try:
+                    os.close(descriptor)
+                except BaseException as exc:
+                    if first_error is None:
+                        first_error = exc
+        if first_error is not None:
+            raise first_error
 
     def __enter__(self) -> RuntimeStage:
+        self._ensure_open()
         return self
 
     def __exit__(self, _exc_type: object, _exc_value: object, _traceback: object) -> None:
@@ -718,7 +766,11 @@ def _write_json_exclusive(path: Path, payload: Mapping[str, object]) -> None:
         os.close(parent_descriptor)
 
 
-def _write_json_exclusive_at(parent_descriptor: int, name: str, payload: Mapping[str, object]) -> None:
+def _write_json_exclusive_at(
+    parent_descriptor: int,
+    name: str,
+    payload: Mapping[str, object],
+) -> tuple[int, int, int]:
     encoded = (
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False) + "\n"
     ).encode("utf-8")
@@ -752,6 +804,43 @@ def _write_json_exclusive_at(parent_descriptor: int, name: str, payload: Mapping
     finally:
         if descriptor is not None:
             os.close(descriptor)
+    assert identity is not None
+    return identity
+
+
+def _unlink_owned_at(
+    parent_descriptor: int,
+    name: str,
+    expected_identity: tuple[int, int, int],
+) -> None:
+    try:
+        current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if _identity(current) != expected_identity:
+        raise ValueError(f"{name} ownership changed before cleanup")
+    os.unlink(name, dir_fd=parent_descriptor)
+    _fsync_directory(parent_descriptor)
+
+
+def _publish_ready_receipt_at(
+    stage_descriptor: int,
+    parent_descriptor: int,
+    receipt: Mapping[str, object],
+) -> tuple[int, int, int]:
+    """Publish READY only after the receipt and both directory entries are durable."""
+
+    identity = _write_json_exclusive_at(stage_descriptor, _RECEIPT_FILENAME, receipt)
+    try:
+        _fsync_directory(stage_descriptor)
+        _fsync_directory(parent_descriptor)
+    except BaseException:
+        try:
+            _unlink_owned_at(stage_descriptor, _RECEIPT_FILENAME, identity)
+        except BaseException:
+            pass
+        raise
+    return identity
 
 
 def _mark_failed(stage_root: Path, selection_lock_id: str | None, exc: BaseException) -> None:
@@ -768,7 +857,12 @@ def _mark_failed(stage_root: Path, selection_lock_id: str | None, exc: BaseExcep
         pass
 
 
-def _mark_failed_at(stage_descriptor: int, selection_lock_id: str | None, exc: BaseException) -> None:
+def _mark_failed_at(
+    stage_descriptor: int,
+    selection_lock_id: str | None,
+    exc: BaseException,
+    receipt_identity: tuple[int, int, int] | None = None,
+) -> None:
     payload: dict[str, object] = {
         "schema_version": 1,
         "status": "FAILED",
@@ -777,9 +871,17 @@ def _mark_failed_at(stage_descriptor: int, selection_lock_id: str | None, exc: B
         "reusable": False,
     }
     try:
+        if receipt_identity is not None:
+            _unlink_owned_at(stage_descriptor, _RECEIPT_FILENAME, receipt_identity)
+        try:
+            os.stat(_RECEIPT_FILENAME, dir_fd=stage_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            return
         _write_json_exclusive_at(stage_descriptor, _FAILED_FILENAME, payload)
         _fsync_directory(stage_descriptor)
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 
@@ -1077,6 +1179,8 @@ def stage_recipe_c_runtime(
             stage_descriptor: int | None = None
             repo_descriptor: int | None = None
             published_predictor: PublishedDevicePatch | None = None
+            runtime_stage: RuntimeStage | None = None
+            receipt_identity: tuple[int, int, int] | None = None
             try:
                 stage_root, parent_descriptor, stage_descriptor = _claim_destination(Path(destination))
                 _fsync_directory(parent_descriptor)
@@ -1195,6 +1299,12 @@ def stage_recipe_c_runtime(
                     published_predictor.identity
                 ):
                     raise ValueError("published predictor changed before receipt")
+                _assert_published_predictor_at(
+                    repo_descriptor,
+                    predictor_repo_relative,
+                    published_predictor,
+                )
+                _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
                 receipt: dict[str, object] = {
                     "schema_version": 1,
                     "status": "READY",
@@ -1215,23 +1325,6 @@ def stage_recipe_c_runtime(
                     "config_sha256": staged_config_hash,
                     "resolved_device_candidates": list(DEVICE_SELECTION_ORDER),
                 }
-                _write_json_exclusive_at(stage_descriptor, _RECEIPT_FILENAME, receipt)
-                _fsync_directory(stage_descriptor)
-                _fsync_directory(parent_descriptor)
-                _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
-                _assert_published_predictor_at(
-                    repo_descriptor,
-                    predictor_repo_relative,
-                    published_predictor,
-                )
-                final_predictor_hash, final_predictor_metadata = _sha256_descriptor(
-                    published_predictor.descriptor,
-                    "patched predictor",
-                )
-                if final_predictor_hash != published_predictor.sha256 or _identity(final_predictor_metadata) != (
-                    published_predictor.identity
-                ):
-                    raise ValueError("published predictor changed after receipt")
                 runtime_stage = RuntimeStage(
                     _stage_root_path=stage_root,
                     _source_root_path=source_root,
@@ -1251,10 +1344,16 @@ def stage_recipe_c_runtime(
                     resolved_device_candidates=tuple(DEVICE_SELECTION_ORDER),
                     receipt=receipt,
                 )
+                receipt_identity = _publish_ready_receipt_at(stage_descriptor, parent_descriptor, receipt)
                 return runtime_stage
             except BaseException as exc:
+                if runtime_stage is not None:
+                    try:
+                        runtime_stage.close()
+                    except BaseException as close_exc:
+                        exc.add_note(f"runtime stage close failed: {close_exc!r}")
                 if stage_descriptor is not None:
-                    _mark_failed_at(stage_descriptor, selection_lock_id, exc)
+                    _mark_failed_at(stage_descriptor, selection_lock_id, exc, receipt_identity)
                 raise
             finally:
                 if repo_descriptor is not None:
