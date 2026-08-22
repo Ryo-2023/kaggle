@@ -770,6 +770,20 @@ def _assert_published_repo_entry_at(
     return metadata
 
 
+def _read_verified_published_repo_entry_at(
+    parent_descriptor: int,
+    name: str,
+    expected_identity: tuple[int, int, int],
+    expected_digest: str,
+) -> os.stat_result:
+    payload, metadata = _read_regular_stable_at(parent_descriptor, name, "repository publication")
+    if _identity(metadata) != expected_identity or len(payload) != expected_identity[2]:
+        raise ValueError("repository publication identity changed")
+    if hashlib.sha256(payload).hexdigest() != expected_digest:
+        raise ValueError("repository publication digest changed")
+    return metadata
+
+
 def _publish_repo_bytes_at(
     root_descriptor: int,
     relative_parts: tuple[str, ...],
@@ -824,7 +838,12 @@ def _publish_repo_bytes_at(
         if digest != expected_digest or _identity(hashed_metadata) != published_identity:
             raise ValueError("repository publication digest changed")
         _fsync_directory(parent_descriptor)
-        _assert_published_repo_entry_at(parent_descriptor, name, published_identity)
+        _read_verified_published_repo_entry_at(
+            parent_descriptor,
+            name,
+            published_identity,
+            expected_digest,
+        )
 
         if temporary_name is not None:
             if temporary_owner is None or not _cleanup_owned_publish_temp_at(
@@ -834,7 +853,12 @@ def _publish_repo_bytes_at(
             ):
                 raise OSError("repository temporary ownership changed during cleanup")
             _fsync_directory(parent_descriptor)
-        _assert_published_repo_entry_at(parent_descriptor, name, published_identity)
+        _read_verified_published_repo_entry_at(
+            parent_descriptor,
+            name,
+            published_identity,
+            expected_digest,
+        )
         committed = True
         return PublishReceipt(
             relative_path=relative.as_posix(),

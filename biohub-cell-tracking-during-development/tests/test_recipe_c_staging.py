@@ -341,6 +341,36 @@ def test_runtime_stage_publish_verify_failure_preserves_attacker_replacement(
         stage.close()
 
 
+def test_runtime_stage_publish_rejects_same_inode_same_size_mutation(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    target = stage_root / "repo" / "scripts" / "derived.py"
+    original_fsync = staging_module._fsync_directory
+    mutated = False
+
+    def mutate_final_content_after_publish(descriptor: int) -> None:
+        nonlocal mutated
+        if not mutated:
+            target.write_bytes(b"evil!!!")
+            mutated = True
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(staging_module, "_fsync_directory", mutate_final_content_after_publish)
+    try:
+        with pytest.raises(ValueError, match="digest"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+        assert mutated
+        assert not target.exists()
+        assert not list(target.parent.glob(".recipe-c-repo-publish.*"))
+    finally:
+        stage.close()
+
+
 def test_runtime_stage_publish_detects_temporary_replacement_without_publishing_attacker(
     tmp_path: Path,
     fake_inputs: tuple[Path, Path, Path, dict[str, object]],
