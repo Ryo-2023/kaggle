@@ -1029,6 +1029,56 @@ def test_receipt_fsync_failures_never_leave_ready_marker(
     assert triggered == ({failure_point} if failure_point != "cleanup" else {"publish", "cleanup"})
 
 
+def test_receipt_cleanup_exception_never_leaves_ready_only(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    original_write = staging_module._write_json_exclusive_at
+    original_fsync = staging_module._fsync_directory
+    receipt_written = False
+    stage_failure_triggered = False
+    cleanup_called = False
+    cleanup_identities: list[tuple[int, int, int]] = []
+
+    def write_json(parent_descriptor: int, name: str, payload: dict[str, object]) -> tuple[int, int, int]:
+        nonlocal receipt_written
+        result = original_write(parent_descriptor, name, payload)
+        if name == "receipt.json":
+            receipt_written = True
+        return result
+
+    def fail_stage_fsync(descriptor: int) -> None:
+        nonlocal stage_failure_triggered
+        if receipt_written and not stage_failure_triggered:
+            stage_failure_triggered = True
+            raise OSError("synthetic stage fsync failure")
+        original_fsync(descriptor)
+
+    def fail_cleanup(parent_descriptor: int, name: str, expected_identity: tuple[int, int, int]) -> None:
+        nonlocal cleanup_called
+        if name == "receipt.json":
+            cleanup_called = True
+            cleanup_identities.append(expected_identity)
+            raise OSError("synthetic cleanup failure")
+        raise AssertionError("unexpected cleanup target")
+
+    monkeypatch.setattr(staging_module, "_write_json_exclusive_at", write_json)
+    monkeypatch.setattr(staging_module, "_fsync_directory", fail_stage_fsync)
+    monkeypatch.setattr(staging_module, "_unlink_owned_at", fail_cleanup)
+    destination = tmp_path / "stage"
+    with pytest.raises(OSError, match="stage fsync"):
+        stage_recipe_c_runtime(source, primary, secondary, destination, lock)
+
+    assert cleanup_called
+    assert stage_failure_triggered
+    assert len(cleanup_identities) == 2
+    assert cleanup_identities[0] == cleanup_identities[1]
+    assert cleanup_identities[0][2] > 0
+    _assert_failed_only(destination)
+
+
 @pytest.mark.parametrize(
     "field",
     [

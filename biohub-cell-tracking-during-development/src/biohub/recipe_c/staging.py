@@ -34,6 +34,19 @@ _RECEIPT_FILENAME = "receipt.json"
 _FAILED_FILENAME = "FAILED.json"
 
 
+class _ReceiptPublishError(OSError):
+    """Carry a written receipt identity through a failed publish operation."""
+
+    def __init__(
+        self,
+        cause: BaseException,
+        receipt_identity: tuple[int, int, int],
+    ) -> None:
+        super().__init__(str(cause))
+        self.cause = cause
+        self.receipt_identity = receipt_identity
+
+
 @dataclass(slots=True)
 class _FdLease:
     closed: bool = False
@@ -826,6 +839,22 @@ def _unlink_owned_at(
     _fsync_directory(parent_descriptor)
 
 
+def _unlink_owned_inode_at(
+    parent_descriptor: int,
+    name: str,
+    expected_identity: tuple[int, int, int],
+) -> None:
+    """Retry receipt cleanup using only the retained owner inode/dev identity."""
+
+    try:
+        current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if (current.st_ino, current.st_dev) != expected_identity[:2]:
+        raise ValueError(f"{name} ownership changed before cleanup retry")
+    os.unlink(name, dir_fd=parent_descriptor)
+
+
 def _publish_ready_receipt_at(
     stage_descriptor: int,
     parent_descriptor: int,
@@ -837,11 +866,13 @@ def _publish_ready_receipt_at(
     try:
         _fsync_directory(stage_descriptor)
         _fsync_directory(parent_descriptor)
-    except BaseException:
+    except BaseException as publish_error:
         try:
             _unlink_owned_at(stage_descriptor, _RECEIPT_FILENAME, identity)
-        except BaseException:
-            pass
+        except BaseException as cleanup_error:
+            failure = _ReceiptPublishError(publish_error, identity)
+            failure.add_note(f"receipt cleanup failed: {cleanup_error!r}")
+            raise failure from publish_error
         raise
     return identity
 
@@ -875,7 +906,10 @@ def _mark_failed_at(
     }
     try:
         if receipt_identity is not None:
-            _unlink_owned_at(stage_descriptor, _RECEIPT_FILENAME, receipt_identity)
+            try:
+                _unlink_owned_at(stage_descriptor, _RECEIPT_FILENAME, receipt_identity)
+            except (OSError, ValueError):
+                _unlink_owned_inode_at(stage_descriptor, _RECEIPT_FILENAME, receipt_identity)
         try:
             os.stat(_RECEIPT_FILENAME, dir_fd=stage_descriptor, follow_symlinks=False)
         except FileNotFoundError:
@@ -1350,13 +1384,21 @@ def stage_recipe_c_runtime(
                 receipt_identity = _publish_ready_receipt_at(stage_descriptor, parent_descriptor, receipt)
                 return runtime_stage
             except BaseException as exc:
+                publish_failure = exc if isinstance(exc, _ReceiptPublishError) else None
+                failure = publish_failure.cause if publish_failure is not None else exc
+                if publish_failure is not None:
+                    receipt_identity = publish_failure.receipt_identity
+                    for note in getattr(publish_failure, "__notes__", ()):
+                        failure.add_note(note)
                 if runtime_stage is not None:
                     try:
                         runtime_stage.close()
                     except BaseException as close_exc:
-                        exc.add_note(f"runtime stage close failed: {close_exc!r}")
+                        failure.add_note(f"runtime stage close failed: {close_exc!r}")
                 if stage_descriptor is not None:
-                    _mark_failed_at(stage_descriptor, selection_lock_id, exc, receipt_identity)
+                    _mark_failed_at(stage_descriptor, selection_lock_id, failure, receipt_identity)
+                if publish_failure is not None:
+                    raise failure from exc
                 raise
             finally:
                 if repo_descriptor is not None:
