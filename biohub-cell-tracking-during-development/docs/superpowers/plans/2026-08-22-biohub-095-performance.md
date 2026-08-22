@@ -22,6 +22,7 @@
 - 大規模runはsample単位に逐次実行し、`0b` と `12df` を並列実行しない。OOM時は一括配列展開をやめ、既存mmap/chunk契約へfallbackする。
 - vendored `src/biohub/official_metrics/metrics.py` と `division_metrics.py` は変更しない。
 - Python、test、lint、推論、metricはUbuntu `biohub-dev` container内で実行する。hostへ依存をinstallしない。
+- 既存5sample dataは並行one-pass worktreeのread-only artifact `/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train` を参照し、コピー・変更しない。
 - Kaggleへの外部submission送信は行わない。大容量data/checkpoint/predictionはGit管理しない。
 - ユーザー向けreportはすべて日本語。性能主張は実測receiptに限定する。
 
@@ -340,7 +341,7 @@ Expected: write-once lock、両checkpoint hash一致、resolved backend情報あ
 
 - [ ] **Step 4: train実画像の2-frame smokeをGT-freeで実行する**
 
-Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --image-root artifacts/detector_fixed_race/panel_data/train --sample 44b6_0113de3b --max-frames 2 --output artifacts/biohub_095/smoke'`
+Run: `docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --image-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --sample 44b6_0113de3b --max-frames 2 --output artifacts/biohub_095/smoke'`
 
 Expected: raw/postprocessed GEFFとmanifestを生成、reload成功、GT access 0、device fallback receiptあり。
 
@@ -372,7 +373,7 @@ Expected: 5/5 imageが存在。GTは存在だけを確認し、推論processへp
 - [ ] **Step 2: sample単位にGT-free full inferenceを逐次実行する**
 
 ```bash
-docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer-panel --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --image-root artifacts/detector_fixed_race/panel_data/train --output artifacts/biohub_095/panel_runs --device auto'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py infer-panel --selection-lock artifacts/biohub_095/selection_lock.json --source artifacts/biohub_095/source/clean_v106 --support artifacts/biohub_095/support --image-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --output artifacts/biohub_095/panel_runs --device auto'
 ```
 
 Expected: 5/5 prediction GEFF/manifest。CUDAならCUDA、Mac native実行でMPS、現Linux DockerではCPU。resolved deviceをsampleごとに記録。
@@ -380,7 +381,7 @@ Expected: 5/5 prediction GEFF/manifest。CUDAならCUDA、Mac native実行でMPS
 - [ ] **Step 3: 各predictionを個別にofficial evaluationする**
 
 ```bash
-docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py evaluate-panel --selection-lock artifacts/biohub_095/selection_lock.json --prediction-root artifacts/biohub_095/panel_runs --gt-root artifacts/detector_fixed_race/panel_data/train --output artifacts/biohub_095/panel_receipt.json'
+docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/biohub-095-performance/biohub-cell-tracking-during-development && PYTHONPATH="$PWD/src" uv run python scripts/run_biohub_095.py evaluate-panel --selection-lock artifacts/biohub_095/selection_lock.json --prediction-root artifacts/biohub_095/panel_runs --gt-root /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/artifacts/detector_fixed_race/panel_data/train --output artifacts/biohub_095/panel_receipt.json'
 ```
 
 Expected: manifest/token検証後にのみGTを開く。5件のTP/FP/FN/Jaccard/Final Scoreを保存。
