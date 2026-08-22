@@ -18,6 +18,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
+CANONICAL_CONFIG_PATH = PROJECT_ROOT / "configs" / "biohub_095_recipe_c.yaml"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
@@ -75,6 +76,16 @@ def _resolve_project_path(path: Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def _resolve_config_path(path: Path) -> Path:
+    """Require the one pinned project config before building any lock."""
+
+    candidate = path if path.is_absolute() else PROJECT_ROOT / path
+    canonical = CANONICAL_CONFIG_PATH
+    if ".." in candidate.parts or candidate.absolute() != canonical.absolute():
+        raise ValueError(f"--config must be the canonical project config: {canonical}")
+    return canonical
+
+
 def _experiment_from_args(args: argparse.Namespace) -> ExperimentSpec:
     return ExperimentSpec(
         experiment_id=args.experiment_id,
@@ -96,7 +107,7 @@ def _freeze(args: argparse.Namespace) -> int:
     source_path = _resolve_project_path(args.source)
     primary_support_path = _resolve_project_path(args.primary_support)
     secondary_support_path = _resolve_project_path(args.secondary_support)
-    config_path = _resolve_project_path(args.config)
+    config_path = _resolve_config_path(args.config)
     output_path = _resolve_project_path(args.output)
     prior_receipts = [_resolve_project_path(path) for path in args.prior_evaluation_receipt]
     if prior_receipts and args.prior_evidence_receipt_hash is None:

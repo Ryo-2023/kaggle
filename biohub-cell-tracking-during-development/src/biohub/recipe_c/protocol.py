@@ -14,11 +14,18 @@ import json
 import math
 import os
 import re
-import tempfile
+import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
-from datetime import datetime
+from datetime import UTC, datetime
+from errno import ELOOP, ENOTDIR
 from pathlib import Path, PureWindowsPath
+
+from biohub.reproducibility.gt_guard import (
+    GroundTruthOrderingError,
+    mint_prediction_token,
+    prediction_manifest_path,
+)
 
 from .source import RECIPE_C_SOURCE
 
@@ -63,6 +70,8 @@ _PRIOR_RECEIPT_OPTIONAL_FIELDS = frozenset({"metrics", "selection_lock_id"})
 _GT_GUARD_FIELDS = frozenset(
     {
         "sample_id",
+        "prediction_path",
+        "prediction_manifest_path",
         "prediction_directory_sha256",
         "prediction_files",
         "prediction_total_bytes",
@@ -73,7 +82,7 @@ _GT_GUARD_FIELDS = frozenset(
     },
 )
 _GT_GUARD_OPTIONAL_FIELDS = frozenset(
-    {"prediction_path", "prediction_manifest_path", "ground_truth_path", "ordering_evidence"},
+    {"ground_truth_path", "ordering_evidence"},
 )
 _GT_GUARD_ORDERING_TOKEN = "biohub.reproducibility.gt_guard.open_ground_truth"
 
@@ -311,6 +320,11 @@ def _require_hash(value: object, label: str) -> str:
     return value
 
 
+def _require_schema_version(value: object, label: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value != LOCK_SCHEMA_VERSION:
+        raise ValueError(f"{label} must be the exact integer schema version {LOCK_SCHEMA_VERSION}")
+
+
 def _require_relative_path(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty relative path")
@@ -335,23 +349,86 @@ def _normalized_key(key: object) -> str:
 _GT_PATH_KEYS = frozenset(
     {
         "groundtruth",
+        "groundtruthdir",
+        "groundtruthdirectory",
         "groundtruthpath",
         "groundtruthroot",
         "groundtruthfile",
+        "groundtruthuri",
         "gt",
+        "gtdir",
+        "gtdirectory",
         "gtpath",
         "gtroot",
         "gtfile",
+        "gturi",
+        "truthpath",
+        "truthdir",
+        "truthdirectory",
+        "labelpath",
+        "labelspath",
+        "annotationpath",
+        "annotationfile",
+        "annotationdir",
+        "annotationdirectory",
+        "annotationuri",
+    },
+)
+_CREDENTIAL_KEYS = frozenset(
+    {
+        "credential",
+        "credentials",
+        "credentialfile",
+        "credentialpath",
+        "secret",
+        "secretfile",
+        "secretpath",
+        "token",
+        "tokenpath",
+        "apikey",
+        "apikeypath",
+        "accesstoken",
+        "accesskey",
+        "privatekey",
+        "auth",
+        "authpath",
+        "kaggle",
+        "kaggledir",
+        "kagglepath",
+        "password",
+        "passwordpath",
     },
 )
 _ALLOWED_GT_USAGE_KEYS = frozenset(
     {
-        "ground_truth_used_for_prediction",
-        "ground_truth_used_for_parameter_fitting",
-        "ground_truth_used_for_method_family_selection",
-        "ground_truth_usage_scope",
+        "groundtruthusedforprediction",
+        "groundtruthusedforparameterfitting",
+        "groundtruthusedformethodfamilyselection",
+        "groundtruthusagescope",
     },
 )
+
+
+def _key_forbids_reference(normalized_key: str) -> str | None:
+    if normalized_key in _ALLOWED_GT_USAGE_KEYS:
+        return None
+    if normalized_key in _GT_PATH_KEYS:
+        return "ground truth"
+    if normalized_key in _CREDENTIAL_KEYS:
+        return "credential"
+    if (
+        "credential" in normalized_key
+        or "secret" in normalized_key
+        or "token" in normalized_key
+        or "apikey" in normalized_key
+        or "password" in normalized_key
+        or "accesskey" in normalized_key
+        or "auth" in normalized_key
+        or "kaggle" in normalized_key
+        or "privatekey" in normalized_key
+    ):
+        return "credential"
+    return None
 
 
 def _assert_no_forbidden_paths(value: object, location: str = "lock") -> None:
@@ -366,11 +443,11 @@ def _assert_no_forbidden_paths(value: object, location: str = "lock") -> None:
         return
     if isinstance(value, Mapping):
         for key, item in value.items():
-            key_text = str(key).lower()
             normalized_key = _normalized_key(key)
             child = f"{location}.{key}"
-            if normalized_key in _GT_PATH_KEYS and str(key) not in _ALLOWED_GT_USAGE_KEYS:
-                raise ValueError(f"ground truth path/value is forbidden in {child}")
+            forbidden_kind = _key_forbids_reference(normalized_key)
+            if forbidden_kind is not None:
+                raise ValueError(f"{forbidden_kind} path/value is forbidden in {child}")
             if isinstance(item, str):
                 lowered = item.lower()
                 if _looks_absolute_path(item):
@@ -379,13 +456,9 @@ def _assert_no_forbidden_paths(value: object, location: str = "lock") -> None:
                     ".kaggle" in lowered
                     or "kaggle.json" in lowered
                     or "credential" in lowered
-                    or normalized_key in {"secret", "secretpath", "kaggledir", "kagglepath"}
+                    or forbidden_kind == "credential"
                 ):
                     raise ValueError(f"credential path is forbidden in {child}")
-                if ("ground_truth" in key_text or normalized_key in _GT_PATH_KEYS) and str(key) not in {
-                    "ground_truth_usage_scope",
-                }:
-                    raise ValueError(f"ground truth path/value is forbidden in {child}")
             _assert_no_forbidden_paths(item, child)
         return
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -425,11 +498,24 @@ def _safe_config_label(path: Path) -> str:
     return path.as_posix()
 
 
+def _reject_symlink_components(path: Path, label: str) -> Path:
+    """Reject a path whose existing components include a symlink."""
+
+    absolute = path if path.is_absolute() else Path.cwd() / path
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"{label} symlink traversal is forbidden: {current}")
+    return absolute
+
+
 def _load_prior_receipt(receipt: object, index: int) -> Mapping[str, object]:
     if isinstance(receipt, str):
         receipt = Path(receipt)
     if not isinstance(receipt, Path):
         raise ValueError(f"prior receipt {index} must be a persisted JSON path")
+    receipt = _reject_symlink_components(receipt, f"prior receipt {index}")
     if receipt.is_symlink() or not receipt.is_file():
         raise ValueError(f"prior receipt {index} must be a regular persisted file")
     try:
@@ -452,8 +538,7 @@ def _validate_strong_prior_receipt(receipt: Mapping[str, object], index: int) ->
     """Require persisted schema, exact panel order, and GT-guard timestamps."""
 
     schema_version = receipt.get("schema_version")
-    if schema_version != LOCK_SCHEMA_VERSION:
-        raise ValueError(f"prior receipt {index} has no strong schema_version")
+    _require_schema_version(schema_version, f"prior receipt {index} schema_version")
     if receipt.get("receipt_type") != "panel_evaluation":
         raise ValueError(f"prior receipt {index} has no strong receipt_type")
     allowed_fields = _PRIOR_RECEIPT_REQUIRED_FIELDS | _PRIOR_RECEIPT_OPTIONAL_FIELDS
@@ -490,13 +575,44 @@ def _validate_strong_prior_receipt(receipt: Mapping[str, object], index: int) ->
         )
         if item["sample_id"] != _PANEL_V1_FIXED[guard_index]:
             raise ValueError(f"prior receipt {index} gt_guard sample order is not PANEL_V1")
-        _require_hash(item["prediction_directory_sha256"], f"prior receipt {index} gt_guard digest")
+        for path_field in ("prediction_path", "prediction_manifest_path"):
+            if not isinstance(item[path_field], str) or not item[path_field].strip():
+                raise ValueError(f"prior receipt {index} {path_field} must be a non-empty path")
+        prediction_path = _reject_symlink_components(
+            Path(item["prediction_path"]),
+            f"prior receipt {index} prediction",
+        )
+        manifest_path = _reject_symlink_components(
+            Path(item["prediction_manifest_path"]),
+            f"prior receipt {index} prediction manifest",
+        )
+        if prediction_path.is_symlink() or not prediction_path.is_dir():
+            raise ValueError(f"prior receipt {index} prediction path is not a persisted directory")
+        if manifest_path.is_symlink() or not manifest_path.is_file():
+            raise ValueError(f"prior receipt {index} prediction manifest is not persisted")
+        expected_manifest = prediction_manifest_path(prediction_path)
+        if manifest_path.absolute() != expected_manifest.absolute():
+            raise ValueError(
+                f"prior receipt {index} prediction manifest must be the per-prediction manifest",
+            )
+        try:
+            token = mint_prediction_token(prediction_path)
+        except (GroundTruthOrderingError, OSError, ValueError) as exc:
+            raise ValueError(
+                f"prior receipt {index} prediction manifest or bytes could not be revalidated",
+            ) from exc
+        if token.manifest_path.absolute() != manifest_path.absolute():
+            raise ValueError(f"prior receipt {index} prediction manifest path does not match gt_guard")
+        if item["prediction_directory_sha256"] != token.directory_sha256:
+            raise ValueError(f"prior receipt {index} prediction directory digest does not match persisted bytes")
         for field in ("prediction_files", "prediction_total_bytes"):
             number = item[field]
             if isinstance(number, bool) or not isinstance(number, int) or number < 0:
                 raise ValueError(f"prior receipt {index} gt_guard {field} is invalid")
         if item["prediction_files"] < 1:
             raise ValueError(f"prior receipt {index} gt_guard prediction directory is empty")
+        if item["prediction_files"] != token.files or item["prediction_total_bytes"] != token.total_bytes:
+            raise ValueError(f"prior receipt {index} prediction size evidence does not match persisted bytes")
         if item["ordering_enforced_by"] != _GT_GUARD_ORDERING_TOKEN:
             raise ValueError(f"prior receipt {index} gt_guard ordering token is invalid")
         timestamps: list[datetime] = []
@@ -514,7 +630,17 @@ def _validate_strong_prior_receipt(receipt: Mapping[str, object], index: int) ->
                 raise ValueError(f"prior receipt {index} gt_guard {field} is invalid") from exc
             if parsed.tzinfo is None:
                 raise ValueError(f"prior receipt {index} gt_guard {field} must include timezone")
+            parsed = parsed.astimezone(UTC)
+            if parsed > datetime.now(UTC):
+                raise ValueError(f"prior receipt {index} gt_guard {field} is in the future")
             timestamps.append(parsed)
+        try:
+            manifest_created = datetime.fromisoformat(token.manifest_created_at).astimezone(UTC)
+            receipt_created = datetime.fromisoformat(item["prediction_manifest_created_at"]).astimezone(UTC)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"prior receipt {index} gt_guard manifest timestamp is invalid") from exc
+        if manifest_created != receipt_created:
+            raise ValueError(f"prior receipt {index} manifest creation time does not match persisted manifest")
         if not timestamps[0] < timestamps[1] < timestamps[2]:
             raise ValueError(f"prior receipt {index} gt_guard timestamps violate prediction-before-GT order")
     selection_lock_id = receipt.get("selection_lock_id")
@@ -647,8 +773,7 @@ def validate_selection_lock_payload(payload: Mapping[str, object]) -> dict[str, 
         raise ValueError(f"selection lock is not canonical JSON-safe: {exc}") from exc
     _assert_no_forbidden_paths(value)
 
-    if value["schema_version"] != LOCK_SCHEMA_VERSION:
-        raise ValueError("unsupported selection lock schema_version")
+    _require_schema_version(value["schema_version"], "selection lock schema_version")
     if value["panel_status"] != PANEL_STATUS:
         raise ValueError("panel_status must be retrospective_adaptive_research")
     panel = value["panel"]
@@ -798,6 +923,12 @@ def validate_selection_lock(path: Path) -> dict[str, object]:
     if not path.is_file():
         raise FileNotFoundError(f"selection lock file is missing: {path.name}")
     raw = path.read_bytes()
+    validated = _validate_lock_bytes(raw)
+    _validate_config_bytes(path, validated)
+    return validated
+
+
+def _validate_lock_bytes(raw: bytes) -> dict[str, object]:
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -807,6 +938,10 @@ def validate_selection_lock(path: Path) -> dict[str, object]:
     validated = validate_selection_lock_payload(payload)
     if raw.decode("utf-8") != canonical_lock_json(validated):
         raise ValueError("selection lock bytes are not canonical JSON")
+    return validated
+
+
+def _validate_config_bytes(path: Path, validated: Mapping[str, object]) -> None:
     config_path = validated["config_relative_path"]
     assert isinstance(config_path, str)
     matching = [candidate for candidate in _config_candidates(path, config_path) if candidate.is_file()]
@@ -815,28 +950,78 @@ def validate_selection_lock(path: Path) -> dict[str, object]:
     actual = _sha256_file(matching[0])
     if actual != validated["config_sha256"]:
         raise ValueError("selection lock config bytes do not match config_sha256")
-    return validated
 
 
-def _ensure_safe_parent(path: Path) -> None:
-    """Create missing parents without traversing an existing symlink."""
+def _open_safe_parent(path: Path) -> tuple[int, str]:
+    """Open every parent component with no-follow dirfd-relative operations."""
 
-    if path.exists() or path.is_symlink():
-        raise FileExistsError(f"selection lock target already exists: {path.name}")
-    parent = path.parent
-    absolute_parent = parent if parent.is_absolute() else Path.cwd() / parent
-    current = Path(absolute_parent.anchor)
-    for part in absolute_parent.parts[1:]:
-        current /= part
-        if current.is_symlink():
-            raise ValueError(f"selection lock parent symlink is forbidden: {current.name}")
-        if current.exists():
-            if not current.is_dir():
-                raise ValueError(f"selection lock parent is not a directory: {current.name}")
+    path = Path(path)
+    target_name = path.name
+    if not target_name or target_name in {".", ".."}:
+        raise ValueError("selection lock target must have a filename")
+    absolute_parent = path.parent if path.is_absolute() else Path.cwd() / path.parent
+    root = Path(absolute_parent.anchor)
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    parent_fd = os.open(str(root), directory_flags)
+    try:
+        relative_parent = absolute_parent.relative_to(root)
+        for component in relative_parent.parts:
+            try:
+                child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(component, 0o755, dir_fd=parent_fd)
+                except FileExistsError:
+                    pass
+                try:
+                    child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+                except OSError as exc:
+                    if exc.errno in {ELOOP, ENOTDIR}:
+                        raise ValueError(
+                            f"selection lock parent symlink or non-directory: {component}",
+                        ) from exc
+                    raise
+            except OSError as exc:
+                if exc.errno in {ELOOP, ENOTDIR}:
+                    raise ValueError(f"selection lock parent symlink or non-directory: {component}") from exc
+                raise
+            os.close(parent_fd)
+            parent_fd = child_fd
+    except BaseException:
+        os.close(parent_fd)
+        raise
+    return parent_fd, target_name
+
+
+def _open_temp_at(parent_fd: int, target_name: str) -> tuple[int, str]:
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    for _ in range(100):
+        temporary_name = f".{target_name}.{secrets.token_hex(12)}"
+        try:
+            temporary_fd = os.open(temporary_name, flags, 0o600, dir_fd=parent_fd)
+        except FileExistsError:
             continue
-        current.mkdir()
-        if current.is_symlink():
-            raise ValueError(f"selection lock parent symlink appeared during creation: {current.name}")
+        return temporary_fd, temporary_name
+    raise FileExistsError("could not create a private selection-lock temporary file")
+
+
+def _write_all(fd: int, payload: bytes) -> None:
+    offset = 0
+    while offset < len(payload):
+        written = os.write(fd, payload[offset:])
+        if written <= 0:
+            raise OSError("selection lock temporary write made no progress")
+        offset += written
+
+
+def _read_fd_bytes(fd: int) -> bytes:
+    size = os.fstat(fd).st_size
+    if size < 0:
+        raise ValueError("selection lock file size is invalid")
+    raw = os.pread(fd, size + 1, 0)
+    if len(raw) != size:
+        raise ValueError("selection lock file changed while being read")
+    return raw
 
 
 def write_selection_lock(path: Path, payload: Mapping[str, object]) -> Path:
@@ -844,37 +1029,62 @@ def write_selection_lock(path: Path, payload: Mapping[str, object]) -> Path:
 
     path = Path(path)
     validated = validate_selection_lock_payload(payload)
-    _ensure_safe_parent(path)
     encoded = canonical_lock_json(validated).encode("utf-8")
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
-    os.close(descriptor)
-    temporary_path = Path(temporary_name)
+    parent_fd, target_name = _open_safe_parent(path)
+    temporary_fd = -1
+    temporary_name: str | None = None
     try:
-        temporary_path.unlink()
-        with temporary_path.open("xb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        prepublish = validate_selection_lock(temporary_path)
+        try:
+            os.stat(target_name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise FileExistsError(f"selection lock target already exists: {target_name}")
+        temporary_fd, temporary_name = _open_temp_at(parent_fd, target_name)
+        _write_all(temporary_fd, encoded)
+        os.fsync(temporary_fd)
+        prepublish = _validate_lock_bytes(_read_fd_bytes(temporary_fd))
         if canonical_lock_json(prepublish) != encoded.decode("utf-8"):
             raise ValueError("selection lock prepublish canonical bytes changed")
         # Hard-link publication is atomic and refuses to replace an existing
         # final file, unlike os.replace().
-        os.link(temporary_path, path)
-        temporary_path.unlink()
-        reread = validate_selection_lock(path)
+        os.link(
+            temporary_name,
+            target_name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+            follow_symlinks=False,
+        )
+        os.fsync(parent_fd)
+        os.unlink(temporary_name, dir_fd=parent_fd)
+        temporary_name = None
+        os.fsync(parent_fd)
+        final_fd = os.open(
+            target_name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent_fd,
+        )
+        try:
+            reread = _validate_lock_bytes(_read_fd_bytes(final_fd))
+        finally:
+            os.close(final_fd)
+        _validate_config_bytes(path, reread)
         if canonical_lock_json(reread) != encoded.decode("utf-8"):
             raise ValueError("selection lock post-write canonical bytes changed")
     except BaseException:
-        if temporary_path.exists() or temporary_path.is_symlink():
+        if temporary_name is not None:
             try:
-                temporary_path.unlink()
+                os.unlink(temporary_name, dir_fd=parent_fd)
             except OSError:
                 pass
         # A valid final artifact is never removed after publication; this
         # preserves write-once semantics when post-publication verification
         # fails for an external reason.
         raise
+    finally:
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
+        os.close(parent_fd)
     return path
 
 

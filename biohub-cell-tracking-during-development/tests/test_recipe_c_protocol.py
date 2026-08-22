@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import stat
 import subprocess
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
@@ -24,6 +25,8 @@ from biohub.recipe_c.protocol import (
     write_selection_lock,
 )
 from biohub.recipe_c.source import RECIPE_C_SOURCE
+from biohub.reproducibility.digest import directory_digest_report
+from biohub.reproducibility.gt_guard import prediction_manifest_path
 
 
 def _source_receipt() -> dict[str, object]:
@@ -212,19 +215,37 @@ def test_selection_lock_does_not_replace_existing_target(
         write_selection_lock(path, valid_lock)
 
 
-def _strong_prior_receipt() -> dict[str, object]:
-    base = datetime(2026, 8, 22, 12, 0, tzinfo=UTC)
+def _strong_prior_receipt(tmp_path: Path, *, future: bool = False) -> dict[str, object]:
+    base = datetime.now(UTC) - timedelta(minutes=10)
+    if future:
+        base = datetime.now(UTC) + timedelta(hours=1)
     samples: list[dict[str, object]] = []
     for index, sample_id in enumerate(PANEL_V1):
+        prediction = tmp_path / "predictions" / sample_id
+        prediction.mkdir(parents=True)
+        (prediction / "prediction.bin").write_bytes(f"prediction-{sample_id}".encode())
+        report = directory_digest_report(prediction)
+        manifest_path = prediction_manifest_path(prediction)
         manifest_created = base + timedelta(seconds=index * 3)
         persisted = manifest_created + timedelta(seconds=1)
         gt_opened = persisted + timedelta(seconds=1)
+        manifest = {
+            "prediction_path": str(prediction),
+            "directory_sha256": report["directory_sha256"],
+            "files": report["files"],
+            "total_bytes": report["total_bytes"],
+            "ground_truth_included": False,
+            "manifest_created_at": manifest_created.isoformat(),
+        }
+        _write_canonical_receipt(manifest_path, manifest)
         samples.append(
             {
                 "sample_id": sample_id,
-                "prediction_directory_sha256": "1" * 64,
-                "prediction_files": 5,
-                "prediction_total_bytes": 100,
+                "prediction_path": str(prediction),
+                "prediction_manifest_path": str(manifest_path),
+                "prediction_directory_sha256": report["directory_sha256"],
+                "prediction_files": report["files"],
+                "prediction_total_bytes": report["total_bytes"],
                 "prediction_manifest_created_at": manifest_created.isoformat(),
                 "prediction_persisted_at": persisted.isoformat(),
                 "ground_truth_opened_at": gt_opened.isoformat(),
@@ -256,17 +277,22 @@ def test_prior_evidence_requires_strong_panel_ordering_schema(config_path: Path)
         build_selection_lock(_source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [weak])
 
 
-def test_prior_evidence_rejects_in_memory_self_claim(config_path: Path) -> None:
+def test_prior_evidence_rejects_in_memory_self_claim(config_path: Path, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"persisted|JSON path|receipt"):
         build_selection_lock(
-            _source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [_strong_prior_receipt()]
+            _source_receipt(),
+            config_path,
+            "a" * 40,
+            "cpu",
+            _experiment(),
+            [_strong_prior_receipt(tmp_path)],
         )
 
 
 def test_prior_evidence_sets_post_prediction_scope_without_copying_receipt(
     config_path: Path, tmp_path: Path,
 ) -> None:
-    strong = _strong_prior_receipt()
+    strong = _strong_prior_receipt(tmp_path)
     strong["metrics"] = {"final_score": 0.9}
     receipt_path = _write_canonical_receipt(tmp_path / "prior.json", strong)
     lock = build_selection_lock(
@@ -277,6 +303,69 @@ def test_prior_evidence_sets_post_prediction_scope_without_copying_receipt(
     assert usage["ground_truth_used_for_method_family_selection"] is True
     assert usage["ground_truth_usage_scope"] == "post_prediction_analysis_only"
     assert "metrics" not in json.dumps(lock)
+    assert "prediction_manifest_path" not in json.dumps(lock)
+    assert str(tmp_path) not in json.dumps(lock)
+
+
+def test_prior_evidence_revalidates_real_prediction_and_manifest(
+    config_path: Path, tmp_path: Path,
+) -> None:
+    strong = _strong_prior_receipt(tmp_path)
+    guard = strong["gt_guard"]
+    assert isinstance(guard, list)
+    first = guard[0]
+    assert isinstance(first, dict)
+    first["prediction_directory_sha256"] = "1" * 64
+    receipt_path = _write_canonical_receipt(tmp_path / "prior-tampered.json", strong)
+    with pytest.raises(ValueError, match=r"prediction|digest|manifest"):
+        build_selection_lock(
+            _source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [receipt_path]
+        )
+
+
+def test_prior_evidence_rejects_missing_prediction_artifact(
+    config_path: Path, tmp_path: Path,
+) -> None:
+    strong = _strong_prior_receipt(tmp_path)
+    guard = strong["gt_guard"]
+    assert isinstance(guard, list)
+    first = guard[0]
+    assert isinstance(first, dict)
+    manifest_path = Path(first["prediction_manifest_path"])
+    manifest_path.unlink()
+    receipt_path = _write_canonical_receipt(tmp_path / "prior-missing.json", strong)
+    with pytest.raises(ValueError, match=r"prediction|manifest|persist"):
+        build_selection_lock(
+            _source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [receipt_path]
+        )
+
+
+def test_prior_evidence_rejects_future_prediction_manifest(
+    config_path: Path, tmp_path: Path,
+) -> None:
+    strong = _strong_prior_receipt(tmp_path, future=True)
+    receipt_path = _write_canonical_receipt(tmp_path / "prior-future.json", strong)
+    with pytest.raises(ValueError, match=r"future|timestamp|prediction"):
+        build_selection_lock(
+            _source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [receipt_path]
+        )
+
+
+@pytest.mark.parametrize("missing_field", ["prediction_path", "prediction_manifest_path"])
+def test_prior_evidence_requires_persisted_paths(
+    config_path: Path, tmp_path: Path, missing_field: str,
+) -> None:
+    strong = _strong_prior_receipt(tmp_path)
+    guard = strong["gt_guard"]
+    assert isinstance(guard, list)
+    first = guard[0]
+    assert isinstance(first, dict)
+    del first[missing_field]
+    receipt_path = _write_canonical_receipt(tmp_path / f"prior-{missing_field}.json", strong)
+    with pytest.raises(ValueError, match=r"required|missing|prediction"):
+        build_selection_lock(
+            _source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [receipt_path]
+        )
 
 
 def test_validate_selection_lock_rejects_tampered_file(tmp_path: Path, valid_lock: dict[str, object]) -> None:
@@ -292,29 +381,18 @@ def test_selection_lock_write_failure_is_atomic_and_retryable(
     tmp_path: Path, valid_lock: dict[str, object], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "selection_lock.json"
-    original_open = Path.open
+    original_write = protocol_module.os.write
+    injected = False
 
-    class _PartialFailure:
-        def __init__(self, target: Path, mode: str, args: tuple[object, ...], kwargs: dict[str, object]) -> None:
-            self.handle = original_open(target, mode, *args, **kwargs)
-
-        def __enter__(self) -> _PartialFailure:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            self.handle.close()
-
-        def write(self, payload: bytes) -> int:
-            self.handle.write(payload[:5])
-            self.handle.flush()
+    def flaky_write(fd: int, payload: bytes) -> int:
+        nonlocal injected
+        if not injected:
+            injected = True
+            original_write(fd, payload[:5])
             raise OSError("injected write failure")
+        return original_write(fd, payload)
 
-    def flaky_open(self: Path, mode: str = "r", *args: object, **kwargs: object) -> object:
-        if mode == "xb":
-            return _PartialFailure(self, mode, args, kwargs)
-        return original_open(self, mode, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "open", flaky_open)
+    monkeypatch.setattr(protocol_module.os, "write", flaky_write)
     with pytest.raises(OSError, match="injected"):
         write_selection_lock(path, valid_lock)
     assert not path.exists()
@@ -340,21 +418,22 @@ def test_selection_lock_post_publish_failure_keeps_valid_final(
     tmp_path: Path, valid_lock: dict[str, object], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "selection_lock.json"
-    original_validate = protocol_module.validate_selection_lock
-    failed = False
+    original_validate = protocol_module._validate_lock_bytes
+    calls = 0
 
-    def fail_after_publish(candidate: Path) -> dict[str, object]:
-        nonlocal failed
-        if Path(candidate) == path and not failed:
-            failed = True
+    def fail_after_publish(raw: bytes) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
             raise OSError("injected post-publish failure")
-        return original_validate(candidate)
+        return original_validate(raw)
 
-    monkeypatch.setattr(protocol_module, "validate_selection_lock", fail_after_publish)
+    monkeypatch.setattr(protocol_module, "_validate_lock_bytes", fail_after_publish)
     with pytest.raises(OSError, match="post-publish"):
         write_selection_lock(path, valid_lock)
+    monkeypatch.undo()
     assert path.is_file()
-    assert original_validate(path) == valid_lock
+    assert validate_selection_lock(path) == valid_lock
     assert not list(tmp_path.glob(".selection_lock.*"))
 
 
@@ -370,6 +449,48 @@ def test_selection_lock_rejects_symlinked_parent(
     assert not (outside / "selection_lock.json").exists()
 
 
+def test_selection_lock_parent_rename_swap_cannot_redirect_write(
+    tmp_path: Path, valid_lock: dict[str, object], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    path = parent / "selection_lock.json"
+    (parent / "recipe-c.yaml").write_bytes((tmp_path / "recipe-c.yaml").read_bytes())
+    (outside / "recipe-c.yaml").write_bytes((tmp_path / "recipe-c.yaml").read_bytes())
+    original_open_parent = protocol_module._open_safe_parent
+
+    def swap_after_check(candidate: Path) -> tuple[int, str]:
+        parent_fd, target_name = original_open_parent(candidate)
+        moved = tmp_path / "moved-parent"
+        parent.rename(moved)
+        parent.symlink_to(outside, target_is_directory=True)
+        return parent_fd, target_name
+
+    monkeypatch.setattr(protocol_module, "_open_safe_parent", swap_after_check)
+    write_selection_lock(path, valid_lock)
+    assert not (outside / "selection_lock.json").exists()
+    assert (tmp_path / "moved-parent" / "selection_lock.json").is_file()
+
+
+def test_selection_lock_fsyncs_containing_directory(
+    tmp_path: Path, valid_lock: dict[str, object], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_fsync = protocol_module.os.fsync
+    directory_fsyncs = 0
+
+    def recording_fsync(fd: int) -> None:
+        nonlocal directory_fsyncs
+        if stat.S_ISDIR(protocol_module.os.fstat(fd).st_mode):
+            directory_fsyncs += 1
+        original_fsync(fd)
+
+    monkeypatch.setattr(protocol_module.os, "fsync", recording_fsync)
+    write_selection_lock(tmp_path / "selection_lock.json", valid_lock)
+    assert directory_fsyncs >= 2
+
+
 def test_selection_lock_rejects_nested_gt_alias_path(valid_lock: dict[str, object]) -> None:
     experiment = valid_lock["experiment"]
     assert isinstance(experiment, dict)
@@ -377,6 +498,59 @@ def test_selection_lock_rejects_nested_gt_alias_path(valid_lock: dict[str, objec
     valid_lock["selection_lock_id"] = recompute_selection_lock_id(valid_lock)
     with pytest.raises(ValueError, match=r"ground truth|GT"):
         validate_selection_lock_payload(valid_lock)
+
+
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "gt_directory",
+        "gt_dir",
+        "groundtruth_dir",
+        "truth_path",
+        "annotation_path",
+        "gt_uri",
+        "credential",
+        "credentials",
+        "credential_path",
+        "secret_file",
+        "token_path",
+        "api_key_path",
+    ],
+)
+def test_selection_lock_rejects_nested_gt_and_credential_key_vocabulary(
+    config_path: Path, forbidden_key: str,
+) -> None:
+    with pytest.raises(ValueError, match=r"ground truth|credential|secret|token|path"):
+        build_selection_lock(
+            _source_receipt(),
+            config_path,
+            "a" * 40,
+            "cpu",
+            _experiment(changes={forbidden_key: "relative/reference"}),
+        )
+
+
+@pytest.mark.parametrize("schema_version", [True, 1.0])
+def test_selection_lock_schema_version_requires_exact_integer(
+    valid_lock: dict[str, object], schema_version: object,
+) -> None:
+    valid_lock["schema_version"] = schema_version
+    valid_lock["selection_lock_id"] = recompute_selection_lock_id(valid_lock)
+    with pytest.raises(ValueError, match=r"schema_version|schema"):
+        validate_selection_lock_payload(valid_lock)
+
+
+@pytest.mark.parametrize("schema_version", [True, 1.0])
+def test_prior_receipt_schema_version_requires_exact_integer(
+    config_path: Path, tmp_path: Path, schema_version: object,
+) -> None:
+    strong = _strong_prior_receipt(tmp_path)
+    strong["schema_version"] = schema_version
+    receipt_path = _write_canonical_receipt(tmp_path / "prior-schema.json", strong)
+    with pytest.raises(ValueError, match=r"schema_version|schema"):
+        build_selection_lock(
+            _source_receipt(), config_path, "a" * 40, "cpu", _experiment(), [receipt_path]
+        )
 
 
 def test_selection_lock_rejects_credential_path_inside_experiment_list(config_path: Path) -> None:
@@ -481,3 +655,52 @@ def test_freeze_cli_uses_read_only_git_environment(
     cli._git_commit_and_clean()
     assert environments
     assert all(env is not None and env.get("GIT_OPTIONAL_LOCKS") == "0" for env in environments)
+
+
+def test_freeze_cli_rejects_external_config_before_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cli = _load_freeze_cli()
+    external = tmp_path / "external.yaml"
+    external.write_bytes((Path(__file__).parents[1] / "configs" / "biohub_095_recipe_c.yaml").read_bytes())
+    parser = cli._build_parser()
+    args = parser.parse_args(
+        [
+            "freeze",
+            "--source", "source",
+            "--primary-support", "primary",
+            "--secondary-support", "secondary",
+            "--config", str(external),
+            "--output", str(tmp_path / "selection_lock.json"),
+            "--experiment-id", "exp",
+            "--method-family", "family",
+            "--hypothesis", "hypothesis",
+            "--expected-gain", "0.1",
+            "--cost", "cost",
+            "--risk", "risk",
+            "--novelty", "novelty",
+            "--changes", "changes",
+            "--control-id", "control",
+            "--acceptance-criteria", "accept",
+        ],
+    )
+    monkeypatch.setattr(cli, "_git_commit_and_clean", lambda: "a" * 40)
+    monkeypatch.setattr(cli, "validate_source_checkout", lambda _path: _source_receipt())
+    monkeypatch.setattr(cli, "validate_support_artifacts", lambda *_paths: {})
+    with pytest.raises(ValueError, match=r"--config|canonical|project"):
+        cli._freeze(args)
+    assert not (tmp_path / "selection_lock.json").exists()
+
+
+@pytest.mark.parametrize(
+    "config_value",
+    [
+        Path("/tmp/external.yaml"),
+        Path("../configs/biohub_095_recipe_c.yaml"),
+        Path("configs/../configs/biohub_095_recipe_c.yaml"),
+    ],
+)
+def test_freeze_cli_rejects_external_or_traversal_config(config_value: Path) -> None:
+    cli = _load_freeze_cli()
+    with pytest.raises(ValueError, match=r"--config|canonical|project"):
+        cli._resolve_config_path(config_value)
