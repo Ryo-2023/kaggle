@@ -12,7 +12,6 @@ opens a ``.zarr``, a checkpoint, or a ``.npz``: manifests and receipts only.
 from __future__ import annotations
 
 import json
-import os
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
@@ -20,25 +19,17 @@ from typing import Any
 
 import pytest
 
+from _race_tree import find_race_tree, unreachable_message
 from biohub.reproducibility.cache_identity import compare_caches, content_input_digest
 from biohub.reproducibility.gt_guard import GroundTruthOrderingError, ordering_holds
 from biohub.reproducibility.receipts import detector_invariance_report
 
-_DEFAULT_TREE = (
-    Path(__file__).resolve().parents[4]
-    / "strong-baseline-v1"
-    / "biohub-cell-tracking-during-development"
-    / "artifacts"
-    / "detector_fixed_race"
-)
-
 
 def race_tree() -> Path:
-    override = os.environ.get("BIOHUB_DETECTOR_FIXED_RACE_ROOT")
-    candidate = Path(override) if override else _DEFAULT_TREE
-    if not candidate.is_dir():
-        pytest.skip(f"detector-fixed race artifacts are not reachable: {candidate}")
-    return candidate
+    tree = find_race_tree()
+    if tree is None:
+        pytest.skip(unreachable_message())
+    return tree
 
 
 # Explicit globs, not rglob: the tree holds multi-gigabyte cache and GEFF directories,

@@ -27,6 +27,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from _race_tree import find_race_tree
 from biohub.reproducibility.digest import directory_digest_report
 from biohub.reproducibility.receipts import method_sensitivity_report
 
@@ -44,22 +45,20 @@ from biohub.detector_fixed_race.schema import (
 
 FIXTURES = Path(__file__).parent / "fixtures" / "reproducibility" / "real_receipts"
 
-_DEFAULT_RACE_DIR = (
-    Path(__file__).resolve().parents[4]
-    / "strong-baseline-v1"
-    / "biohub-cell-tracking-during-development"
-    / "artifacts"
-    / "detector_fixed_race"
-    / "dev_full_auto_compact_timed"
-    / "44b6_0113de3b"
-)
+_RACE_SUBDIR = Path("dev_full_auto_compact_timed") / "44b6_0113de3b"
 
 
 def real_race_dir() -> Path | None:
     """Locate the persisted four-method race output, if it is reachable read-only."""
 
     override = os.environ.get("BIOHUB_RACE_ARTIFACTS")
-    candidate = Path(override) if override else _DEFAULT_RACE_DIR
+    if override:
+        candidate = Path(override)
+        return candidate if candidate.is_dir() else None
+    tree = find_race_tree()
+    if tree is None:
+        return None
+    candidate = tree / _RACE_SUBDIR
     return candidate if candidate.is_dir() else None
 
 
