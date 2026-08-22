@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -189,6 +190,7 @@ def _git_checkout_root(root: Path) -> Path:
         check=False,
         capture_output=True,
         text=True,
+        env=_git_read_only_env(),
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or "not a Git checkout"
@@ -206,11 +208,18 @@ def _git_checkout_root(root: Path) -> Path:
     return expected_root
 
 
+def _git_read_only_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    return env
+
+
 def _require_normal_git_index(root: Path) -> None:
     result = subprocess.run(
         ["git", "-C", str(root), "ls-files", "-v", "-z"],
         check=False,
         capture_output=True,
+        env=_git_read_only_env(),
     )
     if result.returncode != 0:
         detail = result.stderr.decode(errors="replace").strip() or "unable to inspect source checkout index"
@@ -241,6 +250,7 @@ def _require_clean_git_checkout(root: Path) -> None:
         check=False,
         capture_output=True,
         text=True,
+        env=_git_read_only_env(),
     )
     if status.returncode != 0:
         detail = status.stderr.strip() or "unable to inspect source checkout status"
@@ -256,6 +266,7 @@ def _git_head(root: Path) -> str:
         check=False,
         capture_output=True,
         text=True,
+        env=_git_read_only_env(),
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or "not a Git checkout"

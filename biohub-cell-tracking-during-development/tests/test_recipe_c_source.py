@@ -147,6 +147,28 @@ def _index_marker(root: Path, relative: str) -> str:
     return entry[0]
 
 
+def _index_snapshot(root: Path) -> tuple[str, int, int, int]:
+    index_path = root / ".git" / "index"
+    payload = index_path.read_bytes()
+    stat = index_path.stat()
+    return _sha256(payload), len(payload), stat.st_ino, stat.st_mtime_ns
+
+
+def test_source_contract_keeps_index_unchanged_for_touched_clean_source(
+    fake_source_tree: _FakeSourceTree,
+) -> None:
+    source_file = fake_source_tree.root / "source_code.py"
+    original = source_file.read_bytes()
+    source_file.touch()
+    assert source_file.read_bytes() == original
+    before = _index_snapshot(fake_source_tree.root)
+
+    receipt = validate_source_checkout(fake_source_tree.root, contract=fake_source_tree.contract)
+
+    assert receipt["source_commit"] == fake_source_tree.contract.source_commit
+    assert _index_snapshot(fake_source_tree.root) == before
+
+
 @pytest.mark.parametrize(
     ("index_flag", "expected_marker"),
     [("--assume-unchanged", "h"), ("--skip-worktree", "S")],
