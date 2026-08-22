@@ -18,7 +18,7 @@ from pathlib import Path
 
 from biohub.device import DEVICE_SELECTION_ORDER
 
-from .device_patch import apply_device_fallback_patch
+from .device_patch import publish_device_fallback_patch_at
 from .protocol import validate_selection_lock, validate_selection_lock_payload
 from .source import (
     RECIPE_C_SOURCE,
@@ -102,15 +102,6 @@ class RuntimeStage:
         return self.receipt
 
 
-def _relative_path(root: Path, value: object, label: str) -> Path:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{label} relative path is missing")
-    relative = Path(value)
-    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-        raise ValueError(f"{label} path must be relative")
-    return root / relative
-
-
 def _repo_relative(value: object, label: str) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} relative path is missing")
@@ -120,7 +111,7 @@ def _repo_relative(value: object, label: str) -> Path:
     return relative.relative_to("repo")
 
 
-def _root_path(root: Path, label: str) -> Path:
+def _validated_root(root: Path, label: str) -> tuple[Path, tuple[int, int]]:
     root = Path(root)
     try:
         metadata = os.lstat(root)
@@ -136,12 +127,170 @@ def _root_path(root: Path, label: str) -> Path:
         raise ValueError(f"{label} root could not be resolved") from exc
     if resolved != root.absolute():
         raise ValueError(f"{label} root has a symlinked parent")
-    return root
+    return root, (metadata.st_ino, metadata.st_dev)
 
 
-def _read_regular_stable(path: Path, label: str) -> tuple[bytes, os.stat_result]:
+def _root_path(root: Path, label: str) -> Path:
+    return _validated_root(root, label)[0]
+
+
+def _relative_parts(value: object, label: str) -> tuple[str, ...]:
+    if isinstance(value, Path):
+        relative = value
+    elif isinstance(value, str) and value.strip():
+        relative = Path(value)
+    else:
+        raise ValueError(f"{label} relative path is missing")
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise ValueError(f"{label} path must be relative")
+    parts = tuple(part for part in relative.parts if part not in {"", "."})
+    if not parts:
+        raise ValueError(f"{label} path must name an entry")
+    return parts
+
+
+def _open_directory_path(path: Path, label: str) -> int:
+    """Open a directory and every ancestor without following symlinks."""
+
+    path = Path(path)
+    if any(part == ".." for part in path.parts):
+        raise ValueError(f"{label} path traversal is forbidden")
+    flags = os.O_RDONLY | _DIRECTORY | _NOFOLLOW
+    if path.is_absolute():
+        anchor = path.anchor
+        parts = path.parts[1:]
+    else:
+        anchor = "."
+        parts = path.parts
     try:
-        metadata = os.lstat(path)
+        descriptor = os.open(anchor, flags)
+    except OSError as exc:
+        raise ValueError(f"{label} root is missing or not a directory") from exc
+    try:
+        for part in parts:
+            if part in {"", "."}:
+                continue
+            try:
+                child = os.open(part, flags, dir_fd=descriptor)
+            except FileNotFoundError as exc:
+                raise FileNotFoundError(f"{label} root is missing") from exc
+            except OSError as exc:
+                raise ValueError(f"{label} root has a symlinked or non-directory ancestor") from exc
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_artifact_roots(
+    roots: tuple[tuple[Path, str, tuple[int, int]], ...],
+) -> tuple[int, ...]:
+    """Open all immutable roots, closing already-open roots on failure."""
+
+    descriptors: list[int] = []
+    try:
+        for root, label, expected_identity in roots:
+            descriptor = _open_directory_path(root, label)
+            try:
+                metadata = os.fstat(descriptor)
+                if (metadata.st_ino, metadata.st_dev) != expected_identity:
+                    raise ValueError(f"{label} root changed before descriptor acquisition")
+            except BaseException:
+                os.close(descriptor)
+                raise
+            descriptors.append(descriptor)
+    except BaseException:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise
+    return tuple(descriptors)
+
+
+def _open_relative_directory(root_descriptor: int, relative: object, label: str) -> int:
+    parts = _relative_parts(relative, label) if relative not in {Path("."), "."} else ()
+    flags = os.O_RDONLY | _DIRECTORY | _NOFOLLOW
+    descriptor = os.dup(root_descriptor)
+    try:
+        for part in parts:
+            try:
+                child = os.open(part, flags, dir_fd=descriptor)
+            except FileNotFoundError as exc:
+                raise FileNotFoundError(f"{label} directory is missing") from exc
+            except OSError as exc:
+                raise ValueError(f"{label} directory contains a symlink or non-directory") from exc
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_relative_parent(root_descriptor: int, relative: object, label: str) -> tuple[int, str]:
+    parts = _relative_parts(relative, label)
+    parent_parts = parts[:-1]
+    parent = _open_relative_directory(root_descriptor, Path(*parent_parts), label) if parent_parts else os.dup(
+        root_descriptor,
+    )
+    return parent, parts[-1]
+
+
+def _open_staging_inputs(
+    source_descriptor: int,
+    primary_descriptor: int,
+    secondary_descriptor: int,
+    config_relative: Path,
+    predictor_relative: Path,
+    primary_checkpoint_relative: Path,
+    secondary_checkpoint_relative: Path,
+) -> tuple[tuple[int, str], tuple[int, str], tuple[int, str], tuple[int, str], int]:
+    """Open all pinned input parents and the primary repo with leak-safe cleanup."""
+
+    opened: list[int] = []
+
+    def parent(root_descriptor: int, relative: Path, label: str) -> tuple[int, str]:
+        descriptor, name = _open_relative_parent(root_descriptor, relative, label)
+        opened.append(descriptor)
+        return descriptor, name
+
+    try:
+        source_config = parent(source_descriptor, config_relative, "source config")
+        predictor = parent(primary_descriptor, predictor_relative, "predictor")
+        primary_checkpoint = parent(
+            primary_descriptor,
+            primary_checkpoint_relative,
+            "primary checkpoint",
+        )
+        secondary_checkpoint = parent(
+            secondary_descriptor,
+            secondary_checkpoint_relative,
+            "secondary checkpoint",
+        )
+        primary_repo = _open_relative_directory(primary_descriptor, Path("repo"), "primary support repo")
+        opened.append(primary_repo)
+    except BaseException:
+        for descriptor in reversed(opened):
+            os.close(descriptor)
+        raise
+    return source_config, predictor, primary_checkpoint, secondary_checkpoint, primary_repo
+
+
+def _fsync_directory(descriptor: int) -> None:
+    try:
+        os.fsync(descriptor)
+    except OSError as exc:
+        raise OSError("directory fsync failed") from exc
+
+
+def _identity(metadata: os.stat_result) -> tuple[int, int, int]:
+    return metadata.st_ino, metadata.st_dev, metadata.st_size
+
+
+def _read_regular_stable_at(parent_descriptor: int, name: str, label: str) -> tuple[bytes, os.stat_result]:
+    try:
+        metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"{label} file is missing") from exc
     if stat.S_ISLNK(metadata.st_mode):
@@ -149,16 +298,12 @@ def _read_regular_stable(path: Path, label: str) -> tuple[bytes, os.stat_result]
     if not stat.S_ISREG(metadata.st_mode):
         raise ValueError(f"{label} must be a regular file")
     try:
-        descriptor = os.open(path, os.O_RDONLY | _NOFOLLOW)
+        descriptor = os.open(name, os.O_RDONLY | _NOFOLLOW, dir_fd=parent_descriptor)
     except OSError as exc:
         raise ValueError(f"{label} could not be opened without following symlinks") from exc
     try:
         opened = os.fstat(descriptor)
-        if (opened.st_ino, opened.st_dev, opened.st_size) != (
-            metadata.st_ino,
-            metadata.st_dev,
-            metadata.st_size,
-        ):
+        if _identity(opened) != _identity(metadata):
             raise ValueError(f"{label} changed before it was read")
         chunks: list[bytes] = []
         while True:
@@ -169,54 +314,40 @@ def _read_regular_stable(path: Path, label: str) -> tuple[bytes, os.stat_result]
         after = os.fstat(descriptor)
     finally:
         os.close(descriptor)
-    current = os.lstat(path)
-    if not stat.S_ISREG(current.st_mode) or (after.st_ino, after.st_dev, after.st_size) != (
-        current.st_ino,
-        current.st_dev,
-        current.st_size,
-    ):
+    current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    if not stat.S_ISREG(current.st_mode) or _identity(after) != _identity(current):
         raise ValueError(f"{label} changed while it was read")
     return b"".join(chunks), current
 
 
-def _sha256_regular(path: Path, label: str) -> tuple[str, os.stat_result]:
-    payload, metadata = _read_regular_stable(path, label)
+def _sha256_regular_at(parent_descriptor: int, name: str, label: str) -> tuple[str, os.stat_result]:
+    payload, metadata = _read_regular_stable_at(parent_descriptor, name, label)
     return hashlib.sha256(payload).hexdigest(), metadata
 
 
-def _snapshot_tree(root: Path, *, reject_symlinks: bool = False) -> dict[str, tuple[object, ...]]:
-    """Return a symlink-aware snapshot without storing absolute path values."""
+def _snapshot_tree_fd(root_descriptor: int, *, reject_symlinks: bool = False) -> dict[str, tuple[object, ...]]:
+    """Snapshot an already-open artifact tree; no path is re-resolved."""
 
-    root = _root_path(root, "artifact")
-    resolved_root = root.resolve(strict=True)
+    root_metadata = os.fstat(root_descriptor)
+    if not stat.S_ISDIR(root_metadata.st_mode):
+        raise ValueError("artifact root must be a directory")
     snapshot: dict[str, tuple[object, ...]] = {}
 
-    def visit(directory: Path, relative_directory: Path) -> None:
+    def visit(directory_descriptor: int, relative_directory: Path) -> None:
         try:
-            with os.scandir(directory) as iterator:
+            with os.scandir(directory_descriptor) as iterator:
                 names = sorted(entry.name for entry in iterator)
         except OSError as exc:
             raise ValueError("artifact tree could not be enumerated") from exc
         for name in names:
-            path = directory / name
             relative = (relative_directory / name).as_posix()
-            metadata = os.lstat(path)
+            metadata = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
             if stat.S_ISLNK(metadata.st_mode):
-                if reject_symlinks:
-                    raise ValueError("support repo symlink is forbidden")
-                target = os.readlink(path)
-                try:
-                    resolved_target = path.resolve(strict=True)
-                except (FileNotFoundError, RuntimeError) as exc:
-                    raise ValueError(f"artifact contains a dangling symlink: {relative}") from exc
-                if not resolved_target.is_relative_to(resolved_root):
-                    raise ValueError(f"artifact contains an external symlink: {relative}")
-                snapshot[relative] = (
-                    "symlink",
-                    target,
-                    metadata.st_ino,
-                    metadata.st_dev,
-                )
+                # A symlink target cannot be proven to remain inside an
+                # opened root across a rename race.  Fail closed for every
+                # input symlink, including one that appears internal.
+                if reject_symlinks or stat.S_ISLNK(metadata.st_mode):
+                    raise ValueError(f"artifact contains a symlink: {relative}")
             elif stat.S_ISDIR(metadata.st_mode):
                 snapshot[relative] = (
                     "directory",
@@ -224,9 +355,21 @@ def _snapshot_tree(root: Path, *, reject_symlinks: bool = False) -> dict[str, tu
                     metadata.st_dev,
                     metadata.st_mtime_ns,
                 )
-                visit(path, relative_directory / name)
+                child = os.open(
+                    name,
+                    os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+                    dir_fd=directory_descriptor,
+                )
+                try:
+                    visit(child, relative_directory / name)
+                finally:
+                    os.close(child)
             elif stat.S_ISREG(metadata.st_mode):
-                digest, stable = _sha256_regular(path, f"artifact file {relative}")
+                digest, stable = _sha256_regular_at(
+                    directory_descriptor,
+                    name,
+                    f"artifact file {relative}",
+                )
                 snapshot[relative] = (
                     "file",
                     stable.st_ino,
@@ -238,8 +381,32 @@ def _snapshot_tree(root: Path, *, reject_symlinks: bool = False) -> dict[str, tu
             else:
                 raise ValueError(f"artifact contains an unsupported file: {relative}")
 
-    visit(root, Path())
+    visit(root_descriptor, Path())
     return snapshot
+
+
+def _read_regular_stable(path: Path, label: str) -> tuple[bytes, os.stat_result]:
+    parent_descriptor = _open_secure_directory(path.parent, create_missing=False)
+    try:
+        return _read_regular_stable_at(parent_descriptor, path.name, label)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _sha256_regular(path: Path, label: str) -> tuple[str, os.stat_result]:
+    payload, metadata = _read_regular_stable(path, label)
+    return hashlib.sha256(payload).hexdigest(), metadata
+
+
+def _snapshot_tree(root: Path, *, reject_symlinks: bool = False) -> dict[str, tuple[object, ...]]:
+    """Return a symlink-aware snapshot without storing absolute path values."""
+
+    root = _root_path(root, "artifact")
+    descriptor = _open_directory_path(root, "artifact")
+    try:
+        return _snapshot_tree_fd(descriptor, reject_symlinks=reject_symlinks)
+    finally:
+        os.close(descriptor)
 
 
 def _open_secure_directory(path: Path, *, create_missing: bool) -> int:
@@ -268,6 +435,7 @@ def _open_secure_directory(path: Path, *, create_missing: bool) -> int:
                 if not create_missing:
                     raise
                 os.mkdir(part, 0o755, dir_fd=descriptor)
+                _fsync_directory(descriptor)
                 child = os.open(part, os.O_RDONLY | _DIRECTORY | _NOFOLLOW, dir_fd=descriptor)
             except OSError as exc:
                 raise ValueError("destination parent symlink or non-directory") from exc
@@ -279,11 +447,12 @@ def _open_secure_directory(path: Path, *, create_missing: bool) -> int:
         raise
 
 
-def _claim_destination(destination: Path) -> tuple[Path, int]:
+def _claim_destination(destination: Path) -> tuple[Path, int, int]:
     destination = Path(destination)
     if destination.name in {"", ".", ".."}:
         raise ValueError("destination must name a directory")
     parent_descriptor = _open_secure_directory(destination.parent, create_missing=True)
+    stage_descriptor: int | None = None
     try:
         try:
             os.mkdir(destination.name, 0o755, dir_fd=parent_descriptor)
@@ -294,23 +463,19 @@ def _claim_destination(destination: Path) -> tuple[Path, int]:
             os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
             dir_fd=parent_descriptor,
         )
-        try:
-            os.fsync(parent_descriptor)
-        except OSError:
-            # The ownership claim is still exclusive if directory fsync is
-            # unavailable on a platform/filesystem; file receipts are fsynced
-            # separately before publication.
-            pass
-    finally:
+        return destination, parent_descriptor, stage_descriptor
+    except BaseException:
+        if stage_descriptor is not None:
+            os.close(stage_descriptor)
         os.close(parent_descriptor)
-    return destination, stage_descriptor
+        raise
 
 
-def _assert_claimed_stage(stage_root: Path, stage_descriptor: int) -> None:
-    """Reject a destination that was renamed or replaced after claiming it."""
+def _assert_claimed_destination(parent_descriptor: int, name: str, stage_descriptor: int) -> None:
+    """Verify the claimed entry through the already-open parent descriptor."""
 
     opened = os.fstat(stage_descriptor)
-    current = os.lstat(stage_root)
+    current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
     if not stat.S_ISDIR(current.st_mode) or (current.st_ino, current.st_dev) != (
         opened.st_ino,
         opened.st_dev,
@@ -319,12 +484,47 @@ def _assert_claimed_stage(stage_root: Path, stage_descriptor: int) -> None:
 
 
 def _write_json_exclusive(path: Path, payload: Mapping[str, object]) -> None:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-    with path.open("x", encoding="utf-8") as handle:
-        handle.write(encoded)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
+    parent_descriptor = _open_secure_directory(path.parent, create_missing=False)
+    try:
+        _write_json_exclusive_at(parent_descriptor, path.name, payload)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _write_json_exclusive_at(parent_descriptor: int, name: str, payload: Mapping[str, object]) -> None:
+    encoded = (
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False) + "\n"
+    ).encode("utf-8")
+    descriptor: int | None = None
+    identity: tuple[int, int, int] | None = None
+    try:
+        descriptor = os.open(
+            name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW,
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+        identity = _identity(os.fstat(descriptor))
+        written = 0
+        while written < len(encoded):
+            count = os.write(descriptor, encoded[written:])
+            if count <= 0:
+                raise OSError("receipt write made no progress")
+            written += count
+        os.fsync(descriptor)
+        _fsync_directory(parent_descriptor)
+    except BaseException:
+        if identity is not None:
+            try:
+                current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+                if _identity(current) == identity:
+                    os.unlink(name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _mark_failed(stage_root: Path, selection_lock_id: str | None, exc: BaseException) -> None:
@@ -341,14 +541,36 @@ def _mark_failed(stage_root: Path, selection_lock_id: str | None, exc: BaseExcep
         pass
 
 
-def _copy_regular_file(source: Path, destination: Path, label: str) -> None:
-    payload, source_metadata = _read_regular_stable(source, label)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def _mark_failed_at(stage_descriptor: int, selection_lock_id: str | None, exc: BaseException) -> None:
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "status": "FAILED",
+        "selection_lock_id": selection_lock_id,
+        "error_type": type(exc).__name__,
+        "reusable": False,
+    }
+    try:
+        _write_json_exclusive_at(stage_descriptor, _FAILED_FILENAME, payload)
+        _fsync_directory(stage_descriptor)
+    except OSError:
+        pass
+
+
+def _copy_regular_file_at(
+    source_parent_descriptor: int,
+    source_name: str,
+    destination_parent_descriptor: int,
+    destination_name: str,
+    label: str,
+) -> None:
+    payload, source_metadata = _read_regular_stable_at(source_parent_descriptor, source_name, label)
+    descriptor: int | None = None
     try:
         descriptor = os.open(
-            destination,
+            destination_name,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | _NOFOLLOW,
             stat.S_IMODE(source_metadata.st_mode),
+            dir_fd=destination_parent_descriptor,
         )
     except FileExistsError as exc:
         raise FileExistsError("staged destination file already exists") from exc
@@ -362,33 +584,146 @@ def _copy_regular_file(source: Path, destination: Path, label: str) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-    after = os.lstat(source)
-    if not stat.S_ISREG(after.st_mode) or (after.st_ino, after.st_dev, after.st_size) != (
-        source_metadata.st_ino,
-        source_metadata.st_dev,
-        source_metadata.st_size,
-    ):
+    _fsync_directory(destination_parent_descriptor)
+    after = os.stat(source_name, dir_fd=source_parent_descriptor, follow_symlinks=False)
+    if not stat.S_ISREG(after.st_mode) or _identity(after) != _identity(source_metadata):
         raise ValueError(f"{label} changed during copy")
 
 
+def _ensure_directory_at(root_descriptor: int, relative: object, label: str) -> int:
+    parts = () if relative in {Path("."), "."} else _relative_parts(relative, label)
+    flags = os.O_RDONLY | _DIRECTORY | _NOFOLLOW
+    descriptor = os.dup(root_descriptor)
+    try:
+        for part in parts:
+            try:
+                os.mkdir(part, 0o755, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            _fsync_directory(descriptor)
+            child = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _copy_tree_at(
+    source_descriptor: int,
+    destination_parent_descriptor: int,
+    destination_name: str,
+    *,
+    reject_symlinks: bool,
+    exclude_relative: tuple[str, ...] | None = None,
+    relative_parts: tuple[str, ...] = (),
+) -> int:
+    try:
+        os.mkdir(destination_name, 0o755, dir_fd=destination_parent_descriptor)
+    except FileExistsError as exc:
+        raise FileExistsError("staged tree already exists") from exc
+    destination_descriptor = os.open(
+        destination_name,
+        os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+        dir_fd=destination_parent_descriptor,
+    )
+    try:
+        with os.scandir(source_descriptor) as iterator:
+            names = sorted(entry.name for entry in iterator)
+        for name in names:
+            source_relative = (*relative_parts, name)
+            if exclude_relative is not None and source_relative == exclude_relative:
+                continue
+            metadata = os.stat(name, dir_fd=source_descriptor, follow_symlinks=False)
+            if stat.S_ISDIR(metadata.st_mode):
+                child_source = os.open(
+                    name,
+                    os.O_RDONLY | _DIRECTORY | _NOFOLLOW,
+                    dir_fd=source_descriptor,
+                )
+                child_destination: int | None = None
+                try:
+                    child_destination = _copy_tree_at(
+                        child_source,
+                        destination_descriptor,
+                        name,
+                        reject_symlinks=reject_symlinks,
+                        exclude_relative=exclude_relative,
+                        relative_parts=source_relative,
+                    )
+                finally:
+                    os.close(child_source)
+                    if child_destination is not None:
+                        os.close(child_destination)
+                _fsync_directory(destination_descriptor)
+            elif stat.S_ISREG(metadata.st_mode):
+                _copy_regular_file_at(
+                    source_descriptor,
+                    name,
+                    destination_descriptor,
+                    name,
+                    f"support repo file {name}",
+                )
+            else:
+                raise ValueError("support repo contains a symlink or unsupported file")
+        _fsync_directory(destination_descriptor)
+        return destination_descriptor
+    except BaseException:
+        os.close(destination_descriptor)
+        raise
+
+
+def _write_symlink_at(
+    parent_descriptor: int,
+    name: str,
+    target: str,
+    expected_target: os.stat_result,
+) -> None:
+    os.symlink(target, name, dir_fd=parent_descriptor)
+    try:
+        actual = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=True)
+        if (actual.st_ino, actual.st_dev) != (expected_target.st_ino, expected_target.st_dev):
+            raise ValueError("staged checkpoint target identity mismatch")
+        _fsync_directory(parent_descriptor)
+    except BaseException:
+        try:
+            os.unlink(name, dir_fd=parent_descriptor)
+        except OSError:
+            pass
+        raise
+
+
+def _copy_regular_file(source: Path, destination: Path, label: str) -> None:
+    source_parent_descriptor = _open_secure_directory(source.parent, create_missing=False)
+    destination_parent_descriptor = _open_secure_directory(destination.parent, create_missing=True)
+    try:
+        _copy_regular_file_at(
+            source_parent_descriptor,
+            source.name,
+            destination_parent_descriptor,
+            destination.name,
+            label,
+        )
+    finally:
+        os.close(source_parent_descriptor)
+        os.close(destination_parent_descriptor)
+
+
 def _copy_tree(source: Path, destination: Path, *, reject_symlinks: bool) -> None:
-    if destination.exists() or destination.is_symlink():
-        raise FileExistsError("staged tree already exists")
-    destination.mkdir(parents=True)
-    snapshot = _snapshot_tree(source, reject_symlinks=reject_symlinks)
-    del snapshot
-    with os.scandir(source) as iterator:
-        names = sorted(entry.name for entry in iterator)
-    for name in names:
-        source_path = source / name
-        destination_path = destination / name
-        metadata = os.lstat(source_path)
-        if stat.S_ISDIR(metadata.st_mode):
-            _copy_tree(source_path, destination_path, reject_symlinks=reject_symlinks)
-        elif stat.S_ISREG(metadata.st_mode):
-            _copy_regular_file(source_path, destination_path, f"support repo file {name}")
-        else:
-            raise ValueError("support repo contains a symlink or unsupported file")
+    source_descriptor = _open_directory_path(source, "source")
+    destination_parent_descriptor = _open_secure_directory(destination.parent, create_missing=True)
+    try:
+        destination_descriptor = _copy_tree_at(
+            source_descriptor,
+            destination_parent_descriptor,
+            destination.name,
+            reject_symlinks=reject_symlinks,
+        )
+        os.close(destination_descriptor)
+    finally:
+        os.close(source_descriptor)
+        os.close(destination_parent_descriptor)
 
 
 def _lock_payload(selection_lock: Mapping[str, object] | Path) -> dict[str, object]:
@@ -422,13 +757,6 @@ def _assert_lock_identity(
     return lock_id
 
 
-def _same_file(left: Path, right: Path) -> bool:
-    try:
-        return os.path.samefile(left, right)
-    except (FileNotFoundError, OSError):
-        return left.resolve(strict=True) == right.resolve(strict=True)
-
-
 def stage_recipe_c_runtime(
     source_root: Path,
     primary_support_root: Path,
@@ -438,163 +766,283 @@ def stage_recipe_c_runtime(
 ) -> RuntimeStage:
     """Validate immutable inputs and publish one run-local staged runtime."""
 
-    source_root = _root_path(Path(source_root), "source")
-    primary_support_root = _root_path(Path(primary_support_root), "primary support")
-    secondary_support_root = _root_path(Path(secondary_support_root), "secondary support")
-    if _same_file(primary_support_root, secondary_support_root):
-        raise ValueError("primary and secondary support roots must be distinct")
+    source_root, source_identity = _validated_root(Path(source_root), "source")
+    primary_support_root, primary_identity = _validated_root(
+        Path(primary_support_root),
+        "primary support",
+    )
+    secondary_support_root, secondary_identity = _validated_root(
+        Path(secondary_support_root),
+        "secondary support",
+    )
+    source_descriptor, primary_descriptor, secondary_descriptor = _open_artifact_roots(
+        (
+            (source_root, "source", source_identity),
+            (primary_support_root, "primary support", primary_identity),
+            (secondary_support_root, "secondary support", secondary_identity),
+        ),
+    )
     destination_absolute = Path(destination).absolute()
-    for artifact_root in (source_root, primary_support_root, secondary_support_root):
-        artifact_absolute = artifact_root.absolute()
-        if destination_absolute == artifact_absolute or destination_absolute.is_relative_to(artifact_absolute):
-            raise ValueError("destination must be outside immutable artifacts")
-
-    snapshots_before = {
-        "source": _snapshot_tree(source_root),
-        "primary": _snapshot_tree(primary_support_root),
-        "secondary": _snapshot_tree(secondary_support_root),
-    }
-    source_receipt = validate_source_checkout(source_root)
-    support_receipt = validate_support_artifacts(primary_support_root, secondary_support_root)
-    lock = _lock_payload(selection_lock)
-    selection_lock_id = _assert_lock_identity(lock, source_receipt, support_receipt)
-
-    snapshots_validated = {
-        "source": _snapshot_tree(source_root),
-        "primary": _snapshot_tree(primary_support_root),
-        "secondary": _snapshot_tree(secondary_support_root),
-    }
-    if snapshots_validated != snapshots_before:
-        raise ValueError("source/support artifact changed during validation")
-
-    config_path = _relative_path(source_root, source_receipt.get("config_relative_path"), "source config")
-    primary_repo = primary_support_root / "repo"
-    if not primary_repo.is_dir() or primary_repo.is_symlink():
-        raise ValueError("primary support repo is missing or not a directory")
-    predictor = _relative_path(primary_support_root, support_receipt.get("predictor_relative_path"), "predictor")
-    primary_checkpoint = _relative_path(
-        primary_support_root,
-        support_receipt.get("primary_checkpoint_relative_path"),
-        "primary checkpoint",
-    )
-    secondary_checkpoint = _relative_path(
-        secondary_support_root,
-        support_receipt.get("secondary_checkpoint_relative_path"),
-        "secondary checkpoint",
-    )
-    predictor_before_hash, _ = _sha256_regular(predictor, "primary predictor")
-    primary_hash, _ = _sha256_regular(primary_checkpoint, "primary checkpoint")
-    secondary_hash, _ = _sha256_regular(secondary_checkpoint, "secondary checkpoint")
-    if primary_hash == secondary_hash or _same_file(primary_checkpoint, secondary_checkpoint):
-        raise ValueError("primary and secondary checkpoint targets must be distinct")
-    if predictor_before_hash != support_receipt.get("predictor_sha256"):
-        raise ValueError("primary predictor hash changed after validation")
-    if primary_hash != support_receipt.get("primary_checkpoint_sha256"):
-        raise ValueError("primary checkpoint hash changed after validation")
-    if secondary_hash != support_receipt.get("secondary_checkpoint_sha256"):
-        raise ValueError("secondary checkpoint hash changed after validation")
-    config_hash, _ = _sha256_regular(config_path, "source config")
-    if config_hash != source_receipt.get("config_sha256"):
-        raise ValueError("source config hash changed after validation")
-
-    stage_root: Path | None = None
-    stage_descriptor: int | None = None
     try:
-        stage_root, stage_descriptor = _claim_destination(Path(destination))
-        _assert_claimed_stage(stage_root, stage_descriptor)
-        repo_dir = stage_root / "repo"
-        _copy_tree(primary_repo, repo_dir, reject_symlinks=True)
+        if _identity(os.fstat(primary_descriptor))[:2] == _identity(os.fstat(secondary_descriptor))[:2]:
+            raise ValueError("primary and secondary support roots must be distinct")
+        for artifact_root in (source_root, primary_support_root, secondary_support_root):
+            artifact_absolute = artifact_root.absolute()
+            if destination_absolute == artifact_absolute or destination_absolute.is_relative_to(artifact_absolute):
+                raise ValueError("destination must be outside immutable artifacts")
 
-        staged_config = stage_root / Path(source_receipt["config_relative_path"])
-        _copy_regular_file(config_path, staged_config, "source config")
-
-        weights_root = repo_dir / "weights"
-        primary_staged = weights_root / Path(RECIPE_C_SOURCE.primary_checkpoint_relative_path).relative_to("weights")
-        secondary_staged = weights_root / Path(RECIPE_C_SOURCE.secondary_staging_relative_path).relative_to("weights")
-        primary_staged.parent.mkdir(parents=True, exist_ok=True)
-        secondary_staged.parent.mkdir(parents=True, exist_ok=True)
-        os.symlink(primary_checkpoint.absolute(), primary_staged)
-        os.symlink(secondary_checkpoint.absolute(), secondary_staged)
-
-        staged_predictor = repo_dir / _repo_relative(support_receipt["predictor_relative_path"], "predictor")
-        staged_before_hash, _ = _sha256_regular(staged_predictor, "staged predictor")
-        if staged_before_hash != predictor_before_hash:
-            raise ValueError("staged predictor pristine hash mismatch")
-        apply_device_fallback_patch(staged_predictor)
-        staged_after_hash, _ = _sha256_regular(staged_predictor, "patched predictor")
-        _compile_staged_predictor(staged_predictor)
-
-        if not primary_staged.is_symlink() or not secondary_staged.is_symlink():
-            raise ValueError("staged checkpoint links are missing")
-        if not _same_file(primary_staged.resolve(strict=True), primary_checkpoint):
-            raise ValueError("staged primary checkpoint target mismatch")
-        if not _same_file(secondary_staged.resolve(strict=True), secondary_checkpoint):
-            raise ValueError("staged secondary checkpoint target mismatch")
-        staged_config_hash, _ = _sha256_regular(staged_config, "staged config")
-        if staged_config_hash != config_hash:
-            raise ValueError("staged config hash mismatch")
-
-        snapshots_after = {
-            "source": _snapshot_tree(source_root),
-            "primary": _snapshot_tree(primary_support_root),
-            "secondary": _snapshot_tree(secondary_support_root),
+        snapshots_before = {
+            "source": _snapshot_tree_fd(source_descriptor),
+            "primary": _snapshot_tree_fd(primary_descriptor),
+            "secondary": _snapshot_tree_fd(secondary_descriptor),
         }
-        if snapshots_after != snapshots_before:
-            raise ValueError("source/support artifact changed during staging")
-
-        _assert_claimed_stage(stage_root, stage_descriptor)
-        receipt: dict[str, object] = {
-            "schema_version": 1,
-            "status": "READY",
-            "selection_lock_id": selection_lock_id,
-            "roles": {
-                "repo": "repo",
-                "weights": "repo/weights",
-                "source_root": "source_root",
-                "config": Path(source_receipt["config_relative_path"]).as_posix(),
-                "predictor": Path(support_receipt["predictor_relative_path"]).as_posix(),
-                "primary_checkpoint": Path(RECIPE_C_SOURCE.primary_checkpoint_relative_path).as_posix(),
-                "secondary_checkpoint": Path(RECIPE_C_SOURCE.secondary_staging_relative_path).as_posix(),
-            },
-            "predictor_sha256_before": staged_before_hash,
-            "predictor_sha256_after": staged_after_hash,
-            "primary_checkpoint_sha256": primary_hash,
-            "secondary_checkpoint_sha256": secondary_hash,
-            "config_sha256": staged_config_hash,
-            "resolved_device_candidates": list(DEVICE_SELECTION_ORDER),
+        source_receipt = validate_source_checkout(source_root)
+        support_receipt = validate_support_artifacts(primary_support_root, secondary_support_root)
+        lock = _lock_payload(selection_lock)
+        selection_lock_id = _assert_lock_identity(lock, source_receipt, support_receipt)
+        snapshots_validated = {
+            "source": _snapshot_tree_fd(source_descriptor),
+            "primary": _snapshot_tree_fd(primary_descriptor),
+            "secondary": _snapshot_tree_fd(secondary_descriptor),
         }
-        receipt_path = stage_root / _RECEIPT_FILENAME
-        _write_json_exclusive(receipt_path, receipt)
-        os.fsync(stage_descriptor)
-        _assert_claimed_stage(stage_root, stage_descriptor)
-        return RuntimeStage(
-            stage_root=stage_root,
-            repo_dir=repo_dir,
-            weights_root=weights_root,
-            source_root=source_root,
-            staged_config=staged_config,
-            selection_lock_id=selection_lock_id,
-            predictor_sha256_before=staged_before_hash,
-            predictor_sha256_after=staged_after_hash,
-            resolved_device_candidates=tuple(DEVICE_SELECTION_ORDER),
-            receipt=receipt,
-            receipt_path=receipt_path,
+        if snapshots_validated != snapshots_before:
+            raise ValueError("source/support artifact changed during validation")
+
+        config_relative = Path(*_relative_parts(source_receipt.get("config_relative_path"), "source config"))
+        predictor_relative = Path(*_relative_parts(support_receipt.get("predictor_relative_path"), "predictor"))
+        predictor_repo_relative = predictor_relative.relative_to("repo")
+        primary_checkpoint_relative = Path(
+            *_relative_parts(support_receipt.get("primary_checkpoint_relative_path"), "primary checkpoint"),
         )
-    except BaseException as exc:
-        if stage_root is not None:
-            _mark_failed(stage_root, selection_lock_id, exc)
-        raise
+        secondary_checkpoint_relative = Path(
+            *_relative_parts(support_receipt.get("secondary_checkpoint_relative_path"), "secondary checkpoint"),
+        )
+        (
+            (source_config_parent, source_config_name),
+            (predictor_parent, predictor_name),
+            (primary_checkpoint_parent, primary_checkpoint_name),
+            (secondary_checkpoint_parent, secondary_checkpoint_name),
+            primary_repo_descriptor,
+        ) = _open_staging_inputs(
+            source_descriptor,
+            primary_descriptor,
+            secondary_descriptor,
+            config_relative,
+            predictor_relative,
+            primary_checkpoint_relative,
+            secondary_checkpoint_relative,
+        )
+        try:
+            predictor_before_hash, _ = _sha256_regular_at(predictor_parent, predictor_name, "primary predictor")
+            primary_hash, primary_metadata = _sha256_regular_at(
+                primary_checkpoint_parent,
+                primary_checkpoint_name,
+                "primary checkpoint",
+            )
+            secondary_hash, secondary_metadata = _sha256_regular_at(
+                secondary_checkpoint_parent,
+                secondary_checkpoint_name,
+                "secondary checkpoint",
+            )
+            if primary_hash == secondary_hash or (
+                primary_metadata.st_ino,
+                primary_metadata.st_dev,
+            ) == (
+                secondary_metadata.st_ino,
+                secondary_metadata.st_dev,
+            ):
+                raise ValueError("primary and secondary checkpoint targets must be distinct")
+            if predictor_before_hash != support_receipt.get("predictor_sha256"):
+                raise ValueError("primary predictor hash changed after validation")
+            if primary_hash != support_receipt.get("primary_checkpoint_sha256"):
+                raise ValueError("primary checkpoint hash changed after validation")
+            if secondary_hash != support_receipt.get("secondary_checkpoint_sha256"):
+                raise ValueError("secondary checkpoint hash changed after validation")
+            config_hash, _ = _sha256_regular_at(source_config_parent, source_config_name, "source config")
+            if config_hash != source_receipt.get("config_sha256"):
+                raise ValueError("source config hash changed after validation")
+
+            stage_root: Path | None = None
+            parent_descriptor: int | None = None
+            stage_descriptor: int | None = None
+            repo_descriptor: int | None = None
+            try:
+                stage_root, parent_descriptor, stage_descriptor = _claim_destination(Path(destination))
+                _fsync_directory(parent_descriptor)
+                _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
+                repo_descriptor = _copy_tree_at(
+                    primary_repo_descriptor,
+                    stage_descriptor,
+                    "repo",
+                    reject_symlinks=True,
+                    exclude_relative=_relative_parts(predictor_repo_relative, "staged predictor"),
+                )
+
+                staged_config = stage_root / config_relative
+                staged_config_parent = _ensure_directory_at(stage_descriptor, config_relative.parent, "staged config")
+                try:
+                    _copy_regular_file_at(
+                        source_config_parent,
+                        source_config_name,
+                        staged_config_parent,
+                        config_relative.name,
+                        "source config",
+                    )
+                finally:
+                    os.close(staged_config_parent)
+
+                primary_stage_relative = Path(RECIPE_C_SOURCE.primary_checkpoint_relative_path)
+                secondary_stage_relative = Path(RECIPE_C_SOURCE.secondary_staging_relative_path)
+                primary_stage_parent = _ensure_directory_at(
+                    repo_descriptor,
+                    primary_stage_relative.parent,
+                    "primary staged checkpoint",
+                )
+                try:
+                    _write_symlink_at(
+                        primary_stage_parent,
+                        primary_stage_relative.name,
+                        (primary_support_root / primary_checkpoint_relative).absolute().as_posix(),
+                        primary_metadata,
+                    )
+                finally:
+                    os.close(primary_stage_parent)
+                secondary_stage_parent = _ensure_directory_at(
+                    repo_descriptor,
+                    secondary_stage_relative.parent,
+                    "secondary staged checkpoint",
+                )
+                try:
+                    _write_symlink_at(
+                        secondary_stage_parent,
+                        secondary_stage_relative.name,
+                        (secondary_support_root / secondary_checkpoint_relative).absolute().as_posix(),
+                        secondary_metadata,
+                    )
+                finally:
+                    os.close(secondary_stage_parent)
+
+                staged_before_hash = predictor_before_hash
+                if not publish_device_fallback_patch_at(
+                    primary_descriptor,
+                    predictor_relative,
+                    repo_descriptor,
+                    predictor_repo_relative,
+                ):
+                    raise ValueError("primary predictor unexpectedly required no device patch")
+                staged_predictor_parent, staged_predictor_name = _open_relative_parent(
+                    repo_descriptor,
+                    predictor_repo_relative,
+                    "patched predictor",
+                )
+                try:
+                    staged_after_hash, _ = _sha256_regular_at(
+                        staged_predictor_parent,
+                        staged_predictor_name,
+                        "patched predictor",
+                    )
+                    _compile_staged_predictor_at(staged_predictor_parent, staged_predictor_name)
+                finally:
+                    os.close(staged_predictor_parent)
+
+                staged_config_parent = _open_relative_directory(
+                    stage_descriptor,
+                    config_relative.parent,
+                    "staged config",
+                )
+                try:
+                    staged_config_hash, _ = _sha256_regular_at(
+                        staged_config_parent,
+                        config_relative.name,
+                        "staged config",
+                    )
+                finally:
+                    os.close(staged_config_parent)
+                if staged_config_hash != config_hash:
+                    raise ValueError("staged config hash mismatch")
+
+                snapshots_after = {
+                    "source": _snapshot_tree_fd(source_descriptor),
+                    "primary": _snapshot_tree_fd(primary_descriptor),
+                    "secondary": _snapshot_tree_fd(secondary_descriptor),
+                }
+                if snapshots_after != snapshots_before:
+                    raise ValueError("source/support artifact changed during staging")
+                _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
+                receipt: dict[str, object] = {
+                    "schema_version": 1,
+                    "status": "READY",
+                    "selection_lock_id": selection_lock_id,
+                    "roles": {
+                        "repo": "repo",
+                        "weights": "repo/weights",
+                        "source_root": "source_root",
+                        "config": config_relative.as_posix(),
+                        "predictor": predictor_relative.as_posix(),
+                        "primary_checkpoint": primary_stage_relative.as_posix(),
+                        "secondary_checkpoint": secondary_stage_relative.as_posix(),
+                    },
+                    "predictor_sha256_before": staged_before_hash,
+                    "predictor_sha256_after": staged_after_hash,
+                    "primary_checkpoint_sha256": primary_hash,
+                    "secondary_checkpoint_sha256": secondary_hash,
+                    "config_sha256": staged_config_hash,
+                    "resolved_device_candidates": list(DEVICE_SELECTION_ORDER),
+                }
+                _write_json_exclusive_at(stage_descriptor, _RECEIPT_FILENAME, receipt)
+                _fsync_directory(stage_descriptor)
+                _fsync_directory(parent_descriptor)
+                _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
+                return RuntimeStage(
+                    stage_root=stage_root,
+                    repo_dir=stage_root / "repo",
+                    weights_root=stage_root / "repo/weights",
+                    source_root=source_root,
+                    staged_config=staged_config,
+                    selection_lock_id=selection_lock_id,
+                    predictor_sha256_before=staged_before_hash,
+                    predictor_sha256_after=staged_after_hash,
+                    resolved_device_candidates=tuple(DEVICE_SELECTION_ORDER),
+                    receipt=receipt,
+                    receipt_path=stage_root / _RECEIPT_FILENAME,
+                )
+            except BaseException as exc:
+                if stage_descriptor is not None:
+                    _mark_failed_at(stage_descriptor, selection_lock_id, exc)
+                raise
+            finally:
+                if repo_descriptor is not None:
+                    os.close(repo_descriptor)
+                if stage_descriptor is not None:
+                    os.close(stage_descriptor)
+                if parent_descriptor is not None:
+                    os.close(parent_descriptor)
+        finally:
+            os.close(primary_repo_descriptor)
+            os.close(source_config_parent)
+            os.close(predictor_parent)
+            os.close(primary_checkpoint_parent)
+            os.close(secondary_checkpoint_parent)
     finally:
-        if stage_descriptor is not None:
-            os.close(stage_descriptor)
+        os.close(source_descriptor)
+        os.close(primary_descriptor)
+        os.close(secondary_descriptor)
 
 
-def _compile_staged_predictor(path: Path) -> None:
-    payload, _ = _read_regular_stable(path, "patched predictor")
+def _compile_staged_predictor_at(parent_descriptor: int, name: str) -> None:
+    payload, _ = _read_regular_stable_at(parent_descriptor, name, "patched predictor")
     try:
         compile(payload.decode("utf-8"), "<recipe-c-staged-predictor>", "exec")
     except (UnicodeDecodeError, SyntaxError) as exc:
         raise ValueError("staged predictor failed to compile") from exc
+
+
+def _compile_staged_predictor(path: Path) -> None:
+    parent_descriptor = _open_secure_directory(path.parent, create_missing=False)
+    try:
+        _compile_staged_predictor_at(parent_descriptor, path.name)
+    finally:
+        os.close(parent_descriptor)
 
 
 __all__ = ["RuntimeStage", "stage_recipe_c_runtime"]
