@@ -3,8 +3,9 @@
 初版作成日: 2026-08-21（JST）
 最終更新日: 2026-08-22（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
-作業ブランチ: `codex/biohub-multi-method-race`
-本更新前最新push: `fe8fb7a`
+現在の性能改善ブランチ: `codex/biohub-095-performance`
+履歴上のraceブランチ: `codex/biohub-multi-method-race`
+0.95 campaign技術計画の最新push: `de582ef`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
 実験artifactに記録されたrace実装commit: `ac2ece5`
 
@@ -14,17 +15,53 @@
 
 - 公式 TemporalUNet3D + SimpleNodeTransformer + ILP pipelineを実データで完走した。
 - 同一sample・同一公式metricで、追加3 lane（`blob_lap`、`cc_flow`、`motion_lap`）を推論からprediction GEFF、公式評価まで完走した。
-- 全比較のBest Methodは `harmonic v1`（Final Score `0.9211200215044129`）。
+- 旧development単一sampleの全比較Best Methodは `harmonic v1`（Final Score `0.9211200215044129`）。
 - detector-fixed raceでは同一TemporalUNet3D detector cacheを固定し、development、`44b6_0b24845f`、`44b6_0c582fdc`、`44b6_0db75fae`、`44b6_12dfb391`の5 sampleで4 association方式を公式metricまで完走した。各sampleのBestはharmonic v1である。
 - 0dbのBestは`harmonic_v1`（Final Score `0.8249556959559359`）で、official ILP `0.8150423866970982`を`+0.0099133092588377`上回った。harmonicはEdge TP/FP/FN `134/8/17`、Division TP/FP/FN `0/1/0`で、division false positiveが1件ある。
 - 0dbの公式ILPはprediction `18,325 nodes / 16,060 edges`、Edge TP/FP/FN `133/9/18`、Adjusted/Final `0.8150423866970982`を取得した。GTは評価phase以外に使っていない。
 - `44b6_0c582fdc`も同じdetector固定条件で4方式を完走し、0cのBestは`harmonic_v1`（Final Score `0.8022386963904503`）。0cのofficial ILPは`0.738499713856499`で、harmonic差は`+0.0637389825339513`だった。
-- detector-fixed 5 sampleのFinal Score平均はofficial `0.7688958987642377`、harmonic `0.7944143977140719`、mutual `0.7467735686449968`、motion `0.7187007022873142`。harmonicのofficial差は `+0.025518498949834156` で、5/5 sampleでofficial ILPを上回った。
+- detector-fixed 5 sampleのunweighted macro Final Scoreはofficial `0.7688958987642377`、harmonic `0.7944143977140719`、mutual `0.7467735686449968`、motion `0.7187007022873142`。harmonicのofficial差は `+0.025518498949834156` で、5/5 sampleでofficial ILPを上回った。
 - `44b6_12dfb391` はdivisionを含むsampleだが、cache、4方式のprediction GEFF、manifest検証、公式metricまで完走した。divisionは全方式でTP `0` / FN `1`、harmonicのみFP `3`であり、division対応は未解決である。
 - 新規race laneでは `blob_lap`（Final Score `0.9140773262846648`）が最良だった。
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
 - HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、入力契約・依存・checkpoint・source確認の不足により、今回の公式スコア比較には含めていない。
+
+### 1.1 0.95 Performance Goalの現在地
+
+2026-08-22、固定5サンプルのvendored RoyerLab由来公式Final Score macroを `0.95` 以上にする目標を開始した。GTはprediction GEFFとmanifestの永続化・hash検証後の評価にだけ使用し、threshold、checkpoint、候補生成、手法選択へ戻さない。Kaggleへの外部submissionはこのcampaignに含めない。
+
+| 項目 | 現在値 / 状態 |
+|---|---|
+| 固定panel | `0113`、`0b`、`0c`、`0db`、divisionを含む`12df`の5件。除外しない |
+| 既存実測best | `harmonic_v1` macro `0.7944143977140719` |
+| 目標差 | `+0.1555856022859281` |
+| 第一候補 | 公開 `Recipe C` dual-seed、D4 TTA、ILP、gap/safe-division/track repair |
+| 一次source | `https://github.com/asapacsin/biohub-cell-tracking`、commit `843a47fdd531bdf7e6377673135519c54b69ae28`、Apache-2.0 |
+| 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
+| source側5件参考macro | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。こちらの公式metricでは未再現） |
+| 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
+| 現在の作業 | source/config/checkpoint契約のTDD実装開始前。設計・実装計画はcommit `de582ef`までpush済み |
+
+source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
+
+| sample | source側 `adj_edge_jaccard` |
+|---|---:|
+| `44b6_0113de3b` | `0.9613642399534071` |
+| `44b6_0b24845f` | `1.0139018143009606` |
+| `44b6_0c582fdc` | `0.9062409250942050` |
+| `44b6_0db75fae` | `0.9638150186669892` |
+| `44b6_12dfb391` | `0.9347073959325117` |
+| **unweighted macro** | **`0.9560058787896148`** |
+
+Recipe Cは次の2つのKaggle assetを必要とする。primary packだけではsecondary seedが欠けるため実行しない。
+
+| asset | 内容 | 期待SHA-256 |
+|---|---|---|
+| `pilkwang/biohub-tracking-support-pack-50ep-v1` | predictor repo + primary `split_0` checkpoint | `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` |
+| `pilkwang/biohub-temporal-unet3d-seed314159-v1` | secondary seed checkpoint。run-localで`seed_314159` pathへstage | `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` |
+
+一次sourceの`run_prediction()`はCUDA未検出時に強制停止する。性能configや一次sourceを変えずにCPU/MPS互換を得るため、同sourceの`build_predict_command()`が生成したargvをadapterから実行し、copy済みrun-local predictorのdevice選択だけを `CUDA → MPS → CPU` にする。現在のLinux DockerはPyTorch CPU wheelのためCPU、NVIDIA desktopでは同じ`auto`指定でCUDA、macOS nativeの対応実行系ではMPSを優先する。ILP、GEFF I/O、公式metricはCPUのままとする。
 
 ## 2. Done条件と実験範囲
 
@@ -78,7 +115,7 @@ GTは疎である。未注釈・未マッチのpredictionを自動的にfalse po
 | harmonic notebook JSON SHA-256 | `dd3819cff82851b491d9cbeb6f5f0fc36e8da3c5e9ca90a8b0d5284785a250d` |
 | harmonic setting | reverse harmonic weight `w=0.20` |
 
-harmonic v1では、image、detector、checkpoint、candidate construction、ILP costを変更せず、双方向reverse-logit associationを追加した。保存されたreceiptを根拠に結果を報告している。保持されたnotebook JSONからsource cellを独立監査するfixtureは不足しており、その監査はBLOCKEDである。source textを推測・捏造していない。
+harmonic v1では、image、detector、checkpoint、candidate construction、ILP costを変更せず、forward/reverse scoreのharmonic結合と再標準化を追加した。保存されたreceiptを根拠に結果を報告している。後続Lane F監査ではforward-only temperature variantでも同等以上のTPを回収したため、改善原因をreverse passそのものとは断定せず、再標準化に伴うtemperature/sharpening効果を含むものと解釈する。保持されたnotebook JSONからsource cellを独立監査するfixtureは不足しており、その監査はBLOCKEDである。source textを推測・捏造していない。
 
 公式推論の固定設定:
 
@@ -94,7 +131,7 @@ harmonic v1では、image、detector、checkpoint、candidate construction、ILP
 | reported pool kernel | `3.0` µm |
 | evaluator max distance | `7.0` µm |
 
-downloadしたconfigに `pool_kernel_um=5.0` が含まれる一方、upstream run receiptは `3.0` µmを報告する。この差はlocalで変更せず、upstream由来の再現性課題として記録した。
+downloadしたconfigに `pool_kernel_um=5.0` が含まれる一方、upstream run receiptは `3.0` µmを報告する。ただし現在の5 sample scaleでは両設定とも実効kernel `(3,3,3)` となるため、観測結果を変えた重大欠陥ではなく設定差として記録する。
 
 ### 3.2 Multi-Method Raceの実装 provenance
 
@@ -334,11 +371,12 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 ### Git
 
 - v1 branch: `feat/strong-baseline-v1`、commit `9edb7e1`、push済み
-- race branch: `codex/biohub-multi-method-race`
-- 本更新前最新push: `fe8fb7a`
+- historical race branch: `codex/biohub-multi-method-race`
+- current performance branch: `codex/biohub-095-performance`
+- 0.95 campaignの設計・計画commit: `de582ef`、push済み
 - validation receipt実装commit: `fbfbf26`
-- remote: `origin/codex/biohub-multi-method-race`
-- PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-multi-method-race>
+- current remote: `origin/codex/biohub-095-performance`
+- PR作成URL: <https://github.com/Ryo-2023/kaggle/pull/new/codex/biohub-095-performance>
 
 ### report
 
@@ -346,6 +384,8 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - race詳細: `docs/results/multi_method_benchmark_race.md`
 - v1詳細: `docs/results/strong_baseline_v1.md`
 - feasibility詳細: `docs/results/multi_method_feasibility_ja.md`
+- 0.95設計: `docs/superpowers/specs/2026-08-22-biohub-095-performance-design.md`
+- 0.95実装計画: `docs/superpowers/plans/2026-08-22-biohub-095-performance.md`
 
 ### artifact一覧
 
@@ -380,6 +420,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - `artifacts/detector_fixed_race/panel_runs_12df_{official,harmonic,mutual,motion}/44b6_12dfb391/`
 - `artifacts/detector_fixed_race/panel_runs_dev_{official,harmonic,mutual,motion}/44b6_0113de3b/`（development個別再生・manifest修復済み）
 - `artifacts/detector_fixed_race/validation_receipt.json`
+- `artifacts/detector_fixed_race/panel.json`
 
 Kaggleへの外部提出は実施していない。prediction生成・local official evaluationまでであり、ユーザー承認なしのKaggle submissionは行っていない。
 
@@ -391,18 +432,19 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 2. 12dfb391ではdivision GTを含むが、全方式でDivision TP/FN=`0/1`、harmonicのみFP=`3`だった。division対応は未解決であり、5 sample平均をdivision一般性能へ外挿しない。
 3. harmonicのsource-cell独立監査は保持notebook JSON不足でBLOCKED。
 4. 旧official receiptにはraw candidate count/digestがなく、detector driftを完全には比較できない。detector-fixed cacheはcandidate digestとcache hashを保存している。
-5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の不一致がある。
+5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の設定差があるが、現panelでは実効kernelが同じである。
 6. high-level viewerの`matched_node_id` / `match_node_id`不一致でGUI表示は未完了。ただしheadless overlay evidenceは保存済み。
 7. 現行Dockerの全laneはCPU-only。detector-fixedはCUDA→MPS→CPUの自動fallbackを実装済みだが、GPU実測性能はまだ主張していない。
-8. 外部候補は公式metric未取得。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値はない。
+8. 公開Recipe Cはsource側参考macro `0.9560058787896148` があるが、本repoのvendored official metricは未取得である。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値もない。
+9. Kaggle competitionはnotebook-only submissionである。ローカルprediction生成は外部提出許可を意味せず、GPU runtimeとoffline packagingは未検証である。
 
 ### 次の一手
 
-1. `44b6_12dfb391`でdivision TP/FN=`0/1`、harmonic FP=`3`となった原因を分析し、division対応を改善する。
-2. `reverse_weight=0.10`は12df単体では改善したが0dbで悪化し、5 sample平均でも既定値`0.20`を下回ったため、既定値は変更しない。
-3. validation receiptの実データ集約とfull pytestは完了した。次の検証課題はdivision改善案の同一panel再評価である。
-4. NMS 3.5 µm候補は旧blob laneとして、detector-fixed panelとは別条件で評価する。
-5. viewer属性互換性を修正する場合は、metric/evaluatorの挙動を変えずに別commitで行う。
+1. 公開Recipe Cのsource/config/primary/secondary checkpoint契約をTDDで実装し、二つのasset SHA-256を検証する。
+2. GT-free 2-frame smokeを通し、manifest検証後にだけGTを開くofficial評価境界を確認する。
+3. configをselection lockへ固定し、5 sampleを除外なしで逐次推論・公式評価する。macro `>=0.95` の実receiptが得られるまで達成扱いにしない。
+4. 未達時だけRAM-safe診断でnode/candidate/oracle上限を分解し、GT診断結果を同configの選択へ戻さない。
+5. `reverse_weight=0.10`、division weight `.6`、Lane F temperature候補は既存panel結果から採用しない。
 
 現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。最終full pytestは通過したが、division対応は未解決である。
 
@@ -453,7 +495,7 @@ feature cacheの最初の全100フレーム実行では、sliding window間で�
 docker compose exec -T biohub sh -lc 'cd /workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development && PYTHONPATH=/workspace/biohub-cell-tracking-during-development/scratch/strong-baseline-v1/biohub-cell-tracking-during-development/src uv run python scripts/run_detector_fixed_race.py materialize --sample 44b6_0113de3b --train-root /workspace/biohub-cell-tracking-during-development/data/train --upstream-root artifacts/strong_baseline_v1/upstream --checkpoint artifacts/strong_baseline_v1/inputs/cellmot-baseline-artifacts/weights/unet_transformer/split_0/edge_predictor_best.pth --output artifacts/detector_fixed_race/full_auto'
 ```
 
-関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を含む実装をpush済み。本更新前最新pushは `fe8fb7a`、validation receipt evidence強化commitは `fbfbf26` である。
+関連commit: `830ccab`（accelerator-first device fallback、contextual feature衝突の記録）および `eb6e472`（dense cacheのedge memmap sidecar、chunked validation、pair-contiguous grouping）を含む実装を履歴へ保持している。validation receipt evidence強化commitは `fbfbf26`、現在の0.95 campaign設計・計画commitは `de582ef` である。
 
 NVIDIAデスクトップ移行用に `docker-compose.nvidia.yml` も追加した。通常Composeは現MacBookのCPU環境を維持し、移行先では公式CUDA wheel indexを `BIOHUB_TORCH_INDEX_URL` に指定して `gpus: all` でbuildする。Dockerfile側はCPU indexを既定にしつつ、override時だけ `uv sync --no-install-package torch` 後に指定indexのPyTorchを導入する。これによりCPU-onlyの現環境を壊さず、移行先では `--device auto` がCUDAを選べる。
 
