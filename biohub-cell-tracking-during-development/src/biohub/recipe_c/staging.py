@@ -2,8 +2,8 @@
 
 Only a run-local copy of the public predictor repository is writable.  The
 source checkout and both support artifacts are validated and fingerprinted
-before and after staging; model checkpoints remain symlinks to their original
-read-only files.
+before and after staging; model checkpoints are copied as regular files from
+opened read-only inputs.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 from biohub.device import DEVICE_SELECTION_ORDER
 
-from .device_patch import publish_device_fallback_patch_at
+from .device_patch import PublishedDevicePatch, publish_device_fallback_patch_at
 from .protocol import validate_selection_lock, validate_selection_lock_payload
 from .source import (
     RECIPE_C_SOURCE,
@@ -34,44 +34,237 @@ _FAILED_FILENAME = "FAILED.json"
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeStage:
-    """Paths and immutable identity for one staged Recipe C run."""
+class FdBackedPath:
+    """A path-shaped view whose filesystem operations stay anchored to an fd."""
 
-    stage_root: Path
-    repo_dir: Path
-    weights_root: Path
-    source_root: Path
-    staged_config: Path
+    logical_path: Path
+    root_descriptor: int
+    relative_parts: tuple[str, ...]
+    pinned_descriptor: int | None = None
+    expected_identity: tuple[int, int, int] | None = None
+    expected_sha256: str | None = None
+
+    def __fspath__(self) -> str:
+        descriptor = self.pinned_descriptor if self.pinned_descriptor is not None else self.root_descriptor
+        if descriptor < 0:
+            raise ValueError("runtime stage is closed")
+        if descriptor >= 0 and os.path.exists("/proc/self/fd"):
+            if self.pinned_descriptor is not None:
+                return f"/proc/self/fd/{descriptor}"
+            suffix = "/".join(self.relative_parts)
+            return f"/proc/self/fd/{descriptor}" + (f"/{suffix}" if suffix else "")
+        return str(self.logical_path)
+
+    def __str__(self) -> str:
+        return str(self.logical_path)
+
+    def __repr__(self) -> str:
+        return f"FdBackedPath({self.logical_path!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, FdBackedPath):
+            return self.logical_path == other.logical_path
+        try:
+            return self.logical_path == Path(other)  # type: ignore[arg-type]
+        except TypeError:
+            return False
+
+    def __truediv__(self, other: str | Path) -> FdBackedPath:
+        relative = Path(other)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("fd-backed path traversal is forbidden")
+        parts = self.relative_parts + tuple(part for part in relative.parts if part not in {"", "."})
+        return FdBackedPath(self.logical_path / relative, self.root_descriptor, parts, None)
+
+    @property
+    def name(self) -> str:
+        return self.logical_path.name
+
+    @property
+    def parent(self) -> FdBackedPath:
+        if not self.relative_parts:
+            return self
+        return FdBackedPath(
+            self.logical_path.parent,
+            self.root_descriptor,
+            self.relative_parts[:-1],
+            None,
+        )
+
+    def _stat(self) -> os.stat_result:
+        if self.root_descriptor < 0:
+            raise ValueError("runtime stage is closed")
+        if self.pinned_descriptor is not None:
+            if self.pinned_descriptor < 0:
+                raise ValueError("runtime stage is closed")
+            metadata = os.fstat(self.pinned_descriptor)
+            if self.expected_identity is not None and _identity(metadata) != self.expected_identity:
+                raise ValueError("fd-backed file identity changed")
+            return metadata
+        if not self.relative_parts:
+            return os.fstat(self.root_descriptor)
+        parent, name = _open_relative_parent(
+            self.root_descriptor,
+            Path(*self.relative_parts),
+            "fd-backed path",
+        )
+        try:
+            return os.stat(name, dir_fd=parent, follow_symlinks=False)
+        finally:
+            os.close(parent)
+
+    def stat(self) -> os.stat_result:
+        return self._stat()
+
+    def exists(self) -> bool:
+        try:
+            self._stat()
+        except (FileNotFoundError, ValueError):
+            return False
+        return True
+
+    def is_file(self) -> bool:
+        return stat.S_ISREG(self._stat().st_mode)
+
+    def is_dir(self) -> bool:
+        return stat.S_ISDIR(self._stat().st_mode)
+
+    def is_symlink(self) -> bool:
+        return stat.S_ISLNK(self._stat().st_mode)
+
+    def read_bytes(self) -> bytes:
+        if self.pinned_descriptor is not None:
+            if self.pinned_descriptor < 0:
+                raise ValueError("runtime stage is closed")
+            payload, metadata = _read_descriptor_stable(self.pinned_descriptor, "fd-backed file")
+            if self.expected_identity is not None and _identity(metadata) != self.expected_identity:
+                raise ValueError("fd-backed file identity changed")
+            if self.expected_sha256 is not None and hashlib.sha256(payload).hexdigest() != self.expected_sha256:
+                raise ValueError("fd-backed file digest changed")
+            return payload
+        if not self.relative_parts:
+            raise IsADirectoryError(str(self.logical_path))
+        parent, name = _open_relative_parent(
+            self.root_descriptor,
+            Path(*self.relative_parts),
+            "fd-backed file",
+        )
+        try:
+            payload, _ = _read_regular_stable_at(parent, name, "fd-backed file")
+            return payload
+        finally:
+            os.close(parent)
+
+    def read_text(self, encoding: str = "utf-8") -> str:
+        return self.read_bytes().decode(encoding)
+
+    def resolve(self, strict: bool = False) -> Path:
+        """Return a lexical label; never resolve through the mutable pathname."""
+
+        if strict and not self.exists():
+            raise FileNotFoundError(self.logical_path)
+        return self.logical_path
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeStage:
+    """Staged runtime with fd-backed consumer boundaries."""
+
+    _stage_root_path: Path
+    _source_root_path: Path
+    _config_relative: tuple[str, ...]
+    _predictor_relative: tuple[str, ...]
+    _primary_checkpoint_relative: tuple[str, ...]
+    _secondary_checkpoint_relative: tuple[str, ...]
+    parent_descriptor: int
+    stage_descriptor: int
+    repo_descriptor: int
+    source_descriptor: int
+    predictor_descriptor: int
+    predictor_identity: tuple[int, int, int]
     selection_lock_id: str
     predictor_sha256_before: str
     predictor_sha256_after: str
     resolved_device_candidates: tuple[str, ...]
     receipt: dict[str, object]
-    receipt_path: Path
 
     @property
-    def destination(self) -> Path:
+    def stage_root(self) -> FdBackedPath:
+        return FdBackedPath(self._stage_root_path, self.stage_descriptor, ())
+
+    @property
+    def destination(self) -> FdBackedPath:
         return self.stage_root
 
     @property
-    def config_path(self) -> Path:
+    def repo_dir(self) -> FdBackedPath:
+        return FdBackedPath(self.stage_root.logical_path / "repo", self.repo_descriptor, ())
+
+    @property
+    def weights_root(self) -> FdBackedPath:
+        return self.repo_dir / "weights"
+
+    @property
+    def source_root(self) -> FdBackedPath:
+        return FdBackedPath(self._source_root_path, self.source_descriptor, ())
+
+    @property
+    def staged_config(self) -> FdBackedPath:
+        return self.stage_root / Path(*self._config_relative)
+
+    @property
+    def config_path(self) -> FdBackedPath:
         return self.staged_config
 
     @property
-    def predictor_path(self) -> Path:
-        return self.repo_dir / _repo_relative(RECIPE_C_SOURCE.predictor_relative_path, "predictor")
-
-    @property
-    def primary_checkpoint_path(self) -> Path:
-        return self.weights_root / Path(RECIPE_C_SOURCE.primary_checkpoint_relative_path).relative_to(
-            "weights",
+    def predictor_path(self) -> FdBackedPath:
+        return FdBackedPath(
+            self.repo_dir.logical_path / Path(*self._predictor_relative),
+            self.repo_descriptor,
+            self._predictor_relative,
+            self.predictor_descriptor,
+            self.predictor_identity,
+            self.predictor_sha256_after,
         )
 
     @property
-    def secondary_checkpoint_path(self) -> Path:
-        return self.weights_root / Path(RECIPE_C_SOURCE.secondary_staging_relative_path).relative_to(
-            "weights",
+    def primary_checkpoint_path(self) -> FdBackedPath:
+        return FdBackedPath(
+            self.weights_root.logical_path / Path(*self._primary_checkpoint_relative),
+            self.repo_descriptor,
+            ("weights", *self._primary_checkpoint_relative),
         )
+
+    @property
+    def secondary_checkpoint_path(self) -> FdBackedPath:
+        return FdBackedPath(
+            self.weights_root.logical_path / Path(*self._secondary_checkpoint_relative),
+            self.repo_descriptor,
+            ("weights", *self._secondary_checkpoint_relative),
+        )
+
+    @property
+    def receipt_path(self) -> FdBackedPath:
+        return self.stage_root / _RECEIPT_FILENAME
+
+    def close(self) -> None:
+        for field in (
+            "predictor_descriptor",
+            "repo_descriptor",
+            "source_descriptor",
+            "stage_descriptor",
+            "parent_descriptor",
+        ):
+            descriptor = getattr(self, field)
+            if descriptor >= 0:
+                os.close(descriptor)
+                object.__setattr__(self, field, -1)
+
+    def __enter__(self) -> RuntimeStage:
+        return self
+
+    def __exit__(self, _exc_type: object, _exc_value: object, _traceback: object) -> None:
+        self.close()
 
     @property
     def predictor_sha256_preimage(self) -> str:
@@ -90,7 +283,7 @@ class RuntimeStage:
         return self.predictor_sha256_after
 
     @property
-    def staged_config_path(self) -> Path:
+    def staged_config_path(self) -> FdBackedPath:
         return self.staged_config
 
     @property
@@ -208,6 +401,15 @@ def _open_artifact_roots(
     return tuple(descriptors)
 
 
+def _descriptor_root_path(descriptor: int, label: str) -> Path:
+    """Expose an opened root to legacy validators without re-resolving its name."""
+
+    proc_fd = Path("/proc/self/fd")
+    if not proc_fd.is_dir():
+        raise ValueError(f"{label} fd-backed validation is unavailable")
+    return proc_fd / str(descriptor)
+
+
 def _open_relative_directory(root_descriptor: int, relative: object, label: str) -> int:
     parts = _relative_parts(relative, label) if relative not in {Path("."), "."} else ()
     flags = os.O_RDONLY | _DIRECTORY | _NOFOLLOW
@@ -320,8 +522,33 @@ def _read_regular_stable_at(parent_descriptor: int, name: str, label: str) -> tu
     return b"".join(chunks), current
 
 
+def _read_descriptor_stable(descriptor: int, label: str) -> tuple[bytes, os.stat_result]:
+    """Read a retained regular-file fd without reopening its pathname."""
+
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError(f"{label} must be a regular file")
+    chunks: list[bytes] = []
+    offset = 0
+    while True:
+        chunk = os.pread(descriptor, _HASH_CHUNK_SIZE, offset)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        offset += len(chunk)
+    after = os.fstat(descriptor)
+    if _identity(before) != _identity(after):
+        raise ValueError(f"{label} changed while it was read")
+    return b"".join(chunks), after
+
+
 def _sha256_regular_at(parent_descriptor: int, name: str, label: str) -> tuple[str, os.stat_result]:
     payload, metadata = _read_regular_stable_at(parent_descriptor, name, label)
+    return hashlib.sha256(payload).hexdigest(), metadata
+
+
+def _sha256_descriptor(descriptor: int, label: str) -> tuple[str, os.stat_result]:
+    payload, metadata = _read_descriptor_stable(descriptor, label)
     return hashlib.sha256(payload).hexdigest(), metadata
 
 
@@ -674,26 +901,6 @@ def _copy_tree_at(
         raise
 
 
-def _write_symlink_at(
-    parent_descriptor: int,
-    name: str,
-    target: str,
-    expected_target: os.stat_result,
-) -> None:
-    os.symlink(target, name, dir_fd=parent_descriptor)
-    try:
-        actual = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=True)
-        if (actual.st_ino, actual.st_dev) != (expected_target.st_ino, expected_target.st_dev):
-            raise ValueError("staged checkpoint target identity mismatch")
-        _fsync_directory(parent_descriptor)
-    except BaseException:
-        try:
-            os.unlink(name, dir_fd=parent_descriptor)
-        except OSError:
-            pass
-        raise
-
-
 def _copy_regular_file(source: Path, destination: Path, label: str) -> None:
     source_parent_descriptor = _open_secure_directory(source.parent, create_missing=False)
     destination_parent_descriptor = _open_secure_directory(destination.parent, create_missing=True)
@@ -796,8 +1003,11 @@ def stage_recipe_c_runtime(
             "primary": _snapshot_tree_fd(primary_descriptor),
             "secondary": _snapshot_tree_fd(secondary_descriptor),
         }
-        source_receipt = validate_source_checkout(source_root)
-        support_receipt = validate_support_artifacts(primary_support_root, secondary_support_root)
+        source_receipt = validate_source_checkout(_descriptor_root_path(source_descriptor, "source"))
+        support_receipt = validate_support_artifacts(
+            _descriptor_root_path(primary_descriptor, "primary support"),
+            _descriptor_root_path(secondary_descriptor, "secondary support"),
+        )
         lock = _lock_payload(selection_lock)
         selection_lock_id = _assert_lock_identity(lock, source_receipt, support_receipt)
         snapshots_validated = {
@@ -866,6 +1076,7 @@ def stage_recipe_c_runtime(
             parent_descriptor: int | None = None
             stage_descriptor: int | None = None
             repo_descriptor: int | None = None
+            published_predictor: PublishedDevicePatch | None = None
             try:
                 stage_root, parent_descriptor, stage_descriptor = _claim_destination(Path(destination))
                 _fsync_directory(parent_descriptor)
@@ -878,7 +1089,6 @@ def stage_recipe_c_runtime(
                     exclude_relative=_relative_parts(predictor_repo_relative, "staged predictor"),
                 )
 
-                staged_config = stage_root / config_relative
                 staged_config_parent = _ensure_directory_at(stage_descriptor, config_relative.parent, "staged config")
                 try:
                     _copy_regular_file_at(
@@ -899,11 +1109,12 @@ def stage_recipe_c_runtime(
                     "primary staged checkpoint",
                 )
                 try:
-                    _write_symlink_at(
+                    _copy_regular_file_at(
+                        primary_checkpoint_parent,
+                        primary_checkpoint_name,
                         primary_stage_parent,
                         primary_stage_relative.name,
-                        (primary_support_root / primary_checkpoint_relative).absolute().as_posix(),
-                        primary_metadata,
+                        "primary checkpoint",
                     )
                 finally:
                     os.close(primary_stage_parent)
@@ -913,37 +1124,39 @@ def stage_recipe_c_runtime(
                     "secondary staged checkpoint",
                 )
                 try:
-                    _write_symlink_at(
+                    _copy_regular_file_at(
+                        secondary_checkpoint_parent,
+                        secondary_checkpoint_name,
                         secondary_stage_parent,
                         secondary_stage_relative.name,
-                        (secondary_support_root / secondary_checkpoint_relative).absolute().as_posix(),
-                        secondary_metadata,
+                        "secondary checkpoint",
                     )
                 finally:
                     os.close(secondary_stage_parent)
 
                 staged_before_hash = predictor_before_hash
-                if not publish_device_fallback_patch_at(
+                published_predictor = publish_device_fallback_patch_at(
                     primary_descriptor,
                     predictor_relative,
                     repo_descriptor,
                     predictor_repo_relative,
-                ):
+                )
+                if not published_predictor.changed:
                     raise ValueError("primary predictor unexpectedly required no device patch")
-                staged_predictor_parent, staged_predictor_name = _open_relative_parent(
-                    repo_descriptor,
-                    predictor_repo_relative,
+                staged_after_hash, staged_predictor_metadata = _sha256_descriptor(
+                    published_predictor.descriptor,
                     "patched predictor",
                 )
-                try:
-                    staged_after_hash, _ = _sha256_regular_at(
-                        staged_predictor_parent,
-                        staged_predictor_name,
-                        "patched predictor",
-                    )
-                    _compile_staged_predictor_at(staged_predictor_parent, staged_predictor_name)
-                finally:
-                    os.close(staged_predictor_parent)
+                if staged_after_hash != published_predictor.sha256 or _identity(staged_predictor_metadata) != (
+                    published_predictor.identity
+                ):
+                    raise ValueError("published predictor fd identity or digest mismatch")
+                _compile_staged_predictor_descriptor(published_predictor.descriptor)
+                _assert_published_predictor_at(
+                    repo_descriptor,
+                    predictor_repo_relative,
+                    published_predictor,
+                )
 
                 staged_config_parent = _open_relative_directory(
                     stage_descriptor,
@@ -969,6 +1182,19 @@ def stage_recipe_c_runtime(
                 if snapshots_after != snapshots_before:
                     raise ValueError("source/support artifact changed during staging")
                 _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
+                _assert_published_predictor_at(
+                    repo_descriptor,
+                    predictor_repo_relative,
+                    published_predictor,
+                )
+                final_predictor_hash, final_predictor_metadata = _sha256_descriptor(
+                    published_predictor.descriptor,
+                    "patched predictor",
+                )
+                if final_predictor_hash != published_predictor.sha256 or _identity(final_predictor_metadata) != (
+                    published_predictor.identity
+                ):
+                    raise ValueError("published predictor changed before receipt")
                 receipt: dict[str, object] = {
                     "schema_version": 1,
                     "status": "READY",
@@ -993,19 +1219,39 @@ def stage_recipe_c_runtime(
                 _fsync_directory(stage_descriptor)
                 _fsync_directory(parent_descriptor)
                 _assert_claimed_destination(parent_descriptor, stage_root.name, stage_descriptor)
-                return RuntimeStage(
-                    stage_root=stage_root,
-                    repo_dir=stage_root / "repo",
-                    weights_root=stage_root / "repo/weights",
-                    source_root=source_root,
-                    staged_config=staged_config,
+                _assert_published_predictor_at(
+                    repo_descriptor,
+                    predictor_repo_relative,
+                    published_predictor,
+                )
+                final_predictor_hash, final_predictor_metadata = _sha256_descriptor(
+                    published_predictor.descriptor,
+                    "patched predictor",
+                )
+                if final_predictor_hash != published_predictor.sha256 or _identity(final_predictor_metadata) != (
+                    published_predictor.identity
+                ):
+                    raise ValueError("published predictor changed after receipt")
+                runtime_stage = RuntimeStage(
+                    _stage_root_path=stage_root,
+                    _source_root_path=source_root,
+                    _config_relative=tuple(config_relative.parts),
+                    _predictor_relative=tuple(predictor_repo_relative.parts),
+                    _primary_checkpoint_relative=tuple(primary_stage_relative.relative_to("weights").parts),
+                    _secondary_checkpoint_relative=tuple(secondary_stage_relative.relative_to("weights").parts),
+                    parent_descriptor=os.dup(parent_descriptor),
+                    stage_descriptor=os.dup(stage_descriptor),
+                    repo_descriptor=os.dup(repo_descriptor),
+                    source_descriptor=os.dup(source_descriptor),
+                    predictor_descriptor=os.dup(published_predictor.descriptor),
+                    predictor_identity=published_predictor.identity,
                     selection_lock_id=selection_lock_id,
                     predictor_sha256_before=staged_before_hash,
                     predictor_sha256_after=staged_after_hash,
                     resolved_device_candidates=tuple(DEVICE_SELECTION_ORDER),
                     receipt=receipt,
-                    receipt_path=stage_root / _RECEIPT_FILENAME,
                 )
+                return runtime_stage
             except BaseException as exc:
                 if stage_descriptor is not None:
                     _mark_failed_at(stage_descriptor, selection_lock_id, exc)
@@ -1013,6 +1259,8 @@ def stage_recipe_c_runtime(
             finally:
                 if repo_descriptor is not None:
                     os.close(repo_descriptor)
+                if published_predictor is not None:
+                    os.close(published_predictor.descriptor)
                 if stage_descriptor is not None:
                     os.close(stage_descriptor)
                 if parent_descriptor is not None:
@@ -1027,6 +1275,30 @@ def stage_recipe_c_runtime(
         os.close(source_descriptor)
         os.close(primary_descriptor)
         os.close(secondary_descriptor)
+
+
+def _assert_published_predictor_at(
+    root_descriptor: int,
+    relative_path: Path,
+    published: PublishedDevicePatch,
+) -> None:
+    parent_descriptor, name = _open_relative_parent(root_descriptor, relative_path, "published predictor")
+    try:
+        metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode) or _identity(metadata) != published.identity:
+            raise ValueError("published predictor entry identity changed")
+    except FileNotFoundError as exc:
+        raise ValueError("published predictor entry disappeared") from exc
+    finally:
+        os.close(parent_descriptor)
+
+
+def _compile_staged_predictor_descriptor(descriptor: int) -> None:
+    payload, _ = _read_descriptor_stable(descriptor, "patched predictor")
+    try:
+        compile(payload.decode("utf-8"), "<recipe-c-staged-predictor>", "exec")
+    except (UnicodeDecodeError, SyntaxError) as exc:
+        raise ValueError("staged predictor failed to compile") from exc
 
 
 def _compile_staged_predictor_at(parent_descriptor: int, name: str) -> None:

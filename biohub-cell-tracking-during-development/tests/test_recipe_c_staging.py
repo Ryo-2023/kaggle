@@ -108,15 +108,12 @@ def test_staging_never_mutates_source_or_support(
     assert stage.predictor_path.is_file()
     assert _sha256(stage.predictor_path) == stage.predictor_sha256_after
     assert stage.staged_config.is_file()
-    assert stage.primary_checkpoint_path.is_symlink()
-    assert stage.secondary_checkpoint_path.is_symlink()
-    assert stage.primary_checkpoint_path.resolve() == (
-        primary / RECIPE_C_SOURCE.primary_checkpoint_relative_path
-    ).resolve()
-    assert stage.secondary_checkpoint_path.resolve() == (
-        secondary / RECIPE_C_SOURCE.secondary_checkpoint_relative_path
-    ).resolve()
+    assert not stage.primary_checkpoint_path.is_symlink()
+    assert not stage.secondary_checkpoint_path.is_symlink()
+    assert stage.primary_checkpoint_path.read_bytes() == b"primary-checkpoint"
+    assert stage.secondary_checkpoint_path.read_bytes() == b"secondary-checkpoint"
     assert json.dumps(stage.receipt, sort_keys=True).find(str(tmp_path)) == -1
+    stage.close()
 
 
 def test_device_patch_contains_cuda_mps_cpu_order() -> None:
@@ -366,12 +363,14 @@ def test_device_patch_fd_does_not_replace_external_file_after_ancestor_swap(tmp_
     try:
         (tmp_path / "controlled").rename(tmp_path / "controlled-moved")
         (tmp_path / "controlled").symlink_to(tmp_path / "outside", target_is_directory=True)
-        assert publish_device_fallback_patch_at(
+        published = publish_device_fallback_patch_at(
             root_fd,
             Path("nested/predict.py"),
             destination_fd,
             Path("nested/predict.py"),
-        ) is True
+        )
+        assert published.changed is True
+        os.close(published.descriptor)
         assert outside_predictor.read_bytes() == original
         assert b"mps" in (destination / "predict.py").read_bytes()
     finally:
@@ -390,12 +389,14 @@ def test_device_fresh_publish_is_atomic_and_no_clobbering(tmp_path: Path) -> Non
     source_fd = staging_module._open_directory_path(source_root, "source")
     destination_fd = staging_module._open_directory_path(destination_root, "destination")
     try:
-        assert publish_device_fallback_patch_at(
+        published = publish_device_fallback_patch_at(
             source_fd,
             Path("repo/scripts/predict.py"),
             destination_fd,
             Path("repo/scripts/predict.py"),
-        ) is True
+        )
+        assert published.changed is True
+        os.close(published.descriptor)
     finally:
         os.close(source_fd)
         os.close(destination_fd)
@@ -463,13 +464,17 @@ def test_device_fresh_publish_detects_final_entry_race_without_clobber(
     destination_parent = destination_root / "repo/scripts"
     destination_parent.mkdir(parents=True)
     destination_predictor = destination_parent / "predict.py"
-    original_link = device_patch_module.os.link
+    original_link = device_patch_module._link_anonymous
 
-    def create_attacker_entry_before_link(source: str, destination: str, **kwargs: object) -> None:
+    def create_attacker_entry_before_link(
+        descriptor: int,
+        parent_descriptor: int,
+        name: str,
+    ) -> None:
         destination_predictor.write_bytes(b"attacker")
-        original_link(source, destination, **kwargs)
+        original_link(descriptor, parent_descriptor, name)
 
-    monkeypatch.setattr(device_patch_module.os, "link", create_attacker_entry_before_link)
+    monkeypatch.setattr(device_patch_module, "_link_anonymous", create_attacker_entry_before_link)
     source_fd = staging_module._open_directory_path(source_root, "source")
     destination_fd = staging_module._open_directory_path(destination_root, "destination")
     try:
@@ -521,6 +526,246 @@ def test_device_fresh_publish_cleans_owned_temp_after_write_failure(
         os.close(destination_fd)
         monkeypatch.setattr(device_patch_module.os, "write", original_write)
     assert not list(destination_parent.glob(".predict.py.recipe-c-device-patch.*"))
+
+
+def test_device_publish_does_not_link_attacker_replaced_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import biohub.recipe_c.device_patch as device_patch_module
+
+    source_root = tmp_path / "source"
+    source_predictor = source_root / "predict.py"
+    source_root.mkdir()
+    source_predictor.write_bytes(DEVICE_PREIMAGE.encode("utf-8"))
+    destination_root = tmp_path / "destination"
+    destination_root.mkdir()
+    destination_predictor = destination_root / "predict.py"
+    original_link = device_patch_module._link_anonymous
+    triggered = False
+
+    def replace_temp_before_link(descriptor: int, parent: int, name: str) -> object:
+        nonlocal triggered
+        temporary_entries = sorted(destination_root.glob(".recipe-c-anonymous.*"))
+        assert len(temporary_entries) == 1
+        temporary_entries[0].unlink()
+        temporary_entries[0].write_bytes(b"attacker-temp")
+        triggered = True
+        return original_link(descriptor, parent, name)
+
+    monkeypatch.setattr(device_patch_module, "_O_TMPFILE", 0)
+    monkeypatch.setattr(device_patch_module, "_link_anonymous", replace_temp_before_link)
+    source_fd = staging_module._open_directory_path(source_root, "source")
+    destination_fd = staging_module._open_directory_path(destination_root, "destination")
+    try:
+        with pytest.raises(OSError):
+            publish_device_fallback_patch_at(
+                source_fd,
+                Path("predict.py"),
+                destination_fd,
+                Path("predict.py"),
+            )
+    finally:
+        os.close(source_fd)
+        os.close(destination_fd)
+    assert triggered
+    assert not destination_predictor.exists()
+    temporary_entries = sorted(destination_root.glob(".recipe-c-anonymous.*"))
+    assert len(temporary_entries) == 1
+    assert temporary_entries[0].read_bytes() == b"attacker-temp"
+    temporary_entries[0].unlink()
+
+
+def test_device_named_temp_replacement_cannot_publish_attacker_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import biohub.recipe_c.device_patch as device_patch_module
+
+    source_root = tmp_path / "source"
+    source_predictor = source_root / "predict.py"
+    source_root.mkdir()
+    source_predictor.write_bytes(DEVICE_PREIMAGE.encode("utf-8"))
+    destination_root = tmp_path / "destination"
+    destination_root.mkdir()
+    destination_predictor = destination_root / "predict.py"
+    original_link = device_patch_module._link_anonymous
+    triggered = False
+    replaced: list[Path] = []
+
+    def replace_named_temp(
+        descriptor: int,
+        parent_descriptor: int,
+        name: str,
+    ) -> None:
+        nonlocal triggered
+        temporary_entries = sorted(destination_root.glob(".recipe-c-anonymous.*"))
+        assert len(temporary_entries) == 1
+        temporary = temporary_entries[0]
+        temporary.unlink()
+        temporary.write_bytes(b"attacker-temp")
+        replaced.append(temporary)
+        triggered = True
+        original_link(descriptor, parent_descriptor, name)
+
+    monkeypatch.setattr(device_patch_module, "_O_TMPFILE", 0)
+    monkeypatch.setattr(device_patch_module, "_link_anonymous", replace_named_temp)
+    source_fd = staging_module._open_directory_path(source_root, "source")
+    destination_fd = staging_module._open_directory_path(destination_root, "destination")
+    try:
+        with pytest.raises(OSError):
+            publish_device_fallback_patch_at(
+                source_fd,
+                Path("predict.py"),
+                destination_fd,
+                Path("predict.py"),
+            )
+    finally:
+        os.close(source_fd)
+        os.close(destination_fd)
+    assert triggered
+    assert not destination_predictor.exists()
+    assert replaced and replaced[0].read_bytes() == b"attacker-temp"
+    replaced[0].unlink()
+
+
+def test_staging_rejects_predictor_replaced_after_publish_return(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    original_publish = staging_module.publish_device_fallback_patch_at
+    published_returned = False
+
+    def publish_then_replace(
+        source_root_descriptor: int,
+        source_relative_path: Path,
+        destination_root_descriptor: int,
+        destination_relative_path: Path,
+    ) -> object:
+        nonlocal published_returned
+        published = original_publish(
+            source_root_descriptor,
+            source_relative_path,
+            destination_root_descriptor,
+            destination_relative_path,
+        )
+        parent, name = staging_module._open_relative_parent(
+            destination_root_descriptor,
+            destination_relative_path,
+            "attacker predictor",
+        )
+        try:
+            os.unlink(name, dir_fd=parent)
+            descriptor = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=parent,
+            )
+            try:
+                os.write(descriptor, b"attacker = 1\n")
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            staging_module._fsync_directory(parent)
+        finally:
+            os.close(parent)
+        published_returned = True
+        return published
+
+    monkeypatch.setattr(staging_module, "publish_device_fallback_patch_at", publish_then_replace)
+    destination = tmp_path / "stage"
+    with pytest.raises(ValueError, match="published predictor"):
+        stage_recipe_c_runtime(source, primary, secondary, destination, lock)
+    failed = json.loads((destination / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["status"] == "FAILED"
+    assert failed["reusable"] is False
+    assert not (destination / "receipt.json").exists()
+    assert published_returned
+
+
+def test_staging_checkpoint_copy_is_not_escaped_by_support_root_swap(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_checkpoint = outside / "model.pth"
+    outside_checkpoint.write_bytes(b"attacker-checkpoint")
+    original_copy = staging_module._copy_regular_file_at
+    swapped = False
+
+    def copy_then_swap(
+        source_parent_descriptor: int,
+        source_name: str,
+        destination_parent_descriptor: int,
+        destination_name: str,
+        label: str,
+    ) -> None:
+        nonlocal swapped
+        original_copy(
+            source_parent_descriptor,
+            source_name,
+            destination_parent_descriptor,
+            destination_name,
+            label,
+        )
+        if label == "primary checkpoint" and not swapped:
+            swapped = True
+            moved = primary.with_name("primary-moved")
+            primary.rename(moved)
+            primary.symlink_to(outside, target_is_directory=True)
+
+    monkeypatch.setattr(staging_module, "_copy_regular_file_at", copy_then_swap)
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    try:
+        assert stage.primary_checkpoint_path.is_file()
+        assert not stage.primary_checkpoint_path.is_symlink()
+        assert stage.primary_checkpoint_path.read_bytes() == b"primary-checkpoint"
+        assert _sha256(stage.primary_checkpoint_path) == lock["primary_checkpoint_sha256"]
+        assert swapped
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_consumers_remain_fd_backed_after_final_claim_swap(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    destination = tmp_path / "stage"
+    outside = tmp_path / "outside"
+    (outside / "repo/scripts").mkdir(parents=True)
+    (outside / "repo/scripts/predict_unet_transformer.py").write_text(
+        "attacker = 1\n",
+        encoding="utf-8",
+    )
+    original_assert = staging_module._assert_claimed_destination
+    calls = 0
+
+    def assert_then_swap(parent_descriptor: int, name: str, stage_descriptor: int) -> None:
+        nonlocal calls
+        original_assert(parent_descriptor, name, stage_descriptor)
+        calls += 1
+        if calls == 3:
+            moved = tmp_path / "moved-stage"
+            destination.rename(moved)
+            destination.symlink_to(outside, target_is_directory=True)
+
+    monkeypatch.setattr(staging_module, "_assert_claimed_destination", assert_then_swap)
+    stage = stage_recipe_c_runtime(source, primary, secondary, destination, lock)
+    try:
+        assert calls >= 3
+        assert not stage.stage_root.is_symlink()
+        assert b"mps" in stage.predictor_path.read_bytes()
+        assert b"attacker" not in stage.predictor_path.read_bytes()
+    finally:
+        stage.close()
 
 
 def test_directory_fsync_failure_is_not_treated_as_success(
@@ -592,28 +837,33 @@ def test_copy_tree_requires_destination_directory_fsync(
         os.close(destination_parent_fd)
 
 
-def test_symlink_publication_requires_destination_directory_fsync(
+def test_checkpoint_copy_requires_destination_directory_fsync(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    target = tmp_path / "checkpoint.pth"
-    target.write_bytes(b"checkpoint")
-    parent_fd = staging_module._open_secure_directory(tmp_path, create_missing=False)
+    source = tmp_path / "checkpoint.pth"
+    source.write_bytes(b"checkpoint")
+    source_parent_fd = staging_module._open_secure_directory(tmp_path, create_missing=False)
+    destination = tmp_path / "destination"
+    destination.mkdir()
+    destination_parent_fd = staging_module._open_secure_directory(destination, create_missing=False)
 
     def fail_fsync(_descriptor: int) -> None:
-        raise OSError("synthetic symlink directory fsync failure")
+        raise OSError("synthetic checkpoint directory fsync failure")
 
     monkeypatch.setattr(staging_module, "_fsync_directory", fail_fsync)
     try:
-        with pytest.raises(OSError, match="symlink directory fsync"):
-            staging_module._write_symlink_at(
-                parent_fd,
+        with pytest.raises(OSError, match="checkpoint directory fsync"):
+            staging_module._copy_regular_file_at(
+                source_parent_fd,
+                source.name,
+                destination_parent_fd,
                 "weights.pth",
-                target.as_posix(),
-                os.stat(target, follow_symlinks=False),
+                "checkpoint",
             )
     finally:
-        os.close(parent_fd)
+        os.close(source_parent_fd)
+        os.close(destination_parent_fd)
 
 
 def test_device_patch_detects_changed_owned_stage_entry_after_publication(

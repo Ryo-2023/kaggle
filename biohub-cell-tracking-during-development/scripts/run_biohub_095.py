@@ -161,7 +161,10 @@ def _dry_run(args: argparse.Namespace) -> int:
         _resolve_project_path(args.destination),
         _resolve_project_path(args.selection_lock),
     )
-    print(json.dumps(stage.receipt, sort_keys=True, separators=(",", ":")))
+    try:
+        print(json.dumps(stage.receipt, sort_keys=True, separators=(",", ":")))
+    finally:
+        stage.close()
     return 0
 
 
