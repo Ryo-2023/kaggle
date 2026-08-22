@@ -21,10 +21,10 @@ at all, and :func:`write_provenance` records that fact next to the artefact.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 
 from .schema import (
     GRAPH_ROW_COLUMNS,
@@ -148,7 +148,7 @@ def write_provenance(
     csv_path = Path(csv_path)
     payload = {
         "artifact": csv_path.name,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "method_id": method_id,
         "format_source": {
             "repository": UPSTREAM_REPOSITORY,

@@ -15,8 +15,8 @@ present, which is the situation this repository is actually in.
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Sequence
 
 from .schema import (
     REFERENCE_SHAPE_TZYX,

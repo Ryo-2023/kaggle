@@ -37,7 +37,6 @@ import os
 from pathlib import Path
 
 import numpy as np
-
 from validation_power_analysis import ADJUSTMENT_ALPHA, Z95, mcnemar_exact
 
 METHODS = ["official_ilp", "harmonic_v1", "mutual_confidence", "motion_gated"]
@@ -447,7 +446,7 @@ def main() -> int:
     for pr in pairwise:
         gains = ",".join(f"{d['edge_gain_b_over_a']:+d}" for d in pr["per_sample"])
         print(f"  {pr['a']:<18}{pr['b']:<18}{gains:>14}{pr['pooled_b']:>4}{pr['pooled_c']:>3}"
-              f"{pr['p_two_sided_exact']:>11.6f}  {str(pr['sig_0.05']):<6}{pr['sig_bonferroni']}")
+              f"{pr['p_two_sided_exact']:>11.6f}  {pr['sig_0.05']!s:<6}{pr['sig_bonferroni']}")
     print("\n  sensitivity - how many reversed edges destroy each verdict:")
     for pr in pairwise:
         row = "  ".join(
@@ -470,7 +469,7 @@ def main() -> int:
     print(f"    {'pair':<24}{'obs':>8}{'FP-resampled CI95':>26}{'paired, FP fixed CI95':>28}")
     for bp in boot_pairs:
         print(f"    {bp['a'][:10]+'->'+bp['b'][:10]:<24}{bp['observed_diff']:>+8.4f}"
-              f"  [{bp['ci95'][0]:+.4f},{bp['ci95'][1]:+.4f}] {str(bp['ci_excludes_zero']):<6}"
+              f"  [{bp['ci95'][0]:+.4f},{bp['ci95'][1]:+.4f}] {bp['ci_excludes_zero']!s:<6}"
               f"  [{bp['paired_fp_fixed_ci95'][0]:+.4f},{bp['paired_fp_fixed_ci95'][1]:+.4f}] "
               f"{bp['paired_fp_fixed_ci_excludes_zero']}")
     print("\n  node-count penalty (pooled, weighted):")
@@ -496,7 +495,7 @@ def main() -> int:
         d = div[m]
         fps = ",".join(f"{s[5:9]}:{v}" for s, v in d["per_sample_fp"].items() if v)
         print(f"  {m:<20}{d['division_tp']:>5}{d['division_fp']:>5}{d['division_fn']:>5}"
-              f"{str(d['division_jaccard']):>13}{d['division_term_contribution']:>8.4f}  {fps or '-'}")
+              f"{d['division_jaccard']!s:>13}{d['division_term_contribution']:>8.4f}  {fps or '-'}")
 
     print()
     print("=" * 78)
@@ -518,7 +517,7 @@ def main() -> int:
     print("=" * 78)
     for row in loo:
         worst = max(row["leave_one_out"], key=lambda r: r["p"])
-        print(f"  {row['a'][:12]:<13}vs {row['b'][:12]:<13} robust={str(row['robust_to_any_single_drop']):<6}"
+        print(f"  {row['a'][:12]:<13}vs {row['b'][:12]:<13} robust={row['robust_to_any_single_drop']!s:<6}"
               f" worst case: drop {worst['dropped']} -> b={worst['b']},c={worst['c']}, p={worst['p']:.2e}")
 
     print()

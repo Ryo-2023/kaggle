@@ -39,7 +39,6 @@ import math
 from pathlib import Path
 
 import numpy as np
-
 from validation_power_analysis import (  # noqa: F401  (same scripts/ dir)
     ADJUSTMENT_ALPHA,
     Z95,
@@ -292,7 +291,7 @@ def main() -> int:
         print(
             f"  {pr['a']:<18}{pr['b']:<18}{pr['observed_score_diff']:>+9.4f}"
             f"{pr['discordant_edges']:>6}{pr['p_two_sided_exact']:>9.4f}"
-            f"  {str(pr['separable_at_0.05']):<6}{pr['separable_bonferroni']}"
+            f"  {pr['separable_at_0.05']!s:<6}{pr['separable_bonferroni']}"
         )
     print(
         f"\nneed >= {sizing['min_one_way_discordant_edges']['p<0.05']} one-way discordant edges "

@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         ilp_config = dict(OFFICIAL_ILP_CONFIG)
         ilp_config["division_weight"] = float(args.division_weight)
 
-        def ilp_solver(graph):  # noqa: ANN001, ANN202
+        def ilp_solver(graph):
             if graph.num_edges() <= 0:
                 return graph
             solver = td.solvers.ILPSolver(

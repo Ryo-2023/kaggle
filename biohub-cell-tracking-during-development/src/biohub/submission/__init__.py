@@ -40,14 +40,14 @@ from .validator import (
 
 __all__ = [
     "COMPETITION_SLUG",
+    "ERROR",
+    "INFO",
     "MAX_MATCH_DISTANCE_UM",
     "REFERENCE_SCALE_UM",
     "REFERENCE_SHAPE_TZYX",
     "SENTINEL",
     "SUBMISSION_COLUMNS",
-    "ERROR",
     "WARN",
-    "INFO",
     "DatasetSummary",
     "Finding",
     "ValidationReport",

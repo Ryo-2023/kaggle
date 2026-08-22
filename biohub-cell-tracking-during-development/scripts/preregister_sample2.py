@@ -39,7 +39,6 @@ import math
 from pathlib import Path
 
 import numpy as np
-
 from validation_power_analysis import mcnemar_exact  # same scripts/ dir
 
 
@@ -167,7 +166,7 @@ def main() -> int:
         print(f"  P(harmonic_v1 ranks first)       = {r['p_ranks_first'].get('harmonic_v1', float('nan')):.4f}")
         d = r["best_minus_official_edges"]
         print(f"  harmonic-official edge gain      = {d['mean']:+.2f}  P(>0)={d['p_positive']:.3f}  P(<=0)={d['p_zero_or_negative']:.3f}")
-        print(f"  predicted TP 95% intervals       = " + ", ".join(
+        print("  predicted TP 95% intervals       = " + ", ".join(
             f"{m}:{lo}-{hi}" for m, (lo, hi) in r["tp_95pct_interval"].items()))
         print()
     print(f"pooled panel (samples 1+2) = {n_pooled} GT edges, resolvable delta = "
@@ -178,7 +177,7 @@ def main() -> int:
         if row["edges_gained_per_sample"] == 2 or row["n_samples_agreeing"] <= 3:
             print(f"  {row['edges_gained_per_sample']:>9}{row['n_samples_agreeing']:>3}"
                   f"{row['pooled_b']:>10}{row['exact_mcnemar_p']:>10.4f}"
-                  f"  {str(row['significant_0.05']):<6}{row['significant_bonferroni_6pairs']}")
+                  f"  {row['significant_0.05']!s:<6}{row['significant_bonferroni_6pairs']}")
     print(f"\nwrote {args.out}")
     return 0
 

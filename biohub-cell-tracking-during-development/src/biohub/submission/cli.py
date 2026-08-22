@@ -78,8 +78,7 @@ def _parse_shape(raw: str) -> tuple[int, int, int, int] | None:
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
-    from .validator import load_ground_truth_nodes, validate_submission, write_report_json
-    from .validator import datasets_from_zarr_dir
+    from .validator import datasets_from_zarr_dir, load_ground_truth_nodes, validate_submission, write_report_json
 
     expected = None
     if args.expect_datasets:

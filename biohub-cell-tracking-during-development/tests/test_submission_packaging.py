@@ -22,7 +22,6 @@ from biohub.submission.packaging import (
 from biohub.submission.schema import SUBMISSION_COLUMNS
 from biohub.submission.validator import validate_submission
 
-
 # --------------------------------------------------------------------------- #
 # round-trip (stdlib only)
 # --------------------------------------------------------------------------- #

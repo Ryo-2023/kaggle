@@ -22,9 +22,9 @@ import csv
 import json
 import math
 from collections import Counter, defaultdict
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, Iterator, Mapping, Sequence
 
 from .schema import (
     EDGE_ONLY_FIELDS,
@@ -32,7 +32,6 @@ from .schema import (
     NODE_ONLY_FIELDS,
     REFERENCE_SCALE_UM,
     REFERENCE_SHAPE_TZYX,
-    ROW_TYPE_EDGE,
     ROW_TYPE_NODE,
     ROW_TYPES,
     SENTINEL,

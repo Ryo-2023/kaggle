@@ -81,7 +81,7 @@ def fetch(
                 try:
                     response = api.competition_list_files(competition, **kwargs)
                     break
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     if "429" not in str(exc) or attempt == max_retries - 1:
                         _save_state(cache, state)
                         raise
@@ -211,7 +211,7 @@ def main() -> int:
             state = fetch(
                 args.competition, args.cache, args.page_size, args.sleep, args.max_pages
             )
-        except Exception as exc:  # noqa: BLE001 - report the exact failure, never guess
+        except Exception as exc:
             print(
                 f"BLOCKED: kaggle competition_list_files({args.competition!r}) failed: "
                 f"{type(exc).__name__}: {exc}",
