@@ -31,6 +31,7 @@ from biohub.recipe_c.source import (  # noqa: E402
     validate_source_checkout,
     validate_support_artifacts,
 )
+from biohub.recipe_c.staging import stage_recipe_c_runtime  # noqa: E402
 
 
 def _git_commit_and_clean() -> str:
@@ -152,6 +153,18 @@ def _freeze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dry_run(args: argparse.Namespace) -> int:
+    stage = stage_recipe_c_runtime(
+        _resolve_project_path(args.source),
+        _resolve_project_path(args.primary_support),
+        _resolve_project_path(args.secondary_support),
+        _resolve_project_path(args.destination),
+        _resolve_project_path(args.selection_lock),
+    )
+    print(json.dumps(stage.receipt, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Freeze the Biohub 0.95 Recipe C selection lock.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -183,6 +196,13 @@ def _build_parser() -> argparse.ArgumentParser:
     freeze.add_argument("--control-id", required=True)
     freeze.add_argument("--acceptance-criteria", required=True)
     freeze.set_defaults(handler=_freeze)
+    dry_run = subparsers.add_parser("dry-run", help="stage a validated runtime without inference or evaluation")
+    dry_run.add_argument("--source", type=Path, required=True)
+    dry_run.add_argument("--primary-support", type=Path, required=True)
+    dry_run.add_argument("--secondary-support", type=Path, required=True)
+    dry_run.add_argument("--selection-lock", type=Path, required=True)
+    dry_run.add_argument("--destination", type=Path, required=True)
+    dry_run.set_defaults(handler=_dry_run)
     return parser
 
 
