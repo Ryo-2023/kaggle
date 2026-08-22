@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 SOURCE_URL = "https://github.com/asapacsin/biohub-cell-tracking"
@@ -21,6 +21,7 @@ LICENSE_RELATIVE_PATH = "LICENSE"
 CONFIG_RELATIVE_PATH = "configs/experiments/recipe_c_motion_off_edge_0_40_det0_96875.yaml"
 NOTEBOOK_RELATIVE_PATH = "upstream_clean_v106/clean-approach-lightweight-local-cv-no-hack.ipynb"
 PREDICTOR_RELATIVE_PATH = "repo/scripts/predict_unet_transformer.py"
+PREDICTOR_SHA256 = "c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9"
 CHECKPOINT_RELATIVE_PATH = "weights/unet_transformer/split_0/edge_predictor_best.pth"
 SECONDARY_STAGING_RELATIVE_PATH = "weights/unet_transformer/seed_314159/edge_predictor_best.pth"
 PRIMARY_DATASET = "pilkwang/biohub-tracking-support-pack-50ep-v1"
@@ -35,36 +36,6 @@ CONFIG_SHA256 = "0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ce
 NOTEBOOK_SHA256 = "5adc99aef3b61f2d8c5da5253eb1df13262986e8879bf6f630b5c1b5fa345d9d"
 
 _HASH_CHUNK_SIZE = 1024 * 1024
-
-# These are the values that identify the locked Recipe C.  The complete mapping
-# is read from the byte-pinned YAML file when PyYAML is available; this compact
-# fallback keeps the receipt useful in stdlib-only environments.
-_RECIPE_C_CONFIG_VALUES: dict[str, object] = {
-    "inference": {
-        "detection_threshold": 0.96875,
-        "ensemble_alpha": 0.5,
-        "edge_threshold": 0.4,
-        "spatial_d4_tta": True,
-        "use_ilp": True,
-        "weights_relative": CHECKPOINT_RELATIVE_PATH,
-        "ensemble_weights_relative": SECONDARY_STAGING_RELATIVE_PATH,
-        "ilp_edge_weight": -1.0,
-        "ilp_appearance_weight": 0.0,
-        "ilp_disappearance_weight": 1.575,
-        "ilp_division_weight": 1.0,
-        "method": "unet_transformer",
-        "prediction_script": "scripts/predict_unet_transformer.py",
-    },
-    "postprocessing": {
-        "output_motion_relink": False,
-        "output_gap_close": True,
-        "output_safe_divisions": True,
-        "output_min_track_len": 6,
-        "output_linefit_smooth": True,
-        "output_prune_isolated": True,
-        "adaptive_short_track_rescue": True,
-    },
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +52,7 @@ class RecipeCSourceContract:
     notebook_relative_path: str = NOTEBOOK_RELATIVE_PATH
     notebook_sha256: str = NOTEBOOK_SHA256
     predictor_relative_path: str = PREDICTOR_RELATIVE_PATH
+    predictor_sha256: str = PREDICTOR_SHA256
     primary_checkpoint_relative_path: str = CHECKPOINT_RELATIVE_PATH
     primary_checkpoint_sha256: str = PRIMARY_CHECKPOINT_SHA256
     secondary_checkpoint_relative_path: str = CHECKPOINT_RELATIVE_PATH
@@ -92,7 +64,6 @@ class RecipeCSourceContract:
     secondary_dataset: str = SECONDARY_DATASET
     secondary_dataset_version: int = SECONDARY_DATASET_VERSION
     secondary_dataset_license: str = SUPPORT_DATASET_LICENSE
-    config_values: dict[str, object] = field(default_factory=lambda: dict(_RECIPE_C_CONFIG_VALUES))
 
     @property
     def source_license(self) -> str:
@@ -148,13 +119,31 @@ def _sha256(path: Path) -> str:
 
 
 def _artifact_file(root: Path, relative_path: str, label: str) -> Path:
+    """Resolve a file inside an original immutable source/support artifact.
+
+    Run-local staging may intentionally use symlinks to external read-only assets;
+    staged trees must not be passed to this original-artifact validator.
+    """
+
+    try:
+        artifact_root = Path(root).resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"{label} artifact root is missing: {root}") from exc
+    if not artifact_root.is_dir():
+        raise ValueError(f"{label} artifact root is not a directory: {root}")
     relative = Path(relative_path)
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError(f"{label} path must be relative to the artifact root: {relative_path}")
-    path = root / relative
-    if not path.is_file():
+    path = artifact_root / relative
+    try:
+        resolved = path.resolve(strict=True)
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise FileNotFoundError(f"{label} file is missing: {relative_path}") from exc
+    if not resolved.is_relative_to(artifact_root):
+        raise ValueError(f"{label} path escapes artifact root via symlink: {relative_path}")
+    if not resolved.is_file():
         raise FileNotFoundError(f"{label} file is missing: {relative_path}")
-    return path
+    return resolved
 
 
 def _validate_file(root: Path, relative_path: str, expected_sha256: str, label: str) -> str:
@@ -166,6 +155,59 @@ def _validate_file(root: Path, relative_path: str, expected_sha256: str, label: 
             f"expected {expected_sha256}, got {actual_sha256}",
         )
     return actual_sha256
+
+
+def _git_checkout_root(root: Path) -> Path:
+    try:
+        expected_root = Path(root).resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ValueError(f"source checkout root is missing: {root}") from exc
+    if not expected_root.is_dir():
+        raise ValueError(f"source checkout root is not a directory: {root}")
+
+    result = subprocess.run(
+        ["git", "-C", str(expected_root), "rev-parse", "--show-toplevel"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "not a Git checkout"
+        raise ValueError(f"source checkout root could not be read: {detail}")
+    try:
+        actual_root = Path(result.stdout.strip()).resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ValueError("source checkout root could not be resolved") from exc
+    if actual_root != expected_root:
+        raise ValueError(
+            "source checkout root must be the exact Git top-level directory: "
+            f"expected {expected_root}, got {actual_root}",
+        )
+
+    return expected_root
+
+
+def _require_clean_git_checkout(root: Path) -> None:
+    status = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignored=no",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if status.returncode != 0:
+        detail = status.stderr.strip() or "unable to inspect source checkout status"
+        raise ValueError(f"source checkout status could not be read: {detail}")
+    if status.stdout.strip():
+        changes = status.stdout.strip().replace("\n", "; ")
+        raise ValueError(f"source checkout must be clean; modifications found: {changes}")
 
 
 def _git_head(root: Path) -> str:
@@ -181,11 +223,11 @@ def _git_head(root: Path) -> str:
     return result.stdout.strip()
 
 
-def _load_config_values(path: Path, fallback: dict[str, object]) -> dict[str, object]:
+def _load_config_values(path: Path) -> dict[str, object]:
     try:
         import yaml
-    except ModuleNotFoundError:
-        return dict(fallback)
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("PyYAML is required to parse the pinned Recipe C config") from exc
 
     with path.open("r", encoding="utf-8") as handle:
         payload = yaml.safe_load(handle)
@@ -200,12 +242,13 @@ def validate_source_checkout(
 ) -> dict[str, object]:
     """Validate the pinned Git checkout and return an absolute-path-free receipt."""
 
-    root = Path(root)
+    root = _git_checkout_root(Path(root))
     actual_commit = _git_head(root)
     if actual_commit != contract.source_commit:
         raise ValueError(
             f"source commit mismatch: expected {contract.source_commit}, got {actual_commit}",
         )
+    _require_clean_git_checkout(root)
 
     license_sha256 = _validate_file(
         root,
@@ -213,6 +256,7 @@ def validate_source_checkout(
         contract.license_sha256,
         "license",
     )
+    config_path = _artifact_file(root, contract.config_relative_path, "config")
     config_sha256 = _validate_file(
         root,
         contract.config_relative_path,
@@ -226,10 +270,9 @@ def validate_source_checkout(
         "notebook",
     )
     config_values = _load_config_values(
-        root / contract.config_relative_path,
-        contract.config_values,
+        config_path,
     )
-    return {
+    receipt: dict[str, object] = {
         "source_url": contract.source_url,
         "source_commit": actual_commit,
         "license": contract.license,
@@ -241,6 +284,7 @@ def validate_source_checkout(
         "notebook_relative_path": contract.notebook_relative_path,
         "notebook_sha256": notebook_sha256,
         "predictor_relative_path": contract.predictor_relative_path,
+        "predictor_sha256": contract.predictor_sha256,
         "primary_checkpoint_relative_path": contract.primary_checkpoint_relative_path,
         "primary_checkpoint_sha256": contract.primary_checkpoint_sha256,
         "secondary_checkpoint_relative_path": contract.secondary_checkpoint_relative_path,
@@ -253,6 +297,8 @@ def validate_source_checkout(
         "secondary_dataset_version": contract.secondary_dataset_version,
         "secondary_dataset_license": contract.secondary_dataset_license,
     }
+    canonical_json(receipt)
+    return receipt
 
 
 def validate_support_artifacts(
@@ -267,8 +313,11 @@ def validate_support_artifacts(
     if primary_root.resolve() == secondary_root.resolve():
         raise ValueError("primary and secondary support artifacts must use distinct roots")
 
-    predictor_sha256 = _sha256(
-        _artifact_file(primary_root, contract.predictor_relative_path, "primary predictor"),
+    predictor_sha256 = _validate_file(
+        primary_root,
+        contract.predictor_relative_path,
+        contract.predictor_sha256,
+        "primary predictor",
     )
     primary_sha256 = _validate_file(
         primary_root,
@@ -312,6 +361,7 @@ __all__ = [
     "NOTEBOOK_RELATIVE_PATH",
     "NOTEBOOK_SHA256",
     "PREDICTOR_RELATIVE_PATH",
+    "PREDICTOR_SHA256",
     "PRIMARY_CHECKPOINT_SHA256",
     "PRIMARY_DATASET",
     "PRIMARY_DATASET_VERSION",

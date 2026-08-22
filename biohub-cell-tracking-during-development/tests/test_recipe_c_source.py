@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,6 +14,7 @@ import pytest
 from biohub.recipe_c.source import (
     RECIPE_C_SOURCE,
     RecipeCSourceContract,
+    canonical_json,
     validate_source_checkout,
     validate_support_artifacts,
 )
@@ -97,8 +99,10 @@ def fake_secondary(tmp_path: Path) -> _FakeArtifact:
 
 
 def _fixture_support_contract(fake_primary: _FakeArtifact, fake_secondary: _FakeArtifact) -> RecipeCSourceContract:
+    predictor = fake_primary.root / RECIPE_C_SOURCE.predictor_relative_path
     return replace(
         RECIPE_C_SOURCE,
+        predictor_sha256=_sha256(predictor.read_bytes()),
         primary_checkpoint_sha256=_sha256(fake_primary.checkpoint.read_bytes()),
         secondary_checkpoint_sha256=_sha256(fake_secondary.checkpoint.read_bytes()),
     )
@@ -108,6 +112,39 @@ def test_source_contract_rejects_wrong_commit(tmp_path: Path, fake_source_tree: 
     fake_source_tree.write_git_head("0" * 40)
     with pytest.raises(ValueError, match="source commit"):
         validate_source_checkout(fake_source_tree.root, contract=fake_source_tree.contract)
+
+
+def test_source_contract_rejects_tracked_dirty_checkout(fake_source_tree: _FakeSourceTree) -> None:
+    (fake_source_tree.root / "LICENSE").write_text("changed\n")
+
+    with pytest.raises(ValueError, match=r"clean|dirty|modification"):
+        validate_source_checkout(fake_source_tree.root, contract=fake_source_tree.contract)
+
+
+def test_source_contract_rejects_untracked_checkout(fake_source_tree: _FakeSourceTree) -> None:
+    (fake_source_tree.root / "UNTRACKED_SECRET").write_text("do not record\n")
+
+    with pytest.raises(ValueError, match=r"clean|dirty|untracked|modification"):
+        validate_source_checkout(fake_source_tree.root, contract=fake_source_tree.contract)
+
+
+def test_source_contract_rejects_nested_checkout_root(fake_source_tree: _FakeSourceTree) -> None:
+    nested = fake_source_tree.root / "nested"
+    nested.mkdir()
+
+    with pytest.raises(ValueError, match=r"root|top-level"):
+        validate_source_checkout(nested, contract=fake_source_tree.contract)
+
+
+@pytest.mark.parametrize("field", ["license_sha256", "config_sha256", "notebook_sha256"])
+def test_source_contract_rejects_fixed_file_hash_mismatch(
+    fake_source_tree: _FakeSourceTree,
+    field: str,
+) -> None:
+    contract = replace(fake_source_tree.contract, **{field: "0" * 64})
+
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        validate_source_checkout(fake_source_tree.root, contract=contract)
 
 
 def test_source_contract_returns_fixed_file_hashes(fake_source_tree: _FakeSourceTree) -> None:
@@ -122,6 +159,7 @@ def test_source_contract_returns_fixed_file_hashes(fake_source_tree: _FakeSource
     assert receipt["secondary_checkpoint_sha256"] == fake_source_tree.contract.secondary_checkpoint_sha256
     assert receipt["primary_checkpoint_relative_path"] == fake_source_tree.contract.primary_checkpoint_relative_path
     assert receipt["secondary_checkpoint_relative_path"] == fake_source_tree.contract.secondary_checkpoint_relative_path
+    assert receipt["predictor_sha256"] == fake_source_tree.contract.predictor_sha256
     assert receipt["primary_dataset_version"] == fake_source_tree.contract.primary_dataset_version
     assert receipt["secondary_dataset_version"] == fake_source_tree.contract.secondary_dataset_version
     assert receipt["primary_dataset_license"] == fake_source_tree.contract.primary_dataset_license
@@ -129,6 +167,12 @@ def test_source_contract_returns_fixed_file_hashes(fake_source_tree: _FakeSource
     encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"), allow_nan=False)
     assert "/root/.kaggle" not in encoded
     assert str(fake_source_tree.root) not in encoded
+
+
+def test_source_contract_pins_predictor_sha256() -> None:
+    assert RECIPE_C_SOURCE.predictor_sha256 == (
+        "c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9"
+    )
 
 
 def test_support_contract_requires_both_distinct_checkpoints(
@@ -139,6 +183,96 @@ def test_support_contract_requires_both_distinct_checkpoints(
     fake_secondary.checkpoint.unlink()
 
     with pytest.raises(FileNotFoundError, match="seed_314159"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
+def test_support_contract_rejects_same_root(
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    contract = _fixture_support_contract(fake_primary, fake_secondary)
+
+    with pytest.raises(ValueError, match="distinct roots"):
+        validate_support_artifacts(fake_primary.root, fake_primary.root, contract=contract)
+
+
+def test_support_contract_rejects_identical_checkpoints(
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    fake_secondary.checkpoint.write_bytes(fake_primary.checkpoint.read_bytes())
+    contract = _fixture_support_contract(fake_primary, fake_secondary)
+
+    with pytest.raises(ValueError, match="distinct"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
+def test_support_contract_rejects_checkpoint_hash_mismatch(
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    contract = replace(
+        _fixture_support_contract(fake_primary, fake_secondary),
+        primary_checkpoint_sha256="0" * 64,
+    )
+
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
+def test_support_contract_rejects_checkpoint_symlink_escape(
+    tmp_path: Path,
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    outside = tmp_path / "outside-checkpoint.pth"
+    outside.write_bytes(b"outside checkpoint")
+    fake_primary.checkpoint.unlink()
+    fake_primary.checkpoint.symlink_to(outside)
+    contract = replace(
+        _fixture_support_contract(fake_primary, fake_secondary),
+        primary_checkpoint_sha256=_sha256(outside.read_bytes()),
+    )
+
+    with pytest.raises(ValueError, match=r"outside|escape|root"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
+def test_support_contract_rejects_predictor_symlink_escape(
+    tmp_path: Path,
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    predictor = fake_primary.root / RECIPE_C_SOURCE.predictor_relative_path
+    outside = tmp_path / "outside-predictor.py"
+    outside.write_text("# outside code\n")
+    predictor.unlink()
+    predictor.symlink_to(outside)
+    contract = _fixture_support_contract(fake_primary, fake_secondary)
+
+    with pytest.raises(ValueError, match=r"outside|escape|root"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
+def test_support_contract_rejects_intermediate_symlink_escape(
+    tmp_path: Path,
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    outside_weights = tmp_path / "outside-weights"
+    outside_checkpoint = outside_weights / "split_0" / "edge_predictor_best.pth"
+    outside_checkpoint.parent.mkdir(parents=True)
+    outside_checkpoint.write_bytes(b"outside checkpoint")
+    intermediate = fake_primary.root / "weights" / "unet_transformer"
+    backup = fake_primary.root / "weights" / "unet_transformer-original"
+    intermediate.rename(backup)
+    intermediate.symlink_to(outside_weights, target_is_directory=True)
+    contract = replace(
+        _fixture_support_contract(fake_primary, fake_secondary),
+        primary_checkpoint_sha256=_sha256(outside_checkpoint.read_bytes()),
+    )
+
+    with pytest.raises(ValueError, match=r"outside|escape|root"):
         validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
 
 
@@ -154,6 +288,7 @@ def test_support_contract_validates_predictor_and_two_checkpoint_hashes(
     assert receipt["primary_checkpoint_relative_path"] == contract.primary_checkpoint_relative_path
     assert receipt["secondary_checkpoint_relative_path"] == contract.secondary_checkpoint_relative_path
     assert receipt["predictor_relative_path"] == contract.predictor_relative_path
+    assert receipt["predictor_sha256"] == contract.predictor_sha256
     assert receipt["primary_dataset_version"] == contract.primary_dataset_version
     assert receipt["secondary_dataset_version"] == contract.secondary_dataset_version
     assert receipt["primary_dataset_license"] == contract.primary_dataset_license
@@ -162,6 +297,61 @@ def test_support_contract_validates_predictor_and_two_checkpoint_hashes(
     assert receipt["secondary_checkpoint_root"] == "secondary"
 
 
+def test_support_contract_rejects_predictor_hash_mismatch(
+    fake_primary: _FakeArtifact,
+    fake_secondary: _FakeArtifact,
+) -> None:
+    contract = replace(
+        _fixture_support_contract(fake_primary, fake_secondary),
+        predictor_sha256="0" * 64,
+    )
+
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        validate_support_artifacts(fake_primary.root, fake_secondary.root, contract=contract)
+
+
 def test_recipe_config_is_the_canonical_source_config() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "biohub_095_recipe_c.yaml"
     assert _sha256(config_path.read_bytes()) == RECIPE_C_SOURCE.config_sha256
+
+
+def test_source_contract_fails_closed_when_yaml_parser_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_source_tree: _FakeSourceTree,
+) -> None:
+    monkeypatch.setitem(sys.modules, "yaml", None)
+
+    with pytest.raises(RuntimeError, match="PyYAML"):
+        validate_source_checkout(fake_source_tree.root, contract=fake_source_tree.contract)
+
+
+def test_source_contract_rejects_non_json_config_values(tmp_path: Path) -> None:
+    payloads = {
+        "LICENSE": b"Apache License\n",
+        RECIPE_C_SOURCE.config_relative_path: b"inference:\n  bad: .nan\n",
+        RECIPE_C_SOURCE.notebook_relative_path: b"fake notebook\n",
+    }
+    root = tmp_path / "nan-source"
+    commit = _git_checkout(root, payloads)
+    contract = replace(
+        RECIPE_C_SOURCE,
+        source_commit=commit,
+        license_sha256=_sha256(payloads["LICENSE"]),
+        config_sha256=_sha256(payloads[RECIPE_C_SOURCE.config_relative_path]),
+        notebook_sha256=_sha256(payloads[RECIPE_C_SOURCE.notebook_relative_path]),
+    )
+
+    with pytest.raises(ValueError, match=r"JSON|NaN|Out of range"):
+        validate_source_checkout(root, contract=contract)
+
+
+def test_recipe_contract_does_not_expose_mutable_config_values() -> None:
+    assert not hasattr(RECIPE_C_SOURCE, "config_values")
+
+
+def test_canonical_json_is_deterministic_and_refuses_nan() -> None:
+    first = {"b": {"z": 2, "a": 1}, "a": [3, 4]}
+    second = {"a": [3, 4], "b": {"a": 1, "z": 2}}
+    assert canonical_json(first) == canonical_json(second)
+    with pytest.raises(ValueError, match=r"NaN|Out of range"):
+        canonical_json({"value": float("nan")})
