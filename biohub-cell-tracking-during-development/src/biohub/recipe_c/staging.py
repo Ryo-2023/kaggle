@@ -775,6 +775,7 @@ def _write_json_exclusive_at(
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False) + "\n"
     ).encode("utf-8")
     descriptor: int | None = None
+    owner: tuple[int, int] | None = None
     identity: tuple[int, int, int] | None = None
     try:
         descriptor = os.open(
@@ -783,7 +784,8 @@ def _write_json_exclusive_at(
             0o600,
             dir_fd=parent_descriptor,
         )
-        identity = _identity(os.fstat(descriptor))
+        opened = os.fstat(descriptor)
+        owner = opened.st_ino, opened.st_dev
         written = 0
         while written < len(encoded):
             count = os.write(descriptor, encoded[written:])
@@ -792,11 +794,12 @@ def _write_json_exclusive_at(
             written += count
         os.fsync(descriptor)
         _fsync_directory(parent_descriptor)
+        identity = _identity(os.fstat(descriptor))
     except BaseException:
-        if identity is not None:
+        if owner is not None:
             try:
                 current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
-                if _identity(current) == identity:
+                if (current.st_ino, current.st_dev) == owner:
                     os.unlink(name, dir_fd=parent_descriptor)
             except OSError:
                 pass

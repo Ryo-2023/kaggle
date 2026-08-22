@@ -919,6 +919,116 @@ def test_device_patch_closes_temp_fd_when_cleanup_raises_without_masking_publish
         os.close(destination_fd)
 
 
+def _assert_failed_only(destination: Path) -> None:
+    assert not (destination / "receipt.json").exists()
+    failed = json.loads((destination / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["status"] == "FAILED"
+    assert failed["reusable"] is False
+
+
+def test_receipt_partial_write_failure_cleans_owned_entry_and_marks_failed(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    original_open = staging_module.os.open
+    original_write = staging_module.os.write
+    receipt_descriptor: int | None = None
+    failed = False
+
+    def capture_open(path: str | bytes, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        nonlocal receipt_descriptor
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        if path == "receipt.json":
+            receipt_descriptor = descriptor
+        return descriptor
+
+    def fail_receipt_write(descriptor: int, payload: bytes) -> int:
+        nonlocal failed
+        if descriptor == receipt_descriptor and not failed:
+            failed = True
+            partial = max(1, len(payload) // 2)
+            original_write(descriptor, payload[:partial])
+            raise OSError("synthetic receipt write failure")
+        return original_write(descriptor, payload)
+
+    monkeypatch.setattr(staging_module.os, "open", capture_open)
+    monkeypatch.setattr(staging_module.os, "write", fail_receipt_write)
+    destination = tmp_path / "stage"
+    with pytest.raises(OSError, match="receipt write failure"):
+        stage_recipe_c_runtime(source, primary, secondary, destination, lock)
+
+    assert failed
+    _assert_failed_only(destination)
+
+
+def test_receipt_identity_is_postwrite_fsynced_file_identity(tmp_path: Path) -> None:
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    stage_descriptor = staging_module._open_directory_path(stage, "stage")
+    try:
+        identity = staging_module._write_json_exclusive_at(
+            stage_descriptor,
+            "receipt.json",
+            {"status": "READY"},
+        )
+        metadata = os.stat(stage / "receipt.json", follow_symlinks=False)
+        assert identity == (metadata.st_ino, metadata.st_dev, metadata.st_size)
+        assert metadata.st_size > 0
+    finally:
+        os.close(stage_descriptor)
+
+
+@pytest.mark.parametrize("failure_point", ["stage", "parent", "cleanup"])
+def test_receipt_fsync_failures_never_leave_ready_marker(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    original_write = staging_module._write_json_exclusive_at
+    original_fsync = staging_module._fsync_directory
+    receipt_written = False
+    fsyncs_after_receipt = 0
+    triggered: set[str] = set()
+
+    def write_json(parent_descriptor: int, name: str, payload: dict[str, object]) -> tuple[int, int, int]:
+        nonlocal receipt_written
+        result = original_write(parent_descriptor, name, payload)
+        if name == "receipt.json":
+            receipt_written = True
+        return result
+
+    def fail_fsync(descriptor: int) -> None:
+        nonlocal fsyncs_after_receipt
+        if receipt_written:
+            fsyncs_after_receipt += 1
+            if failure_point == "stage" and fsyncs_after_receipt == 1:
+                triggered.add("stage")
+                raise OSError("synthetic stage fsync failure")
+            if failure_point == "parent" and fsyncs_after_receipt == 2:
+                triggered.add("parent")
+                raise OSError("synthetic parent fsync failure")
+            if failure_point == "cleanup" and fsyncs_after_receipt == 1:
+                triggered.add("publish")
+                raise OSError("synthetic receipt cleanup fsync failure")
+            if failure_point == "cleanup" and fsyncs_after_receipt == 2:
+                triggered.add("cleanup")
+                raise OSError("synthetic receipt cleanup fsync failure")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(staging_module, "_write_json_exclusive_at", write_json)
+    monkeypatch.setattr(staging_module, "_fsync_directory", fail_fsync)
+    destination = tmp_path / "stage"
+    with pytest.raises(OSError, match="fsync"):
+        stage_recipe_c_runtime(source, primary, secondary, destination, lock)
+
+    _assert_failed_only(destination)
+    assert triggered == ({failure_point} if failure_point != "cleanup" else {"publish", "cleanup"})
+
+
 @pytest.mark.parametrize(
     "field",
     [
