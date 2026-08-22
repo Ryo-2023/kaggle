@@ -6,7 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -17,7 +17,7 @@ from biohub.recipe_c.device_patch import (
     publish_device_fallback_patch_at,
 )
 from biohub.recipe_c.source import RECIPE_C_SOURCE
-from biohub.recipe_c.staging import RuntimeStage, stage_recipe_c_runtime
+from biohub.recipe_c.staging import PublishReceipt, RuntimeStage, stage_recipe_c_runtime
 
 DEVICE_PREIMAGE = 'device = torch.device("cuda" if torch.cuda.is_available() else "cpu")\n'
 
@@ -114,6 +114,332 @@ def test_staging_never_mutates_source_or_support(
     assert stage.secondary_checkpoint_path.read_bytes() == b"secondary-checkpoint"
     assert json.dumps(stage.receipt, sort_keys=True).find(str(tmp_path)) == -1
     stage.close()
+
+
+def test_runtime_stage_publishes_and_reads_fresh_repo_bytes(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    canonical = primary / RECIPE_C_SOURCE.predictor_relative_path
+    canonical_before = canonical.read_bytes()
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    try:
+        relative = PurePath("scripts/predict_unet_transformer_recipe_c_runtime.py")
+        payload = b"derived predictor\n"
+        receipt = stage.publish_repo_bytes(relative, payload, expected="absent")
+
+        assert isinstance(receipt, PublishReceipt)
+        assert receipt.relative_path == relative.as_posix()
+        assert receipt.sha256 == hashlib.sha256(payload).hexdigest()
+        assert receipt.size == len(payload)
+        assert receipt.device > 0
+        assert receipt.inode > 0
+        assert receipt.fsynced is True
+        assert stage.read_repo_bytes(relative) == payload
+        assert (stage.repo_dir / relative).is_file()
+        assert canonical.read_bytes() == canonical_before
+    finally:
+        stage.close()
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [PurePath("."), PurePath("../escape.py"), PurePath("/absolute.py"), PurePath("")],
+)
+def test_runtime_stage_rejects_invalid_repo_relative_paths(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    relative: PurePath,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    try:
+        with pytest.raises(ValueError, match=r"relative|repo"):
+            stage.read_repo_bytes(relative)
+        with pytest.raises(ValueError, match=r"relative|repo"):
+            stage.publish_repo_bytes(relative, b"payload", expected="absent")
+    finally:
+        stage.close()
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "symlink", "dangling"])
+def test_runtime_stage_publish_is_absent_only_and_no_clobber(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    kind: str,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    target = stage.repo_dir.logical_path / "scripts" / "derived.py"
+    try:
+        if kind == "file":
+            target.write_bytes(b"sentinel")
+        elif kind == "directory":
+            target.mkdir()
+            (target / "sentinel").write_bytes(b"sentinel")
+        elif kind == "symlink":
+            target.symlink_to(tmp_path / "outside.py")
+        else:
+            target.symlink_to(tmp_path / "missing.py")
+
+        with pytest.raises(FileExistsError, match=r"exists|absent"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"new", expected="absent")
+        if kind == "file":
+            assert target.read_bytes() == b"sentinel"
+        elif kind == "directory":
+            assert (target / "sentinel").read_bytes() == b"sentinel"
+        else:
+            assert target.is_symlink()
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_repo_api_rejects_after_close(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    repo_fd = stage.repo_fd
+    stage.close()
+    with pytest.raises(ValueError, match="closed"):
+        _ = stage.repo_fd
+    with pytest.raises(ValueError, match="closed"):
+        stage.read_repo_bytes(PurePath("scripts/predict_unet_transformer.py"))
+    with pytest.raises(ValueError, match="closed"):
+        stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+    with pytest.raises(OSError):
+        os.fstat(repo_fd)
+
+
+def test_runtime_stage_publish_rejects_non_absent_expectation_and_missing_parent(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    try:
+        with pytest.raises(ValueError, match="expected must be absent"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="present")  # type: ignore[arg-type]
+        with pytest.raises((FileNotFoundError, ValueError), match=r"directory|missing|symlink"):
+            stage.publish_repo_bytes(PurePath("missing/derived.py"), b"payload", expected="absent")
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_survives_repo_root_rename_without_following_replacement(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "scripts").mkdir()
+    repo_path = stage_root / "repo"
+    moved_repo = tmp_path / "moved-repo"
+    repo_path.rename(moved_repo)
+    repo_path.symlink_to(outside / "scripts", target_is_directory=True)
+    try:
+        receipt = stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"pinned", expected="absent")
+        assert receipt.fsynced is True
+        assert (moved_repo / "scripts/derived.py").read_bytes() == b"pinned"
+        assert not (outside / "scripts" / "derived.py").exists()
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_rejects_descendant_symlink_without_external_write(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (stage_root / "repo" / "escape").symlink_to(outside, target_is_directory=True)
+    try:
+        with pytest.raises(ValueError, match=r"symlink|directory"):
+            stage.publish_repo_bytes(PurePath("escape/derived.py"), b"payload", expected="absent")
+        assert not (outside / "derived.py").exists()
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_detects_final_name_race_without_clobber(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    target = stage_root / "repo" / "scripts" / "derived.py"
+    original_link = staging_module._link_publish_fd_at
+    triggered = False
+
+    def create_attacker_entry(
+        descriptor: int,
+        parent_descriptor: int,
+        name: str,
+    ) -> None:
+        nonlocal triggered
+        attacker = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=parent_descriptor)
+        try:
+            os.write(attacker, b"attacker")
+        finally:
+            os.close(attacker)
+        triggered = True
+        original_link(descriptor, parent_descriptor, name)
+
+    monkeypatch.setattr(staging_module, "_link_publish_fd_at", create_attacker_entry)
+    try:
+        with pytest.raises(FileExistsError, match="already exists"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+        assert triggered
+        assert target.read_bytes() == b"attacker"
+        assert not list(target.parent.glob(".recipe-c-repo-publish.*"))
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_verify_failure_preserves_attacker_replacement(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    target = stage_root / "repo" / "scripts" / "derived.py"
+    original_assert = staging_module._assert_published_repo_entry_at
+    replaced = False
+
+    def replace_after_publish(
+        parent_descriptor: int,
+        name: str,
+        expected_identity: tuple[int, int, int],
+    ) -> os.stat_result:
+        nonlocal replaced
+        if not replaced:
+            target.unlink()
+            target.write_bytes(b"attacker-after-publish")
+            replaced = True
+        return original_assert(parent_descriptor, name, expected_identity)
+
+    monkeypatch.setattr(staging_module, "_assert_published_repo_entry_at", replace_after_publish)
+    try:
+        with pytest.raises(ValueError, match="identity changed"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+        assert replaced
+        assert target.read_bytes() == b"attacker-after-publish"
+        assert not list(target.parent.glob(".recipe-c-repo-publish.*"))
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_detects_temporary_replacement_without_publishing_attacker(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    target = stage_root / "repo" / "scripts" / "derived.py"
+    original_link = staging_module._link_publish_fd_at
+    replaced = False
+
+    def replace_temporary_before_link(
+        descriptor: int,
+        parent_descriptor: int,
+        name: str,
+    ) -> None:
+        nonlocal replaced
+        temporary_entries = sorted(target.parent.glob(".recipe-c-repo-publish.*"))
+        assert len(temporary_entries) == 1
+        temporary_entries[0].unlink()
+        temporary_entries[0].write_bytes(b"attacker-temp")
+        replaced = True
+        original_link(descriptor, parent_descriptor, name)
+
+    monkeypatch.setattr(staging_module, "_O_TMPFILE", 0)
+    monkeypatch.setattr(staging_module, "_link_publish_fd_at", replace_temporary_before_link)
+    try:
+        with pytest.raises(OSError, match="temporary ownership"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+        assert replaced
+        assert not target.exists()
+        temporary_entries = sorted(target.parent.glob(".recipe-c-repo-publish.*"))
+        assert len(temporary_entries) == 1
+        assert temporary_entries[0].read_bytes() == b"attacker-temp"
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_write_failure_cleans_owned_temp_and_final(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    target = stage_root / "repo" / "scripts" / "derived.py"
+    original_open_temp = staging_module._open_publish_temp_at
+    temporary_descriptor: int | None = None
+
+    def capture_open_temp(parent_descriptor: int) -> tuple[int, str | None, tuple[int, int]]:
+        nonlocal temporary_descriptor
+        result = original_open_temp(parent_descriptor)
+        temporary_descriptor = result[0]
+        return result
+
+    original_write = staging_module.os.write
+
+    def fail_temp_write(descriptor: int, payload: bytes) -> int:
+        if descriptor == temporary_descriptor:
+            raise OSError("synthetic repository temp write failure")
+        return original_write(descriptor, payload)
+
+    monkeypatch.setattr(staging_module, "_open_publish_temp_at", capture_open_temp)
+    monkeypatch.setattr(staging_module.os, "write", fail_temp_write)
+    try:
+        with pytest.raises(OSError, match="temp write"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+        assert temporary_descriptor is not None
+        with pytest.raises(OSError):
+            os.fstat(temporary_descriptor)
+        assert not target.exists()
+        assert not list(target.parent.glob(".recipe-c-repo-publish.*"))
+    finally:
+        stage.close()
+
+
+def test_runtime_stage_publish_directory_fsync_failure_is_not_success(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, primary, secondary, lock = fake_inputs
+    stage_root = tmp_path / "stage"
+    stage = stage_recipe_c_runtime(source, primary, secondary, stage_root, lock)
+    target = stage_root / "repo" / "scripts" / "derived.py"
+
+    def fail_fsync(_descriptor: int) -> None:
+        raise OSError("synthetic repository directory fsync failure")
+
+    monkeypatch.setattr(staging_module, "_fsync_directory", fail_fsync)
+    try:
+        with pytest.raises(OSError, match="directory fsync"):
+            stage.publish_repo_bytes(PurePath("scripts/derived.py"), b"payload", expected="absent")
+        assert not target.exists()
+        assert not list(target.parent.glob(".recipe-c-repo-publish.*"))
+    finally:
+        stage.close()
 
 
 def test_device_patch_contains_cuda_mps_cpu_order() -> None:

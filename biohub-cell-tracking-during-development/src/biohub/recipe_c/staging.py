@@ -8,14 +8,18 @@ opened read-only inputs.
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
 import json
 import os
+import secrets
 import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
+from typing import Literal
 
 from biohub.device import DEVICE_SELECTION_ORDER
 
@@ -30,6 +34,8 @@ from .source import (
 _HASH_CHUNK_SIZE = 1024 * 1024
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+_O_TMPFILE = getattr(os, "O_TMPFILE", 0)
+_AT_EMPTY_PATH = 0x1000
 _RECEIPT_FILENAME = "receipt.json"
 _FAILED_FILENAME = "FAILED.json"
 
@@ -45,6 +51,18 @@ class _ReceiptPublishError(OSError):
         super().__init__(str(cause))
         self.cause = cause
         self.receipt_identity = receipt_identity
+
+
+@dataclass(frozen=True, slots=True)
+class PublishReceipt:
+    """Identity and durability evidence for one fresh repository artifact."""
+
+    relative_path: str
+    sha256: str
+    size: int
+    device: int
+    inode: int
+    fsynced: bool
 
 
 @dataclass(slots=True)
@@ -243,6 +261,40 @@ class RuntimeStage:
         return FdBackedPath(self._stage_root_path / "repo", self.repo_descriptor, (), _lease=self._lease)
 
     @property
+    def repo_fd(self) -> int:
+        """Return the borrowed repository descriptor; consumers must not close it."""
+
+        self._ensure_open()
+        return self.repo_descriptor
+
+    def read_repo_bytes(self, relative: PurePath) -> bytes:
+        self._ensure_open()
+        parts = _repo_publish_parts(relative)
+        parent_descriptor, name = _open_relative_parent(
+            self.repo_descriptor,
+            PurePosixPath(*parts),
+            "repository artifact",
+        )
+        try:
+            payload, _ = _read_regular_stable_at(parent_descriptor, name, "repository artifact")
+            return payload
+        finally:
+            os.close(parent_descriptor)
+
+    def publish_repo_bytes(
+        self,
+        relative: PurePath,
+        payload: bytes,
+        *,
+        expected: Literal["absent"],
+    ) -> PublishReceipt:
+        self._ensure_open()
+        if expected != "absent":
+            raise ValueError("repository publish expected must be absent")
+        parts = _repo_publish_parts(relative)
+        return _publish_repo_bytes_at(self.repo_descriptor, parts, payload)
+
+    @property
     def weights_root(self) -> FdBackedPath:
         self._ensure_open()
         return self.repo_dir / "weights"
@@ -365,6 +417,17 @@ def _repo_relative(value: object, label: str) -> Path:
     return relative.relative_to("repo")
 
 
+def _repo_publish_parts(relative: PurePath) -> tuple[str, ...]:
+    if not isinstance(relative, PurePosixPath):
+        raise ValueError("repository artifact path must be a relative PurePosixPath")
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise ValueError("repository artifact path must be relative to repo")
+    parts = tuple(relative.parts)
+    if any(part in {"", "."} for part in parts):
+        raise ValueError("repository artifact path must name an entry")
+    return parts
+
+
 def _validated_root(root: Path, label: str) -> tuple[Path, tuple[int, int]]:
     root = Path(root)
     try:
@@ -389,7 +452,7 @@ def _root_path(root: Path, label: str) -> Path:
 
 
 def _relative_parts(value: object, label: str) -> tuple[str, ...]:
-    if isinstance(value, Path):
+    if isinstance(value, PurePath):
         relative = value
     elif isinstance(value, str) and value.strip():
         relative = Path(value)
@@ -611,6 +674,210 @@ def _sha256_regular_at(parent_descriptor: int, name: str, label: str) -> tuple[s
 def _sha256_descriptor(descriptor: int, label: str) -> tuple[str, os.stat_result]:
     payload, metadata = _read_descriptor_stable(descriptor, label)
     return hashlib.sha256(payload).hexdigest(), metadata
+
+
+def _open_publish_temp_at(parent_descriptor: int) -> tuple[int, str | None, tuple[int, int]]:
+    if _O_TMPFILE:
+        try:
+            descriptor = os.open(
+                ".",
+                os.O_RDWR | _O_TMPFILE | _NOFOLLOW,
+                0o600,
+                dir_fd=parent_descriptor,
+            )
+            metadata = os.fstat(descriptor)
+            return descriptor, None, (metadata.st_ino, metadata.st_dev)
+        except OSError as exc:
+            if exc.errno not in {errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP}:
+                raise
+
+    temporary_name = f".recipe-c-repo-publish.{os.getpid()}.{secrets.token_hex(24)}"
+    descriptor = os.open(
+        temporary_name,
+        os.O_RDWR | os.O_CREAT | os.O_EXCL | _NOFOLLOW,
+        0o600,
+        dir_fd=parent_descriptor,
+    )
+    metadata = os.fstat(descriptor)
+    return descriptor, temporary_name, (metadata.st_ino, metadata.st_dev)
+
+
+def _link_publish_fd_at(descriptor: int, parent_descriptor: int, name: str) -> None:
+    try:
+        linkat = ctypes.CDLL(None, use_errno=True).linkat
+    except (AttributeError, OSError) as exc:
+        raise OSError(errno.ENOTSUP, "fd-backed repository publication is unavailable") from exc
+    linkat.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+    linkat.restype = ctypes.c_int
+    result = linkat(
+        descriptor,
+        b"",
+        parent_descriptor,
+        os.fsencode(name),
+        _AT_EMPTY_PATH,
+    )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number), name)
+
+
+def _cleanup_owned_publish_temp_at(
+    parent_descriptor: int,
+    name: str,
+    owner: tuple[int, int],
+) -> bool:
+    try:
+        current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if (current.st_ino, current.st_dev) != owner:
+        return False
+    try:
+        os.unlink(name, dir_fd=parent_descriptor)
+    except FileNotFoundError:
+        return True
+    return True
+
+
+def _unlink_owned_publish_entry_at(
+    parent_descriptor: int,
+    name: str,
+    expected_identity: tuple[int, int, int],
+) -> bool:
+    try:
+        current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return True
+    if (current.st_ino, current.st_dev) != expected_identity[:2]:
+        return False
+    os.unlink(name, dir_fd=parent_descriptor)
+    return True
+
+
+def _assert_published_repo_entry_at(
+    parent_descriptor: int,
+    name: str,
+    expected_identity: tuple[int, int, int],
+) -> os.stat_result:
+    try:
+        metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError as exc:
+        raise ValueError("repository publication disappeared") from exc
+    if not stat.S_ISREG(metadata.st_mode) or _identity(metadata) != expected_identity:
+        raise ValueError("repository publication identity changed")
+    return metadata
+
+
+def _publish_repo_bytes_at(
+    root_descriptor: int,
+    relative_parts: tuple[str, ...],
+    payload: bytes,
+) -> PublishReceipt:
+    if not isinstance(payload, bytes):
+        raise TypeError("repository publication payload must be bytes")
+    relative = PurePosixPath(*relative_parts)
+    parent_descriptor, name = _open_relative_parent(root_descriptor, relative, "repository artifact")
+    temporary_descriptor: int | None = None
+    temporary_name: str | None = None
+    temporary_owner: tuple[int, int] | None = None
+    published_identity: tuple[int, int, int] | None = None
+    committed = False
+    primary_error: BaseException | None = None
+    expected_digest = hashlib.sha256(payload).hexdigest()
+    try:
+        try:
+            os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise FileExistsError("repository final entry already exists")
+
+        temporary_descriptor, temporary_name, temporary_owner = _open_publish_temp_at(parent_descriptor)
+        written = 0
+        while written < len(payload):
+            count = os.write(temporary_descriptor, payload[written:])
+            if count <= 0:
+                raise OSError("repository publication made no write progress")
+            written += count
+        os.fchmod(temporary_descriptor, 0o600)
+        os.fsync(temporary_descriptor)
+        temporary_metadata = os.fstat(temporary_descriptor)
+        if _identity(temporary_metadata) != (
+            temporary_metadata.st_ino,
+            temporary_metadata.st_dev,
+            len(payload),
+        ):
+            raise ValueError("repository temporary identity changed")
+
+        try:
+            _link_publish_fd_at(temporary_descriptor, parent_descriptor, name)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
+                raise FileExistsError("repository final entry already exists") from exc
+            raise
+
+        published_identity = _identity(temporary_metadata)
+        _assert_published_repo_entry_at(parent_descriptor, name, published_identity)
+        digest, hashed_metadata = _sha256_descriptor(temporary_descriptor, "repository publication")
+        if digest != expected_digest or _identity(hashed_metadata) != published_identity:
+            raise ValueError("repository publication digest changed")
+        _fsync_directory(parent_descriptor)
+        _assert_published_repo_entry_at(parent_descriptor, name, published_identity)
+
+        if temporary_name is not None:
+            if temporary_owner is None or not _cleanup_owned_publish_temp_at(
+                parent_descriptor,
+                temporary_name,
+                temporary_owner,
+            ):
+                raise OSError("repository temporary ownership changed during cleanup")
+            _fsync_directory(parent_descriptor)
+        _assert_published_repo_entry_at(parent_descriptor, name, published_identity)
+        committed = True
+        return PublishReceipt(
+            relative_path=relative.as_posix(),
+            sha256=expected_digest,
+            size=len(payload),
+            device=published_identity[1],
+            inode=published_identity[0],
+            fsynced=True,
+        )
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        cleanup_error: BaseException | None = None
+        if not committed and published_identity is not None:
+            try:
+                if _unlink_owned_publish_entry_at(parent_descriptor, name, published_identity):
+                    _fsync_directory(parent_descriptor)
+            except BaseException as exc:
+                cleanup_error = exc
+        if temporary_name is not None and temporary_owner is not None:
+            try:
+                if not _cleanup_owned_publish_temp_at(parent_descriptor, temporary_name, temporary_owner):
+                    raise OSError("repository temporary ownership changed during cleanup")
+            except BaseException as exc:
+                if cleanup_error is None:
+                    cleanup_error = exc
+        if temporary_descriptor is not None:
+            try:
+                os.close(temporary_descriptor)
+            except BaseException as exc:
+                if cleanup_error is None:
+                    cleanup_error = exc
+        try:
+            os.close(parent_descriptor)
+        except BaseException as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+        if cleanup_error is not None:
+            if primary_error is not None:
+                primary_error.add_note(f"repository publication cleanup failed: {cleanup_error!r}")
+            else:
+                raise cleanup_error
 
 
 def _snapshot_tree_fd(root_descriptor: int, *, reject_symlinks: bool = False) -> dict[str, tuple[object, ...]]:
