@@ -155,8 +155,8 @@ def _minimal_receipt(marker: str) -> InferenceReceipt:
         primary_checkpoint_sha256="1" * 64,
         secondary_checkpoint_sha256="2" * 64,
         sample_ids=(PANEL_V1[0],),
-        mode="smoke_2frame",
-        max_frames=2,
+        mode="smoke_6frame",
+        max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         command=("python", "predict"),
         command_sha256="3" * 64,
         execution_argv_sha256="4" * 64,
@@ -216,7 +216,21 @@ def test_smoke_requires_exactly_one_sample(
     samples: tuple[str, ...],
 ) -> None:
     with pytest.raises(ValueError, match=r"exactly one|smoke"):
-        runner_module._sample_selection(samples, _lock(), 2)
+        runner_module._sample_selection(samples, _lock(), runner_module.RECIPE_C_SMOKE_FRAMES)
+
+
+def test_recipe_c_smoke_horizon_is_fixed_at_six_frames() -> None:
+    assert runner_module.RECIPE_C_SMOKE_FRAMES == 6
+    assert runner_module._VOLUME_SMOKE == (6, 64, 256, 256)
+    assert runner_module._sample_selection(
+        (PANEL_V1[0],), _lock(), runner_module.RECIPE_C_SMOKE_FRAMES
+    ) == (PANEL_V1[0],)
+
+
+@pytest.mark.parametrize("invalid_horizon", [1, 2, 5, 7, 8, True, 6.0])
+def test_smoke_rejects_non_fixed_horizon(invalid_horizon: object) -> None:
+    with pytest.raises(ValueError, match=r"6|fixed|smoke"):
+        runner_module._sample_selection((PANEL_V1[0],), _lock(), invalid_horizon)
 
 
 @pytest.mark.parametrize(
@@ -524,7 +538,8 @@ def test_empty_or_broken_raw_prediction_is_failed_only(
     output = tmp_path / "output"
     with pytest.raises((ValueError, OSError, RuntimeError, TypeError)):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
     assert forbidden_calls == {"gt": 0, "metric": 0}
@@ -539,7 +554,8 @@ def test_source_postprocess_failure_is_failed_only_and_gt_free(
     output = tmp_path / "output"
     with pytest.raises(RuntimeError, match="source postprocess"):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
     assert forbidden_calls == {"gt": 0, "metric": 0}
@@ -554,7 +570,8 @@ def test_bridge_failure_is_failed_only_and_gt_free(
     output = tmp_path / "output"
     with pytest.raises(RuntimeError, match="bridge"):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
     assert forbidden_calls == {"gt": 0, "metric": 0}
@@ -569,7 +586,8 @@ def test_subprocess_partial_raw_failure_is_failed_only_and_gt_free(
     output = tmp_path / "output"
     with pytest.raises(subprocess.CalledProcessError):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
     assert forbidden_calls == {"gt": 0, "metric": 0}
@@ -658,7 +676,7 @@ def test_smoke_subset_preserves_zarr_metadata_and_array_encoding(tmp_path: Path)
             "image_statistics": {"quantiles": [0.0, 0.5, 1.0]},
         }
     )
-    values = np.arange(4 * 2 * 3 * 4, dtype=np.uint16).reshape(4, 2, 3, 4)
+    values = np.arange(6 * 2 * 3 * 4, dtype=np.uint16).reshape(6, 2, 3, 4)
     array = source.create_array(
         "0",
         data=values,
@@ -670,19 +688,19 @@ def test_smoke_subset_preserves_zarr_metadata_and_array_encoding(tmp_path: Path)
 
     (tmp_path / "scratch").mkdir()
     destination_root = runner_module._prepare_image_data(
-        image_root, (sample,), 2, tmp_path / "scratch"
+        image_root, (sample,), runner_module.RECIPE_C_SMOKE_FRAMES, tmp_path / "scratch"
     )
     destination = zarr.open_group(str(destination_root / f"{sample}.zarr"), mode="r")
     copied = destination["0"]
     assert dict(destination.attrs) == dict(source.attrs)
     assert dict(copied.attrs) == dict(array.attrs)
-    assert tuple(copied.shape) == (2, 2, 3, 4)
+    assert tuple(copied.shape) == (runner_module.RECIPE_C_SMOKE_FRAMES, 2, 3, 4)
     assert tuple(copied.chunks) == tuple(array.chunks)
     assert copied.dtype == array.dtype
     assert copied.fill_value == array.fill_value
     assert tuple(copied.metadata.dimension_names) == tuple(array.metadata.dimension_names)
     assert copied.metadata.codecs == array.metadata.codecs
-    np.testing.assert_array_equal(copied[:], values[:2])
+    np.testing.assert_array_equal(copied[:], values[:runner_module.RECIPE_C_SMOKE_FRAMES])
 
 
 def test_smoke_subset_is_reopened_and_verified_after_publish(
@@ -704,7 +722,7 @@ def test_smoke_subset_is_reopened_and_verified_after_publish(
             "image_statistics": {"quantiles": [0.0, 1.0]},
         }
     )
-    source.create_array("0", data=np.zeros((4, 2, 2, 2), dtype=np.uint8), chunks=(1, 2, 2, 2))
+    source.create_array("0", data=np.zeros((6, 2, 2, 2), dtype=np.uint8), chunks=(1, 2, 2, 2))
     original_open_group = zarr.open_group
     calls: list[tuple[str, object]] = []
 
@@ -714,7 +732,9 @@ def test_smoke_subset_is_reopened_and_verified_after_publish(
 
     monkeypatch.setattr(zarr, "open_group", tracked_open_group)
     (tmp_path / "scratch").mkdir()
-    runner_module._prepare_image_data(image_root, (sample,), 2, tmp_path / "scratch")
+    runner_module._prepare_image_data(
+        image_root, (sample,), runner_module.RECIPE_C_SMOKE_FRAMES, tmp_path / "scratch"
+    )
     assert any(mode == "r" and path.endswith(f"{sample}.zarr") for path, mode in calls)
 
 
@@ -736,7 +756,7 @@ def test_smoke_subset_reopen_rejects_backing_store_corruption(
             "image_statistics": {"quantiles": [0.0, 1.0]},
         }
     )
-    source.create_array("0", data=np.zeros((4, 2, 2, 2), dtype=np.uint8), chunks=(1, 2, 2, 2))
+    source.create_array("0", data=np.zeros((6, 2, 2, 2), dtype=np.uint8), chunks=(1, 2, 2, 2))
     original_open_group = zarr.open_group
 
     def corrupt_then_open(*args: object, **kwargs: object):
@@ -752,7 +772,9 @@ def test_smoke_subset_reopen_rejects_backing_store_corruption(
     monkeypatch.setattr(zarr, "open_group", corrupt_then_open)
     (tmp_path / "scratch").mkdir()
     with pytest.raises(ValueError, match=r"metadata|bytes|frame"):
-        runner_module._prepare_image_data(image_root, (sample,), 2, tmp_path / "scratch")
+        runner_module._prepare_image_data(
+            image_root, (sample,), runner_module.RECIPE_C_SMOKE_FRAMES, tmp_path / "scratch"
+        )
 
 
 def test_preflight_failure_persists_only_nonreusable_failed_receipt(
@@ -768,7 +790,10 @@ def test_preflight_failure_persists_only_nonreusable_failed_receipt(
         lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("synthetic preflight failure")),
     )
     with pytest.raises(ValueError, match="preflight"):
-        run_recipe_c_inference(tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2)
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
+        )
     failed = json.loads((output / "FAILED.json").read_text(encoding="utf-8"))
     assert failed["status"] == "FAILED"
     assert failed["phase"] == "preflight"
@@ -788,7 +813,10 @@ def test_invalid_lock_is_claimed_then_records_unvalidated_failed_receipt(
 
     monkeypatch.setattr(runner_module, "_validate_selection_lock", reject)
     with pytest.raises(ValueError, match="invalid lock"):
-        run_recipe_c_inference(tmp_path / "images", (PANEL_V1[0],), stage, {}, output, max_frames=2)
+        run_recipe_c_inference(
+            tmp_path / "images", (PANEL_V1[0],), stage, {}, output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
+        )
     failed = json.loads((output / "FAILED.json").read_text(encoding="utf-8"))
     assert failed["selection_lock_id"] == "unvalidated"
     assert failed["phase"] == "preflight"
@@ -803,7 +831,10 @@ def test_only_auto_requested_device_is_accepted(
     lock["requested_device"] = "cpu"
     monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda _value: lock)
     with pytest.raises(ValueError, match="exactly auto"):
-        run_recipe_c_inference(tmp_path / "images", (PANEL_V1[0],), stage, lock, tmp_path / "output", max_frames=2)
+        run_recipe_c_inference(
+            tmp_path / "images", (PANEL_V1[0],), stage, lock, tmp_path / "output",
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
+        )
     failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
     assert failed["phase"] == "preflight"
 
@@ -933,7 +964,8 @@ def test_raw_publish_callback_uses_supplied_identity_after_replacement(
     monkeypatch.setattr(runner_module, "_copy_raw_prediction", race_copy)
     with pytest.raises(OSError, match="post-publish"):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output",
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     assert (tmp_path / "output" / "raw" / f"{sample}.geff" / "sentinel").read_bytes() == b"keep"
 
@@ -1000,7 +1032,10 @@ def test_existing_output_root_is_rejected_without_failed_side_effect(
     sentinel.write_text("keep", encoding="utf-8")
     monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda value: _lock())
     with pytest.raises(FileExistsError, match="fresh"):
-        run_recipe_c_inference(tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2)
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
+        )
     assert sentinel.read_text(encoding="utf-8") == "keep"
     assert not (output / "FAILED.json").exists()
 
@@ -1030,7 +1065,10 @@ def test_all_existing_output_root_kinds_are_untouched(
         lambda _value: (_ for _ in ()).throw(AssertionError("existing output must reject first")),
     )
     with pytest.raises(FileExistsError, match="fresh"):
-        run_recipe_c_inference(tmp_path / "images", (PANEL_V1[0],), stage, {}, output, max_frames=2)
+        run_recipe_c_inference(
+            tmp_path / "images", (PANEL_V1[0],), stage, {}, output,
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
+        )
     if kind == "file":
         assert output.read_bytes() == b"keep"
     elif kind == "directory":
@@ -1071,7 +1109,8 @@ def test_builder_preflight_failure_uses_allowed_patch_phase(
     )
     with pytest.raises(RuntimeError, match="builder preflight"):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output",
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
     assert failed["phase"] == "patch"
@@ -1114,7 +1153,8 @@ def test_d4_postimage_hash_mismatch_fails_before_builder(
     )
     with pytest.raises(ValueError, match="postimage"):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output",
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     assert calls["builder"] == 0
     failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
@@ -1166,7 +1206,8 @@ def test_subprocess_failures_are_nonreusable_and_phase_labeled(
     monkeypatch.setattr(runner_module.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(failure))
     with pytest.raises(type(failure)):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output",
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     failed_payload = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
     assert failed_payload["phase"] == "subprocess"
@@ -1308,12 +1349,12 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
         stage,
         lock,
         tmp_path / "output",
-        max_frames=2,
+        max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
     )
 
     assert isinstance(receipt, InferenceReceipt)
     assert receipt.status == "READY"
-    assert receipt.mode == "smoke_2frame"
+    assert receipt.mode == "smoke_6frame"
     assert calls == {"d4": 1, "builder": 1, "writer": 1, "run": 1}
     assert forbidden_calls == {"gt": 0, "metric": 0}
     assert len(stage.published) == 2
@@ -1469,7 +1510,8 @@ def _run_manifest_mint_failure(
 
     with pytest.raises(RuntimeError, match="mint"):
         run_recipe_c_inference(
-            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output",
+            max_frames=runner_module.RECIPE_C_SMOKE_FRAMES,
         )
     return tmp_path / "output", forbidden_calls
 

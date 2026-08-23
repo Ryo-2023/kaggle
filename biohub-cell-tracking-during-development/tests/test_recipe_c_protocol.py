@@ -623,6 +623,30 @@ def test_freeze_cli_defaults_are_project_rooted(monkeypatch: pytest.MonkeyPatch)
     assert args.config == cli.PROJECT_ROOT / "configs" / "biohub_095_recipe_c.yaml"
 
 
+def test_infer_cli_allows_full_or_fixed_six_frame_smoke_only() -> None:
+    cli = _load_freeze_cli()
+    parser = cli._build_parser()
+    required = [
+        "infer",
+        "--source", "source",
+        "--primary-support", "primary",
+        "--secondary-support", "secondary",
+        "--selection-lock", "lock.json",
+        "--stage-destination", "stage",
+        "--image-root", "images",
+        "--output-root", "output",
+    ]
+
+    full = parser.parse_args(required)
+    assert full.max_frames is None
+
+    smoke = parser.parse_args([*required, "--max-frames", "6"])
+    assert smoke.max_frames == 6
+
+    with pytest.raises(SystemExit):
+        parser.parse_args([*required, "--max-frames", "2"])
+
+
 @pytest.mark.parametrize("index_flag", ["--assume-unchanged", "--skip-worktree"])
 def test_freeze_cli_rejects_hidden_index_mutation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, index_flag: str

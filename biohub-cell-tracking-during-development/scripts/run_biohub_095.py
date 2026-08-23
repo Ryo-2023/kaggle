@@ -27,6 +27,7 @@ from biohub.recipe_c.protocol import (  # noqa: E402
     build_selection_lock,
     write_selection_lock,
 )
+from biohub.recipe_c.runner import RECIPE_C_SMOKE_FRAMES  # noqa: E402
 from biohub.recipe_c.source import (  # noqa: E402
     validate_source_checkout,
     validate_support_artifacts,
@@ -246,7 +247,13 @@ def _build_parser() -> argparse.ArgumentParser:
     infer.add_argument("--image-root", type=Path, required=True)
     infer.add_argument("--output-root", type=Path, required=True)
     infer.add_argument("--sample-id", action="append", default=[])
-    infer.add_argument("--max-frames", type=int)
+    infer.add_argument(
+        "--max-frames",
+        type=int,
+        default=None,
+        choices=(RECIPE_C_SMOKE_FRAMES,),
+        help=f"fixed GT-free smoke horizon ({RECIPE_C_SMOKE_FRAMES} frames); omit for full inference",
+    )
     infer.set_defaults(handler=_infer)
     return parser
 

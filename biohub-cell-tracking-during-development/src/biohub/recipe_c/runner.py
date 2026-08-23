@@ -57,8 +57,9 @@ _PREDICTOR_DERIVED = PurePosixPath("scripts/predict_unet_transformer_recipe_c_ru
 _SPLITS_DERIVED = PurePosixPath("clean_v106_test_splits_recipe_c_runtime.json")
 _PRIMARY_RELATIVE = PurePosixPath(RECIPE_C_SOURCE.primary_checkpoint_relative_path)
 _SECONDARY_RELATIVE = PurePosixPath(RECIPE_C_SOURCE.secondary_staging_relative_path)
+RECIPE_C_SMOKE_FRAMES = 6
 _VOLUME_FULL = (100, 64, 256, 256)
-_VOLUME_SMOKE = (2, 64, 256, 256)
+_VOLUME_SMOKE = (RECIPE_C_SMOKE_FRAMES, 64, 256, 256)
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +75,7 @@ class InferenceReceipt:
     primary_checkpoint_sha256: str
     secondary_checkpoint_sha256: str
     sample_ids: tuple[str, ...]
-    mode: Literal["full", "smoke_2frame"]
+    mode: Literal["full", "smoke_6frame"]
     max_frames: int | None
     command: tuple[str, ...]
     command_sha256: str
@@ -119,7 +120,18 @@ def _validate_selection_lock(selection_lock: Mapping[str, object] | Path) -> dic
     raise TypeError("selection_lock must be a persisted Path or mapping")
 
 
+def _validate_max_frames(max_frames: int | None) -> None:
+    if max_frames is not None and (
+        type(max_frames) is not int or max_frames != RECIPE_C_SMOKE_FRAMES
+    ):
+        raise ValueError(
+            "max_frames must be omitted for full inference or exactly "
+            f"{RECIPE_C_SMOKE_FRAMES} for the fixed smoke"
+        )
+
+
 def _sample_selection(sample_ids: Sequence[str], lock: Mapping[str, object], max_frames: int | None) -> tuple[str, ...]:
+    _validate_max_frames(max_frames)
     panel = lock.get("panel")
     if not isinstance(panel, Mapping) or panel.get("panel_id") != "PANEL_V1":
         raise ValueError("selection lock does not contain PANEL_V1")
@@ -134,12 +146,10 @@ def _sample_selection(sample_ids: Sequence[str], lock: Mapping[str, object], max
     panel_positions = {sample: index for index, sample in enumerate(PANEL_V1)}
     if tuple(sorted(requested, key=panel_positions.__getitem__)) != requested:
         raise ValueError("sample_ids are not in PANEL_V1 order")
-    if requested != PANEL_V1 and max_frames != 2:
-        raise ValueError("a panel subset is only permitted for the two-frame smoke")
-    if max_frames is not None and max_frames != 2:
-        raise ValueError("max_frames must be exactly 2 when provided")
-    if max_frames == 2 and len(requested) != 1:
-        raise ValueError("smoke_2frame requires exactly one sample")
+    if requested != PANEL_V1 and max_frames != RECIPE_C_SMOKE_FRAMES:
+        raise ValueError("a panel subset is only permitted for the fixed six-frame smoke")
+    if max_frames == RECIPE_C_SMOKE_FRAMES and len(requested) != 1:
+        raise ValueError("smoke_6frame requires exactly one sample")
     return requested
 
 
@@ -210,6 +220,7 @@ def _assert_stage_lock_identity(stage: Any, lock: Mapping[str, object]) -> None:
 
 
 def _preflight_images(image_root: Path, sample_ids: Sequence[str], max_frames: int | None) -> None:
+    _validate_max_frames(max_frames)
     image_root = Path(image_root)
     if image_root.is_symlink() or not image_root.is_dir():
         raise ValueError("image_root must be a regular directory")
@@ -253,6 +264,7 @@ def _prepare_image_data(
     max_frames: int | None,
     scratch_root: Path,
 ) -> Path:
+    _validate_max_frames(max_frames)
     if max_frames is None:
         return Path(image_root)
     import zarr
@@ -935,7 +947,9 @@ def run_recipe_c_inference(
                     counts = validate_prediction_geff(
                         destination,
                         source.stem,
-                        expected_volume_shape_tzyx=_VOLUME_SMOKE if max_frames else _VOLUME_FULL,
+                        expected_volume_shape_tzyx=(
+                            _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
+                        ),
                     )
                     raw_geffs[source.stem] = destination
                     raw_counts[source.stem] = {
@@ -958,7 +972,9 @@ def run_recipe_c_inference(
                 report = validate_submission(
                     csv_path,
                     expected_datasets=chosen_samples,
-                    volume_shape_tzyx=_VOLUME_SMOKE if max_frames else _VOLUME_FULL,
+                    volume_shape_tzyx=(
+                        _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
+                    ),
                     ground_truth_nodes=None,
                     require_divisions=False,
                 )
@@ -989,7 +1005,9 @@ def run_recipe_c_inference(
                     counts = validate_prediction_geff(
                         final,
                         sample_id,
-                        expected_volume_shape_tzyx=_VOLUME_SMOKE if max_frames else _VOLUME_FULL,
+                        expected_volume_shape_tzyx=(
+                            _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
+                        ),
                     )
                     final_counts[sample_id] = {**counts, **directory_digest_report(final)}
                 phase = "manifest"
@@ -1042,7 +1060,7 @@ def run_recipe_c_inference(
                     primary_checkpoint_sha256=str(lock["primary_checkpoint_sha256"]),
                     secondary_checkpoint_sha256=str(lock["secondary_checkpoint_sha256"]),
                     sample_ids=tuple(chosen_samples),
-                    mode="smoke_2frame" if max_frames else "full",
+                    mode="smoke_6frame" if max_frames is not None else "full",
                     max_frames=max_frames,
                     command=command,
                     command_sha256=_argv_sha256(command),
@@ -1098,4 +1116,4 @@ def run_recipe_c_inference(
                 restore()
 
 
-__all__ = ["InferenceReceipt", "run_recipe_c_inference"]
+__all__ = ["RECIPE_C_SMOKE_FRAMES", "InferenceReceipt", "run_recipe_c_inference"]
