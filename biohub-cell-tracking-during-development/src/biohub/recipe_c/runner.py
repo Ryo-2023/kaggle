@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -68,6 +68,7 @@ class InferenceReceipt:
     config_sha256: str
     predictor_sha256_before: str
     stage_predictor_sha256_after: str
+    d4_predictor_sha256_after: str
     predictor_sha256_after: str
     primary_checkpoint_sha256: str
     secondary_checkpoint_sha256: str
@@ -575,7 +576,19 @@ def _rewrite_command(
     return tuple(values)
 
 
-def _copy_raw_prediction(source: Path, destination: Path) -> None:
+def _assert_exact_raw_sources(raw_sources: Sequence[Path], sample_ids: Sequence[str]) -> None:
+    stems = [path.stem for path in raw_sources]
+    expected = tuple(sample_ids)
+    if len(stems) != len(expected) or len(set(stems)) != len(stems) or set(stems) != set(expected):
+        raise ValueError("raw predictor output does not exactly cover selected samples")
+
+
+def _copy_raw_prediction(
+    source: Path,
+    destination: Path,
+    *,
+    on_published: Callable[[Path, tuple[int, int]], None] | None = None,
+) -> tuple[int, int]:
     if source.is_symlink() or not source.is_dir():
         raise ValueError(f"raw prediction is not a regular GEFF directory: {source.name}")
     if destination.exists() or destination.is_symlink():
@@ -583,12 +596,28 @@ def _copy_raw_prediction(source: Path, destination: Path) -> None:
     temporary = Path(tempfile.mkdtemp(prefix=f".{destination.name}.", dir=destination.parent))
     temporary_stat = temporary.lstat()
     temporary_identity = (temporary_stat.st_dev, temporary_stat.st_ino)
+    destination_identity: tuple[int, int] | None = None
     try:
         shutil.copytree(source, temporary, symlinks=False, dirs_exist_ok=True)
         _fsync_tree(temporary)
         publish_directory_noreplace(temporary, destination)
+        destination_identity = _entry_identity(destination)
+        if on_published is not None:
+            on_published(destination, destination_identity)
         fsync_directory(destination.parent)
+        return destination_identity
     except BaseException:
+        if destination_identity is not None:
+            try:
+                current = destination.lstat()
+                if (current.st_dev, current.st_ino) == destination_identity:
+                    shutil.rmtree(destination)
+                    try:
+                        fsync_directory(destination.parent)
+                    except BaseException:
+                        pass
+            except FileNotFoundError:
+                pass
         try:
             current = temporary.lstat()
             if (current.st_dev, current.st_ino) == temporary_identity:
@@ -726,8 +755,13 @@ def run_recipe_c_inference(
     owned_entries: dict[Path, tuple[int, int]] = {}
     recursive_entries: set[Path] = set()
 
-    def remember(path: Path, *, recursive: bool = False) -> None:
-        owned_entries[path] = _entry_identity(path)
+    def remember(
+        path: Path,
+        *,
+        identity: tuple[int, int] | None = None,
+        recursive: bool = False,
+    ) -> None:
+        owned_entries[path] = _entry_identity(path) if identity is None else identity
         if recursive:
             recursive_entries.add(path)
 
@@ -770,12 +804,12 @@ def run_recipe_c_inference(
                 if patched is not True:
                     raise RuntimeError("spatial D4 patch did not report a fresh postimage")
                 py_compile.compile(str(scratch_predictor), doraise=True)
-                predictor_payload = scratch_predictor.read_bytes()
+                d4_predictor_payload = scratch_predictor.read_bytes()
                 stage_predictor_postimage = getattr(runtime_stage, "predictor_sha256_postimage", None)
                 if not isinstance(stage_predictor_postimage, str):
                     raise ValueError("runtime stage predictor postimage is missing")
-                predictor_sha256_after = _sha256(predictor_payload)
-                if predictor_sha256_after == stage_predictor_postimage:
+                d4_predictor_sha256_after = _sha256(d4_predictor_payload)
+                if d4_predictor_sha256_after == stage_predictor_postimage:
                     raise ValueError("spatial D4 did not produce a distinct runtime predictor postimage")
                 config = source_api.load_config(scratch_config)
                 raw_command, splits_path = source_api.build_predict_command(
@@ -793,6 +827,13 @@ def run_recipe_c_inference(
                     raise ValueError("source builder returned a splits path outside isolated scratch") from exc
                 if splits_path.is_symlink() or not splits_path.is_file():
                     raise ValueError("source builder returned a non-regular splits artifact")
+                py_compile.compile(str(scratch_predictor), doraise=True)
+                predictor_payload = scratch_predictor.read_bytes()
+                predictor_sha256_after = _sha256(predictor_payload)
+                if predictor_sha256_after == d4_predictor_sha256_after:
+                    raise ValueError("source builder did not produce a distinct final predictor postimage")
+                if predictor_sha256_after == stage_predictor_postimage:
+                    raise ValueError("final predictor postimage must differ from the stage device postimage")
                 splits_payload = splits_path.read_bytes()
                 publish_predictor = _publish_derived(runtime_stage, _PREDICTOR_DERIVED, predictor_payload)
                 publish_splits = _publish_derived(runtime_stage, _SPLITS_DERIVED, splits_payload)
@@ -837,10 +878,7 @@ def run_recipe_c_inference(
                 username = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
                 stage_predictions = Path(repo_cwd) / "predictions" / username / "unet_transformer" / "split_0"
                 raw_sources = sorted(stage_predictions.glob("*.geff"))
-                if {path.stem for path in raw_sources} != set(chosen_samples) or len(raw_sources) != len(
-                    chosen_samples
-                ):
-                    raise ValueError("raw predictor output does not exactly cover selected samples")
+                _assert_exact_raw_sources(raw_sources, chosen_samples)
                 phase = "raw_persist"
                 raw_root = output_root / "raw"
                 raw_root.mkdir()
@@ -849,8 +887,13 @@ def run_recipe_c_inference(
                 raw_counts: dict[str, object] = {}
                 for source in raw_sources:
                     destination = raw_root / source.name
-                    _copy_raw_prediction(source, destination)
-                    remember(destination, recursive=True)
+                    _copy_raw_prediction(
+                        source,
+                        destination,
+                        on_published=lambda path, identity: remember(
+                            path, identity=identity, recursive=True
+                        ),
+                    )
                     counts = validate_prediction_geff(
                         destination,
                         source.stem,
@@ -892,15 +935,17 @@ def run_recipe_c_inference(
                     raise ValueError("source postprocess produced an unexpected output entry")
                 phase = "bridge"
                 final_root = output_root / "predictions"
+
+                def remember_bridge(path: Path, identity: tuple[int, int]) -> None:
+                    remember(path, identity=identity, recursive=path != final_root)
+
                 final_geffs = postprocessed_csv_to_geffs(
                     csv_path,
                     final_root,
                     sample_ids=chosen_samples,
                     provenance={"source_commit": runtime_stage.receipt.get("source_commit", "")},
+                    on_published=remember_bridge,
                 )
-                remember(final_root)
-                for final in final_geffs.values():
-                    remember(final, recursive=True)
                 final_counts: dict[str, object] = {}
                 for sample_id, final in final_geffs.items():
                     counts = validate_prediction_geff(
@@ -923,6 +968,7 @@ def run_recipe_c_inference(
                             ),
                             "predictor_sha256": predictor_sha256_after,
                             "predictor_sha256_after": predictor_sha256_after,
+                            "d4_predictor_sha256_after": d4_predictor_sha256_after,
                             "stage_predictor_sha256_after": stage_predictor_postimage,
                             "primary_checkpoint_sha256": runtime_stage.receipt.get(
                                 "primary_checkpoint_sha256", ""
@@ -942,9 +988,9 @@ def run_recipe_c_inference(
                             "child_stderr_sha256": child_stderr_sha256,
                         },
                     )
+                    remember(manifest)
                     mint_prediction_token(final)
                     manifests[sample_id] = manifest
-                    remember(manifest)
                 finished = datetime.now(UTC).isoformat()
                 receipt = InferenceReceipt(
                     status="READY",
@@ -953,6 +999,7 @@ def run_recipe_c_inference(
                     config_sha256=str(lock["config_sha256"]),
                     predictor_sha256_before=str(lock["predictor_sha256"]),
                     stage_predictor_sha256_after=stage_predictor_postimage,
+                    d4_predictor_sha256_after=d4_predictor_sha256_after,
                     predictor_sha256_after=predictor_sha256_after,
                     primary_checkpoint_sha256=str(lock["primary_checkpoint_sha256"]),
                     secondary_checkpoint_sha256=str(lock["secondary_checkpoint_sha256"]),
@@ -975,6 +1022,7 @@ def run_recipe_c_inference(
                         "builder": True,
                         "stage_device_postimage_verified": True,
                         "runtime_d4_postimage_verified": True,
+                        "runtime_builder_postimage_verified": True,
                     },
                     raw_geffs={sample: _role_path(path, output_root) for sample, path in raw_geffs.items()},
                     postprocessed_csv=_role_path(csv_path, output_root),

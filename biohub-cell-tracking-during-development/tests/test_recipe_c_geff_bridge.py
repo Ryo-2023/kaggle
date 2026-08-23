@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -265,19 +266,170 @@ def test_bridge_rechecks_lossless_csv_topology_after_geff_write(
     _write_csv(csv_path, [_node(0, 0, 0), _node(1, 1, 1), _edge(2, 0, 1)])
     original = bridge_module._build_geff
 
-    def tampered(destination: Path, bucket: dict[str, object]) -> None:
+    def tampered(
+        destination: Path, bucket: dict[str, object], *, overwrite: bool = False
+    ) -> None:
         altered = {
             "nodes": {int(key): dict(value) for key, value in bucket["nodes"].items()},
             "edges": list(bucket["edges"]),
         }
         altered["nodes"][0]["x"] = 99
-        original(destination, altered)
+        original(destination, altered, overwrite=overwrite)
 
     monkeypatch.setattr(bridge_module, "_build_geff", tampered)
     with pytest.raises(ValueError, match=r"lossless|topology|coordinate"):
         postprocessed_csv_to_geffs(
             csv_path, tmp_path / "predictions", sample_ids=(SAMPLE,), provenance={}
         )
+
+
+def test_bridge_fsync_failure_does_not_remove_replaced_competitor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+    replaced = False
+
+    def replace_then_fail(path: Path) -> None:
+        nonlocal replaced
+        if Path(path) == output_root and not replaced:
+            final = output_root / f"{SAMPLE}.geff"
+            competitor = output_root / ".competitor.geff"
+            competitor.mkdir()
+            (competitor / "competitor").write_bytes(b"keep")
+            shutil.rmtree(final)
+            competitor.rename(final)
+            replaced = True
+            raise OSError("synthetic bridge fsync failure")
+        raise OSError("synthetic bridge fsync failure")
+
+    monkeypatch.setattr(bridge_module, "_fsync_directory", replace_then_fail)
+    with pytest.raises(OSError, match="fsync"):
+        postprocessed_csv_to_geffs(
+            csv_path, output_root, sample_ids=(SAMPLE,), provenance={}
+        )
+    assert replaced is True
+    assert (output_root / f"{SAMPLE}.geff" / "competitor").read_bytes() == b"keep"
+
+
+def test_bridge_parse_failure_removes_owned_root_without_restat(tmp_path: Path) -> None:
+    csv_path = tmp_path / "empty.csv"
+    _write_csv(csv_path, [])
+    output_root = tmp_path / "predictions"
+    with pytest.raises(ValueError, match="empty"):
+        postprocessed_csv_to_geffs(
+            csv_path, output_root, sample_ids=(SAMPLE,), provenance={}
+        )
+    assert not output_root.exists()
+
+
+def test_bridge_parse_failure_with_callback_removes_owned_root(tmp_path: Path) -> None:
+    csv_path = tmp_path / "empty.csv"
+    _write_csv(csv_path, [])
+    output_root = tmp_path / "predictions"
+    callbacks: list[Path] = []
+
+    def remember(path: Path, identity: tuple[int, int]) -> None:
+        callbacks.append(path)
+
+    with pytest.raises(ValueError, match="empty"):
+        postprocessed_csv_to_geffs(
+            csv_path,
+            output_root,
+            sample_ids=(SAMPLE,),
+            provenance={},
+            on_published=remember,
+        )
+    assert callbacks == [output_root]
+    assert not output_root.exists()
+
+
+def test_bridge_partial_build_failure_cleans_owned_temp_and_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+
+    def partial_build(destination: Path, bucket: dict[str, object], *, overwrite: bool = False) -> None:
+        if not destination.exists():
+            destination.mkdir()
+        (destination / "partial").write_bytes(b"partial")
+        raise OSError("synthetic serializer failure")
+
+    monkeypatch.setattr(bridge_module, "_build_geff", partial_build)
+    with pytest.raises(OSError, match="serializer"):
+        postprocessed_csv_to_geffs(
+            csv_path, output_root, sample_ids=(SAMPLE,), provenance={}
+        )
+    assert not output_root.exists()
+    assert not list(tmp_path.glob("predictions/.*.tmp"))
+
+
+def test_bridge_partial_build_failure_with_callback_removes_owned_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+
+    def partial_build(destination: Path, bucket: dict[str, object], *, overwrite: bool = False) -> None:
+        (destination / "partial").write_bytes(b"partial")
+        raise OSError("synthetic serializer failure")
+
+    monkeypatch.setattr(bridge_module, "_build_geff", partial_build)
+    with pytest.raises(OSError, match="serializer"):
+        postprocessed_csv_to_geffs(
+            csv_path,
+            output_root,
+            sample_ids=(SAMPLE,),
+            provenance={},
+            on_published=lambda path, identity: None,
+        )
+    assert not output_root.exists()
+
+
+def test_bridge_callback_failure_removes_owned_root(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+
+    def fail_callback(path: Path, identity: tuple[int, int]) -> None:
+        raise RuntimeError("synthetic ownership callback failure")
+
+    with pytest.raises(RuntimeError, match="ownership callback"):
+        postprocessed_csv_to_geffs(
+            csv_path,
+            output_root,
+            sample_ids=(SAMPLE,),
+            provenance={},
+            on_published=fail_callback,
+        )
+    assert not output_root.exists()
+
+
+def test_bridge_fsync_failure_with_callback_removes_empty_owned_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+
+    monkeypatch.setattr(
+        bridge_module,
+        "_fsync_directory",
+        lambda path: (_ for _ in ()).throw(OSError("synthetic fsync failure")),
+    )
+    with pytest.raises(OSError, match="fsync"):
+        postprocessed_csv_to_geffs(
+            csv_path,
+            output_root,
+            sample_ids=(SAMPLE,),
+            provenance={},
+            on_published=lambda path, identity: None,
+        )
+    assert not output_root.exists()
 
 
 def test_validate_prediction_geff_rejects_empty_graph(tmp_path: Path) -> None:

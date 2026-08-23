@@ -16,8 +16,9 @@ import json
 import os
 import secrets
 import shutil
+import stat
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -272,7 +273,40 @@ def fsync_directory(path: Path) -> None:
     _fsync_directory(Path(path))
 
 
-def _build_geff(destination: Path, bucket: Mapping[str, Any]) -> None:
+def _entry_identity(path: Path) -> tuple[int, int]:
+    stat_result = Path(path).lstat()
+    return stat_result.st_dev, stat_result.st_ino
+
+
+def _remove_owned_directory(path: Path, identity: tuple[int, int] | None) -> None:
+    if identity is None:
+        return
+    try:
+        current = Path(path).lstat()
+    except FileNotFoundError:
+        return
+    if (current.st_dev, current.st_ino) != identity:
+        return
+    if stat.S_ISDIR(current.st_mode):
+        shutil.rmtree(path)
+
+
+def _remove_owned_empty_directory(path: Path, identity: tuple[int, int] | None) -> None:
+    if identity is None:
+        return
+    try:
+        current = Path(path).lstat()
+    except FileNotFoundError:
+        return
+    if (current.st_dev, current.st_ino) != identity or not stat.S_ISDIR(current.st_mode):
+        return
+    try:
+        Path(path).rmdir()
+    except OSError:
+        pass
+
+
+def _build_geff(destination: Path, bucket: Mapping[str, Any], *, overwrite: bool = False) -> None:
     import polars as pl
     import tracksdata as td
 
@@ -289,7 +323,7 @@ def _build_geff(destination: Path, bucket: Mapping[str, Any]) -> None:
             raise RuntimeError("tracksdata assigned a non-deterministic node ID")
     for source_id, target_id in bucket["edges"]:
         graph.add_edge(int(source_id), int(target_id), {})
-    graph.to_geff(destination, overwrite=False)
+    graph.to_geff(destination, overwrite=overwrite)
 
 
 def postprocessed_csv_to_geffs(
@@ -298,6 +332,7 @@ def postprocessed_csv_to_geffs(
     *,
     sample_ids: Sequence[str],
     provenance: Mapping[str, object],
+    on_published: Callable[[Path, tuple[int, int]], None] | None = None,
 ) -> dict[str, Path]:
     """Convert one strict CSV into fresh, no-clobber GEFF directories."""
 
@@ -306,19 +341,33 @@ def postprocessed_csv_to_geffs(
     if output_root.exists() or output_root.is_symlink():
         raise FileExistsError(f"prediction output root must be fresh: {output_root.name}")
     output_root.mkdir(parents=True, exist_ok=False)
-    parsed = _parse_submission(csv_path, sample_ids, None)
+    output_root_identity = _entry_identity(output_root)
     written: dict[str, Path] = {}
+    published: dict[Path, tuple[int, int]] = {}
     try:
+        if on_published is not None:
+            on_published(output_root, output_root_identity)
+        parsed = _parse_submission(csv_path, sample_ids, None)
         for sample_id in sample_ids:
             final = output_root / f"{sample_id}.geff"
             if final.exists() or final.is_symlink():
                 raise FileExistsError(final)
             temporary = output_root / f".{sample_id}.geff.{secrets.token_hex(8)}.tmp"
-            published = False
+            temporary.mkdir(exist_ok=False)
+            temporary_identity = _entry_identity(temporary)
+            final_identity: tuple[int, int] | None = None
             try:
-                _build_geff(temporary, parsed[sample_id])
+                _build_geff(temporary, parsed[sample_id], overwrite=True)
+                if _entry_identity(temporary) != temporary_identity:
+                    raise OSError("temporary GEFF identity changed during serialization")
                 _rename_noreplace(temporary, final)
-                published = True
+                published_identity = _entry_identity(final)
+                if published_identity != temporary_identity:
+                    raise OSError("temporary GEFF identity changed during publish")
+                final_identity = published_identity
+                published[final] = final_identity
+                if on_published is not None:
+                    on_published(final, final_identity)
                 _fsync_directory(output_root)
                 signature = _read_prediction_signature(final)
                 expected_signature = {
@@ -337,18 +386,17 @@ def postprocessed_csv_to_geffs(
                 if signature != expected_signature:
                     raise ValueError("GEFF roundtrip is not lossless for CSV topology or coordinates")
             except BaseException:
-                if temporary.exists() and not temporary.is_symlink():
-                    shutil.rmtree(temporary)
-                if published and final.is_dir() and not final.is_symlink():
-                    shutil.rmtree(final)
+                _remove_owned_directory(temporary, temporary_identity)
+                _remove_owned_directory(final, final_identity)
+                published.pop(final, None)
                 raise
             written[sample_id] = final
     except BaseException:
         # Only remove directories created by this invocation; never touch an
         # existing output root or a sibling prediction.
-        for path in written.values():
-            if path.exists() and path.is_dir():
-                shutil.rmtree(path)
+        for path, identity in published.items():
+            _remove_owned_directory(path, identity)
+        _remove_owned_empty_directory(output_root, output_root_identity)
         raise
     return written
 

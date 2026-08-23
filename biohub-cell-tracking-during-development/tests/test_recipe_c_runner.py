@@ -6,6 +6,7 @@ import builtins
 import csv
 import hashlib
 import json
+import shutil
 import subprocess
 import types
 from concurrent.futures import ThreadPoolExecutor
@@ -21,8 +22,10 @@ from biohub.recipe_c.runner import InferenceReceipt, run_recipe_c_inference
 
 _STAGE_DEVICE_PREDICTOR = b"print('predictor')\n"
 _D4_RUNTIME_PREDICTOR = b"print('d4 predictor')\n"
+_BUILDER_RUNTIME_PREDICTOR = b"print('builder predictor')\n"
 _STAGE_DEVICE_PREDICTOR_SHA256 = hashlib.sha256(_STAGE_DEVICE_PREDICTOR).hexdigest()
 _D4_RUNTIME_PREDICTOR_SHA256 = hashlib.sha256(_D4_RUNTIME_PREDICTOR).hexdigest()
+_BUILDER_RUNTIME_PREDICTOR_SHA256 = hashlib.sha256(_BUILDER_RUNTIME_PREDICTOR).hexdigest()
 
 
 class _FakePath:
@@ -128,6 +131,7 @@ def _minimal_receipt(marker: str) -> InferenceReceipt:
         config_sha256="c" * 64,
         predictor_sha256_before="d" * 64,
         stage_predictor_sha256_after="e" * 64,
+        d4_predictor_sha256_after="g" * 64,
         predictor_sha256_after="f" * 64,
         primary_checkpoint_sha256="1" * 64,
         secondary_checkpoint_sha256="2" * 64,
@@ -387,6 +391,171 @@ def _command_for_rewrite(*extra: str) -> list[str]:
     ]
 
 
+def _configure_failure_pipeline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    raw_kind: str,
+    failure: str,
+) -> tuple[_FakeStage, str, dict[str, int]]:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    forbidden_calls = {"gt": 0, "metric": 0}
+
+    def forbidden_gt(*args: object, **kwargs: object) -> None:
+        forbidden_calls["gt"] += 1
+        raise AssertionError("GT must remain closed on failure")
+
+    def forbidden_metric(*args: object, **kwargs: object) -> None:
+        forbidden_calls["metric"] += 1
+        raise AssertionError("metrics must remain closed on failure")
+
+    monkeypatch.setattr("biohub.reproducibility.gt_guard.open_ground_truth", forbidden_gt)
+    monkeypatch.setattr("biohub.submission.validator.load_ground_truth_nodes", forbidden_gt)
+    monkeypatch.setattr("biohub.official_metrics.metrics.evaluate", forbidden_metric)
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda _value: _lock())
+    monkeypatch.setattr(runner_module, "_preflight_images", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_prepare_image_data", lambda *args: tmp_path / "input")
+    (tmp_path / "input").mkdir()
+
+    def d4(repo_dir: Path, prediction_script: str) -> bool:
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
+        return True
+
+    def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
+        splits = repo_dir / "clean_v106_test_splits.json"
+        splits.write_text("[]\n", encoding="utf-8")
+        (repo_dir / "scripts" / "predict_unet_transformer.py").write_bytes(_BUILDER_RUNTIME_PREDICTOR)
+        return _command_for_rewrite(), splits
+
+    def writer(geffs: list[Path], config: object, data_dir: Path, output: Path) -> None:
+        if failure == "source":
+            raise RuntimeError("synthetic source postprocess failure")
+        output.write_text("synthetic", encoding="utf-8")
+
+    monkeypatch.setattr(
+        runner_module,
+        "_load_source_api",
+        lambda stage_value: SimpleNamespace(
+            load_config=lambda path: object(),
+            apply_spatial_d4_patch=d4,
+            build_predict_command=builder,
+            write_submission_from_geff=writer,
+        ),
+    )
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        username = runner_module.os.environ.get("USER", runner_module.os.environ.get("USERNAME", "unknown"))
+        source = Path(str(kwargs["cwd"])) / "predictions" / username / "unet_transformer" / "split_0"
+        source.mkdir(parents=True)
+        geff = source / f"{sample}.geff"
+        geff.mkdir()
+        if raw_kind == "broken":
+            (geff / "broken.bin").write_bytes(b"broken")
+        if failure == "subprocess":
+            raise subprocess.CalledProcessError(17, argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="device=cpu\n", stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "biohub.submission.validator.validate_submission",
+        lambda *args, **kwargs: SimpleNamespace(ok=True),
+    )
+    if raw_kind == "valid":
+        monkeypatch.setattr(
+            runner_module,
+            "validate_prediction_geff",
+            lambda *args, **kwargs: {"nodes": 1, "edges": 0, "forks": 0},
+        )
+        monkeypatch.setattr(
+            runner_module,
+            "directory_digest_report",
+            lambda path: {
+                "directory_sha256": "a" * 64,
+                "files": [],
+                "total_bytes": 0,
+                "hash_algorithm": "sha256",
+            },
+        )
+    if failure == "bridge":
+        def failing_bridge(
+            csv_path: Path,
+            output_root: Path,
+            *,
+            sample_ids: tuple[str, ...],
+            provenance: dict[str, object],
+            on_published: object = None,
+        ) -> dict[str, Path]:
+            output_root.mkdir()
+            if callable(on_published):
+                on_published(output_root, runner_module._entry_identity(output_root))
+            raise RuntimeError("synthetic bridge failure")
+
+        monkeypatch.setattr(runner_module, "postprocessed_csv_to_geffs", failing_bridge)
+    return stage, sample, forbidden_calls
+
+
+@pytest.mark.parametrize("raw_kind", ["empty", "broken"])
+def test_empty_or_broken_raw_prediction_is_failed_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw_kind: str
+) -> None:
+    stage, sample, forbidden_calls = _configure_failure_pipeline(
+        tmp_path, monkeypatch, raw_kind=raw_kind, failure="raw"
+    )
+    output = tmp_path / "output"
+    with pytest.raises((ValueError, OSError, RuntimeError, TypeError)):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+        )
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+    assert forbidden_calls == {"gt": 0, "metric": 0}
+
+
+def test_source_postprocess_failure_is_failed_only_and_gt_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, sample, forbidden_calls = _configure_failure_pipeline(
+        tmp_path, monkeypatch, raw_kind="valid", failure="source"
+    )
+    output = tmp_path / "output"
+    with pytest.raises(RuntimeError, match="source postprocess"):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+        )
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+    assert forbidden_calls == {"gt": 0, "metric": 0}
+
+
+def test_bridge_failure_is_failed_only_and_gt_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, sample, forbidden_calls = _configure_failure_pipeline(
+        tmp_path, monkeypatch, raw_kind="valid", failure="bridge"
+    )
+    output = tmp_path / "output"
+    with pytest.raises(RuntimeError, match="bridge"):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+        )
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+    assert forbidden_calls == {"gt": 0, "metric": 0}
+
+
+def test_subprocess_partial_raw_failure_is_failed_only_and_gt_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage, sample, forbidden_calls = _configure_failure_pipeline(
+        tmp_path, monkeypatch, raw_kind="valid", failure="subprocess"
+    )
+    output = tmp_path / "output"
+    with pytest.raises(subprocess.CalledProcessError):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2
+        )
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+    assert forbidden_calls == {"gt": 0, "metric": 0}
+
+
 @pytest.mark.parametrize(
     "extra",
     [
@@ -625,6 +794,111 @@ def test_raw_prediction_publish_keeps_competitor_on_no_replace_race(
     assert (destination / "competitor").read_bytes() == b"keep"
 
 
+def test_raw_prediction_fsync_failure_removes_only_just_published_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.geff"
+    source.mkdir()
+    (source / "source.bin").write_bytes(b"source")
+    destination = tmp_path / "destination.geff"
+    published = False
+    original_publish = runner_module.publish_directory_noreplace
+    original_fsync = runner_module.fsync_directory
+
+    def publish_then_fail(source_path: Path, destination_path: Path) -> None:
+        nonlocal published
+        original_publish(source_path, destination_path)
+        published = True
+
+    def fail_after_publish(path: Path) -> None:
+        if published and Path(path) == destination.parent:
+            raise OSError("synthetic parent fsync failure")
+        original_fsync(path)
+
+    monkeypatch.setattr(runner_module, "publish_directory_noreplace", publish_then_fail)
+    monkeypatch.setattr(runner_module, "fsync_directory", fail_after_publish)
+    with pytest.raises(OSError, match="fsync"):
+        runner_module._copy_raw_prediction(source, destination)
+    assert published is True
+    assert not destination.exists()
+    assert not list(tmp_path.glob(".destination.geff.*"))
+
+
+@pytest.mark.parametrize("stems", [(), ("extra",), ("unknown",), (PANEL_V1[0], PANEL_V1[0])])
+def test_raw_prediction_requires_exact_selected_sample_stems(
+    tmp_path: Path, stems: tuple[str, ...]
+) -> None:
+    sample = PANEL_V1[0]
+    raw_sources = [tmp_path / f"{stem}.geff" for stem in stems]
+    with pytest.raises(ValueError, match=r"exactly|cover selected"):
+        runner_module._assert_exact_raw_sources(raw_sources, (sample,))
+
+
+def test_raw_publish_callback_uses_supplied_identity_after_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda _value: _lock())
+    monkeypatch.setattr(runner_module, "_preflight_images", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_prepare_image_data", lambda *args: tmp_path / "input")
+    (tmp_path / "input").mkdir()
+
+    def d4(repo_dir: Path, prediction_script: str) -> bool:
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
+        return True
+
+    def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
+        splits = repo_dir / "clean_v106_test_splits.json"
+        splits.write_text("[]\n", encoding="utf-8")
+        (repo_dir / "scripts" / "predict_unet_transformer.py").write_bytes(_BUILDER_RUNTIME_PREDICTOR)
+        return _command_for_rewrite(), splits
+
+    monkeypatch.setattr(
+        runner_module,
+        "_load_source_api",
+        lambda stage_value: SimpleNamespace(
+            load_config=lambda path: object(),
+            apply_spatial_d4_patch=d4,
+            build_predict_command=builder,
+            write_submission_from_geff=lambda *args: None,
+        ),
+    )
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        username = runner_module.os.environ.get("USER", runner_module.os.environ.get("USERNAME", "unknown"))
+        source = Path(str(kwargs["cwd"])) / "predictions" / username / "unet_transformer" / "split_0"
+        source.mkdir(parents=True)
+        (source / f"{sample}.geff").mkdir()
+        return subprocess.CompletedProcess(argv, 0, stdout="device=cpu\n", stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+
+    def race_copy(
+        source: Path,
+        destination: Path,
+        *,
+        on_published: object,
+    ) -> tuple[int, int]:
+        destination.mkdir()
+        original_identity = runner_module._entry_identity(destination)
+        competitor = tmp_path / "competitor.geff"
+        competitor.mkdir()
+        (competitor / "sentinel").write_bytes(b"keep")
+        shutil.rmtree(destination)
+        competitor.rename(destination)
+        assert callable(on_published)
+        on_published(destination, original_identity)
+        raise OSError("synthetic raw post-publish failure")
+
+    monkeypatch.setattr(runner_module, "_copy_raw_prediction", race_copy)
+    with pytest.raises(OSError, match="post-publish"):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+        )
+    assert (tmp_path / "output" / "raw" / f"{sample}.geff" / "sentinel").read_bytes() == b"keep"
+
+
 def test_failed_receipt_never_replaces_competitor(tmp_path: Path) -> None:
     output = tmp_path / "output"
     output.mkdir()
@@ -837,6 +1111,7 @@ def test_subprocess_failures_are_nonreusable_and_phase_labeled(
     def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
         splits = repo_dir / "clean_v106_test_splits.json"
         splits.write_text("[]\n", encoding="utf-8")
+        (repo_dir / "scripts" / "predict_unet_transformer.py").write_bytes(_BUILDER_RUNTIME_PREDICTOR)
         return _command_for_rewrite(), splits
 
     monkeypatch.setattr(
@@ -890,6 +1165,7 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
         assert stems == [sample]
         splits = repo_dir / "clean_v106_test_splits.json"
         splits.write_text("[]\n", encoding="utf-8")
+        (repo_dir / "scripts" / "predict_unet_transformer.py").write_bytes(_BUILDER_RUNTIME_PREDICTOR)
         return (
             [
                 "/opt/venv/bin/python",
@@ -948,6 +1224,8 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
 
     def writer(geffs: list[Path], config: object, test_dir: Path, output: Path) -> dict[str, int]:
         calls["writer"] += 1
+        assert test_dir == tmp_path / "input"
+        assert test_dir != tmp_path / "images"
         with output.open("w", newline="", encoding="utf-8") as handle:
             out = csv.DictWriter(handle, fieldnames=(
                 "id", "dataset", "row_type", "node_id", "t", "z", "y", "x", "source_id", "target_id"
@@ -1002,13 +1280,16 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
     assert len(receipt.command_sha256) == 64
     assert len(receipt.execution_argv_sha256) == 64
     assert receipt.stage_predictor_sha256_after == _STAGE_DEVICE_PREDICTOR_SHA256
-    assert receipt.predictor_sha256_after == _D4_RUNTIME_PREDICTOR_SHA256
+    assert receipt.predictor_sha256_after == _BUILDER_RUNTIME_PREDICTOR_SHA256
+    assert receipt.d4_predictor_sha256_after == _D4_RUNTIME_PREDICTOR_SHA256
+    assert receipt.stage_predictor_sha256_after != receipt.d4_predictor_sha256_after
+    assert receipt.d4_predictor_sha256_after != receipt.predictor_sha256_after
     assert stage.predictor_sha256_postimage == _STAGE_DEVICE_PREDICTOR_SHA256
     assert stage.receipt["predictor_sha256_after"] == _STAGE_DEVICE_PREDICTOR_SHA256
     assert receipt.child_device == "cpu"
     assert len(receipt.child_stdout_sha256) == 64
     assert len(receipt.child_stderr_sha256) == 64
-    assert receipt.counts["publish"]["predictor"]["sha256"] == _D4_RUNTIME_PREDICTOR_SHA256  # type: ignore[index]
+    assert receipt.counts["publish"]["predictor"]["sha256"] == _BUILDER_RUNTIME_PREDICTOR_SHA256  # type: ignore[index]
     manifest_path = tmp_path / "output" / "predictions" / f"{sample}.geff.manifest.json"
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     for key in (
@@ -1027,6 +1308,146 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
         "child_stderr_sha256",
     ):
         assert key in manifest_payload
-    assert manifest_payload["predictor_sha256"] == _D4_RUNTIME_PREDICTOR_SHA256
-    assert manifest_payload["predictor_sha256_after"] == _D4_RUNTIME_PREDICTOR_SHA256
+    assert manifest_payload["predictor_sha256"] == _BUILDER_RUNTIME_PREDICTOR_SHA256
+    assert manifest_payload["predictor_sha256_after"] == _BUILDER_RUNTIME_PREDICTOR_SHA256
+    assert manifest_payload["d4_predictor_sha256_after"] == _D4_RUNTIME_PREDICTOR_SHA256
     assert manifest_payload["stage_predictor_sha256_after"] == _STAGE_DEVICE_PREDICTOR_SHA256
+
+
+def _run_manifest_mint_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    preserve_competitor: bool,
+) -> tuple[Path, dict[str, int]]:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    forbidden_calls = {"gt": 0, "metric": 0}
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        forbidden_calls["gt"] += 1
+        raise AssertionError("GT must remain closed on manifest failure")
+
+    def forbidden_metric(*args: object, **kwargs: object) -> None:
+        forbidden_calls["metric"] += 1
+        raise AssertionError("metrics must remain closed on manifest failure")
+
+    monkeypatch.setattr("biohub.reproducibility.gt_guard.open_ground_truth", forbidden)
+    monkeypatch.setattr("biohub.submission.validator.load_ground_truth_nodes", forbidden)
+    monkeypatch.setattr("biohub.official_metrics.metrics.evaluate", forbidden_metric)
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda _value: _lock())
+    monkeypatch.setattr(runner_module, "_preflight_images", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_prepare_image_data", lambda *args: tmp_path / "input")
+    (tmp_path / "input").mkdir()
+
+    def d4(repo_dir: Path, prediction_script: str) -> bool:
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
+        return True
+
+    def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
+        splits = repo_dir / "clean_v106_test_splits.json"
+        splits.write_text("[]\n", encoding="utf-8")
+        (repo_dir / "scripts" / "predict_unet_transformer.py").write_bytes(_BUILDER_RUNTIME_PREDICTOR)
+        return _command_for_rewrite(), splits
+
+    monkeypatch.setattr(
+        runner_module,
+        "_load_source_api",
+        lambda stage_value: SimpleNamespace(
+            load_config=lambda path: object(),
+            apply_spatial_d4_patch=d4,
+            build_predict_command=builder,
+            write_submission_from_geff=lambda geffs, config, data_dir, output: output.write_text(
+                "synthetic", encoding="utf-8"
+            ),
+        ),
+    )
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        destination = Path(str(kwargs["cwd"])) / "predictions" / "unknown" / "unet_transformer" / "split_0"
+        destination.mkdir(parents=True)
+        (destination / f"{sample}.geff").mkdir()
+        return subprocess.CompletedProcess(argv, 0, stdout="device=cpu\n", stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        runner_module,
+        "validate_prediction_geff",
+        lambda *args, **kwargs: {"nodes": 1, "edges": 0, "forks": 0},
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "directory_digest_report",
+        lambda path: {"directory_sha256": "a" * 64, "files": [], "total_bytes": 0, "hash_algorithm": "sha256"},
+    )
+    monkeypatch.setattr(
+        "biohub.submission.validator.validate_submission",
+        lambda *args, **kwargs: SimpleNamespace(ok=True),
+    )
+
+    def fake_bridge(
+        csv_path: Path,
+        output_root: Path,
+        *,
+        sample_ids: tuple[str, ...],
+        provenance: dict[str, object],
+        on_published: object = None,
+    ) -> dict[str, Path]:
+        output_root.mkdir()
+        original_root_identity = runner_module._entry_identity(output_root)
+        if callable(on_published):
+            on_published(output_root, original_root_identity)
+        final = output_root / f"{sample}.geff"
+        final.mkdir()
+        (final / "graph.bin").write_bytes(b"synthetic")
+        original_final_identity = runner_module._entry_identity(final)
+        if preserve_competitor:
+            competitor_final = tmp_path / "bridge-competitor.geff"
+            competitor_final.mkdir()
+            (competitor_final / "sentinel").write_bytes(b"keep")
+            shutil.rmtree(final)
+            competitor_final.rename(final)
+        if callable(on_published):
+            on_published(final, original_final_identity)
+        return {sample: final}
+
+    monkeypatch.setattr(runner_module, "postprocessed_csv_to_geffs", fake_bridge)
+
+    def fake_manifest(prediction_path: Path, *, selection_lock_id: str, provenance: dict[str, object]) -> Path:
+        manifest = prediction_path.with_name(f"{prediction_path.name}.manifest.json")
+        manifest.write_text("{}\n", encoding="utf-8")
+        return manifest
+
+    monkeypatch.setattr(runner_module, "write_prediction_manifest", fake_manifest)
+    monkeypatch.setattr(
+        runner_module,
+        "mint_prediction_token",
+        lambda prediction: (_ for _ in ()).throw(RuntimeError("synthetic mint failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="mint"):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+        )
+    return tmp_path / "output", forbidden_calls
+
+
+def test_manifest_mint_failure_preserves_same_root_competitor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, forbidden_calls = _run_manifest_mint_failure(
+        tmp_path, monkeypatch, preserve_competitor=True
+    )
+    assert (output / "FAILED.json").is_file()
+    assert (output / "predictions" / f"{PANEL_V1[0]}.geff" / "sentinel").read_bytes() == b"keep"
+    assert forbidden_calls == {"gt": 0, "metric": 0}
+
+
+def test_manifest_mint_failure_leaves_failed_only_and_never_opens_gt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output, forbidden_calls = _run_manifest_mint_failure(
+        tmp_path, monkeypatch, preserve_competitor=False
+    )
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+    assert forbidden_calls == {"gt": 0, "metric": 0}
