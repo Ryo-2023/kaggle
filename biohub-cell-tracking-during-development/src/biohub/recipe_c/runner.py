@@ -20,6 +20,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import biohub.device as device_module
+from biohub.recipe_c.diagnostics import (
+    DiagnosticRecorder,
+    _json_safe,
+    _sha256_file,
+)
 from biohub.recipe_c.geff_bridge import (
     fsync_directory,
     postprocessed_csv_to_geffs,
@@ -55,6 +60,7 @@ _REPO_FILES = (
 )
 _PREDICTOR_DERIVED = PurePosixPath("scripts/predict_unet_transformer_recipe_c_runtime.py")
 _SPLITS_DERIVED = PurePosixPath("clean_v106_test_splits_recipe_c_runtime.json")
+_TRACE_DERIVED = PurePosixPath("src/biohub_pipeline/postprocess_stage_trace_recipe_c_runtime.py")
 _PRIMARY_RELATIVE = PurePosixPath(RECIPE_C_SOURCE.primary_checkpoint_relative_path)
 _SECONDARY_RELATIVE = PurePosixPath(RECIPE_C_SOURCE.secondary_staging_relative_path)
 RECIPE_C_SMOKE_FRAMES = 6
@@ -97,6 +103,9 @@ class InferenceReceipt:
     started_at: str
     finished_at: str
     failure: Mapping[str, str] | None
+    diagnostics: str | None = None
+    diagnostics_sha256: str | None = None
+    cuda_equivalence_validated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +115,9 @@ class _SourceApi:
     build_predict_command: Any
     write_submission_from_geff: Any
     _restore_modules: Any = None
+    trace_filter_output_graph: Any = None
+    trace_module_path: Path | None = None
+    postprocessing_module_sha256: str | None = None
 
     def restore(self) -> None:
         if self._restore_modules is not None:
@@ -366,7 +378,22 @@ def _load_source_api(stage: Any) -> _SourceApi:
         config_module = importlib.import_module("biohub_pipeline.config")
         inference_module = importlib.import_module("biohub_pipeline.inference")
         submission_module = importlib.import_module("biohub_pipeline.submission")
+        try:
+            trace_module = importlib.import_module("biohub_pipeline.postprocess_stage_trace")
+            postprocessing_module = importlib.import_module("biohub_pipeline.postprocessing")
+        except ModuleNotFoundError as exc:
+            # Small fake source trees used by unit tests predate the pinned
+            # diagnostic module.  Real pinned Recipe C runs must provide it;
+            # the runner keeps the compatibility path for those isolated tests.
+            if not str(exc).startswith("No module named 'biohub_pipeline"):
+                raise
+            trace_module = None
+            postprocessing_module = None
         modules = (config_module, inference_module, submission_module)
+        if trace_module is not None:
+            modules += (trace_module,)
+        if postprocessing_module is not None:
+            modules += (postprocessing_module,)
         for module in modules:
             module_file = getattr(module, "__file__", None)
             if not isinstance(module_file, str):
@@ -375,6 +402,23 @@ def _load_source_api(stage: Any) -> _SourceApi:
                 Path(module_file).resolve(strict=True).relative_to(source_root)
             except (OSError, ValueError) as exc:
                 raise ValueError("source module provenance is outside the pinned source root") from exc
+        trace_path = (
+            Path(trace_module.__file__).resolve(strict=True)
+            if trace_module is not None
+            else None
+        )
+        postprocessing_path = (
+            Path(postprocessing_module.__file__).resolve(strict=True)
+            if postprocessing_module is not None
+            else None
+        )
+        trace_function = (
+            getattr(trace_module, "filter_output_graph_traced", None)
+            if trace_module is not None
+            else None
+        )
+        if trace_module is not None and not callable(trace_function):
+            raise ValueError("pinned source trace function is missing")
     except BaseException:
         sys.path.remove(source_src_text)
         for name in tuple(sys.modules):
@@ -398,11 +442,16 @@ def _load_source_api(stage: Any) -> _SourceApi:
         sys.modules.update(saved_modules)
 
     return _SourceApi(
-        config_module.load_config,
-        inference_module.apply_spatial_d4_patch,
-        inference_module.build_predict_command,
-        submission_module.write_submission_from_geff,
-        restore_modules,
+        load_config=config_module.load_config,
+        apply_spatial_d4_patch=inference_module.apply_spatial_d4_patch,
+        build_predict_command=inference_module.build_predict_command,
+        write_submission_from_geff=submission_module.write_submission_from_geff,
+        _restore_modules=restore_modules,
+        trace_filter_output_graph=trace_function,
+        trace_module_path=trace_path,
+        postprocessing_module_sha256=(
+            _sha256_file(postprocessing_path) if postprocessing_path is not None else None
+        ),
     )
 
 
@@ -742,6 +791,7 @@ def _write_failed(
     *,
     owned_entries: Mapping[Path, tuple[int, int]] | None = None,
     recursive_entries: set[Path] | None = None,
+    diagnostics: Mapping[str, object] | None = None,
 ) -> None:
     if not output_root.is_dir():
         return
@@ -754,6 +804,7 @@ def _write_failed(
         "error_type": _safe_failure_message(exc),
         "command_sha256": _sha256(json.dumps(list(command), separators=(",", ":")).encode()),
         "reusable": False,
+        "diagnostics": _json_safe(diagnostics or {}, label="failure.diagnostics"),
     }
     write_json_exclusive(output_root / "FAILED.json", payload, mode=0o644)
 
@@ -801,6 +852,10 @@ def run_recipe_c_inference(
     child_device = ""
     child_stdout_sha256 = ""
     child_stderr_sha256 = ""
+    chosen_samples: tuple[str, ...] = ()
+    diagnostics_path: Path | None = None
+    diagnostics_sha256: str | None = None
+    diagnostic_run: DiagnosticRecorder | None = None
     source_api: Any = None
     owned_entries: dict[Path, tuple[int, int]] = {}
     recursive_entries: set[Path] = set()
@@ -826,6 +881,7 @@ def run_recipe_c_inference(
         if requested_device != "auto":
             raise ValueError("selection lock requested_device must be exactly auto")
         resolved_device = _resolve_device(requested_device)
+        diagnostic_run = DiagnosticRecorder.create(chosen_samples, resolved_device)
         if resolved_device not in tuple(runtime_stage.device_candidates):
             raise ValueError("resolved device is not present in the runtime stage candidates")
         _preflight_images(Path(image_root), chosen_samples, max_frames)
@@ -849,7 +905,16 @@ def run_recipe_c_inference(
                     scratch_secondary,
                     scratch_config,
                 )
+                trace_function = diagnostic_run.prepare_trace(
+                    source_api,
+                    scratch / "diagnostics" / _TRACE_DERIVED.name,
+                    _TRACE_DERIVED,
+                    lambda relative, payload: _publish_derived(runtime_stage, relative, payload),
+                )
                 data_root = _prepare_image_data(Path(image_root), chosen_samples, max_frames, scratch)
+                diagnostic_run.record_image_input(
+                    _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
+                )
                 patched = source_api.apply_spatial_d4_patch(scratch_repo, "scripts/predict_unet_transformer.py")
                 if patched is not True:
                     raise RuntimeError("spatial D4 patch did not report a fresh postimage")
@@ -878,7 +943,12 @@ def run_recipe_c_inference(
                 if splits_path.is_symlink() or not splits_path.is_file():
                     raise ValueError("source builder returned a non-regular splits artifact")
                 py_compile.compile(str(scratch_predictor), doraise=True)
-                predictor_payload = scratch_predictor.read_bytes()
+                predictor_payload = diagnostic_run.instrument_predictor(
+                    scratch_predictor,
+                    lambda path: py_compile.compile(str(path), doraise=True),
+                )
+                if trace_function is not None and not diagnostic_run.predictor_diagnostic_instrumented:
+                    raise ValueError("child predictor diagnostic instrumentation was not applied")
                 predictor_sha256_after = _sha256(predictor_payload)
                 if predictor_sha256_after == d4_predictor_sha256_after:
                     raise ValueError("source builder did not produce a distinct final predictor postimage")
@@ -920,9 +990,13 @@ def run_recipe_c_inference(
                     capture_output=True,
                     text=True,
                 )
+                if completed.returncode != 0:
+                    raise RuntimeError(f"child predictor returned non-zero status: {completed.returncode}")
                 child_stdout = completed.stdout or ""
                 child_stderr = completed.stderr or ""
                 child_device = _extract_child_device(child_stdout, resolved_device)
+                diagnostic_run.set_child_device(child_device)
+                diagnostic_run.parse_child_stdout(child_stdout)
                 child_stdout_sha256 = _sha256(child_stdout.encode("utf-8"))
                 child_stderr_sha256 = _sha256(child_stderr.encode("utf-8"))
                 username = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
@@ -935,6 +1009,8 @@ def run_recipe_c_inference(
                 remember(raw_root)
                 raw_geffs: dict[str, Path] = {}
                 raw_counts: dict[str, object] = {}
+                raw_graphs: dict[str, tuple[dict[int, dict[str, object]], list[dict[str, object]]]] = {}
+                strict_diagnostics = diagnostic_run.predictor_diagnostic_instrumented or trace_function is not None
                 for source in raw_sources:
                     destination = raw_root / source.name
                     _copy_raw_prediction(
@@ -952,10 +1028,13 @@ def run_recipe_c_inference(
                         ),
                     )
                     raw_geffs[source.stem] = destination
-                    raw_counts[source.stem] = {
-                        **counts,
-                        **directory_digest_report(destination),
-                    }
+                    raw_counts[source.stem], raw_graphs[source.stem] = diagnostic_run.record_raw_sample(
+                        source.stem,
+                        destination,
+                        counts,
+                        directory_digest_report(destination),
+                        strict=strict_diagnostics,
+                    )
                 phase = "postprocess"
                 csv_path = output_root / "submission.csv"
                 csv_temporary = output_root / ".submission.csv.tmp"
@@ -980,6 +1059,13 @@ def run_recipe_c_inference(
                 )
                 if not report.ok:
                     raise ValueError("source submission failed target structural validation")
+                csv_graphs = diagnostic_run.record_csv_and_trace(
+                    csv_path,
+                    raw_graphs,
+                    trace_function,
+                    strict=strict_diagnostics,
+                    trace_module_sha256=diagnostic_run.trace_module_sha256,
+                )
                 unexpected = {
                     child.name
                     for child in output_root.iterdir()
@@ -1009,7 +1095,32 @@ def run_recipe_c_inference(
                             _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
                         ),
                     )
-                    final_counts[sample_id] = {**counts, **directory_digest_report(final)}
+                    final_counts[sample_id] = diagnostic_run.record_final_sample(
+                        sample_id,
+                        final,
+                        counts,
+                        directory_digest_report(final),
+                        csv_graphs[sample_id],
+                        strict=strict_diagnostics,
+                    )
+                if max_frames == RECIPE_C_SMOKE_FRAMES:
+                    diagnostic_run.assert_six_frame_contract()
+                diagnostics_path = output_root / "diagnostics.json"
+                diagnostic_provenance = diagnostic_run.provenance(
+                    source_commit=str(lock["source_commit"]),
+                    predictor_sha256_before=str(lock["predictor_sha256"]),
+                    predictor_sha256_after=predictor_sha256_after,
+                    postprocessing_module_sha256=getattr(
+                        source_api, "postprocessing_module_sha256", None
+                    ),
+                    child_stdout_sha256=child_stdout_sha256,
+                )
+                diagnostics_sha256 = diagnostic_run.finalize(
+                    diagnostics_path,
+                    diagnostic_provenance,
+                    write_json_exclusive,
+                )
+                remember(diagnostics_path)
                 phase = "manifest"
                 manifests: dict[str, Path] = {}
                 for sample_id, final in final_geffs.items():
@@ -1042,6 +1153,7 @@ def run_recipe_c_inference(
                             "child_device": child_device,
                             "child_stdout_sha256": child_stdout_sha256,
                             "child_stderr_sha256": child_stderr_sha256,
+                            **diagnostic_provenance,
                         },
                     )
                     remember(manifest)
@@ -1079,6 +1191,8 @@ def run_recipe_c_inference(
                         "stage_device_postimage_verified": True,
                         "runtime_d4_postimage_verified": True,
                         "runtime_builder_postimage_verified": True,
+                        "predictor_diagnostic_instrumented": diagnostic_run.predictor_diagnostic_instrumented,
+                        "source_stage_trace_loaded": trace_function is not None,
                     },
                     raw_geffs={sample: _role_path(path, output_root) for sample, path in raw_geffs.items()},
                     postprocessed_csv=_role_path(csv_path, output_root),
@@ -1087,15 +1201,31 @@ def run_recipe_c_inference(
                     counts={
                         "raw": raw_counts,
                         "final": final_counts,
-                        "publish": {"predictor": publish_predictor, "splits": publish_splits},
+                        "publish": {
+                            "predictor": publish_predictor,
+                            "splits": publish_splits,
+                            **(
+                                {"trace": diagnostic_run.trace_publish}
+                                if diagnostic_run.trace_publish is not None
+                                else {}
+                            ),
+                        },
+                        "diagnostic": diagnostic_run.receipt_counts(
+                            getattr(source_api, "postprocessing_module_sha256", None)
+                        ),
                     },
                     started_at=started,
                     finished_at=finished,
                     failure=None,
+                    diagnostics=_role_path(diagnostics_path, output_root) if diagnostics_path is not None else None,
+                    diagnostics_sha256=diagnostics_sha256,
+                    cuda_equivalence_validated=False,
                 )
                 _write_ready_receipt(output_root, receipt)
                 return receipt
     except BaseException as exc:
+        if diagnostic_run is not None:
+            diagnostic_run.mark_failed()
         try:
             _write_failed(
                 output_root,
@@ -1105,6 +1235,7 @@ def run_recipe_c_inference(
                 command,
                 owned_entries=owned_entries,
                 recursive_entries=recursive_entries,
+                diagnostics=diagnostic_run.state if diagnostic_run is not None else {},
             )
         except BaseException as cleanup_error:
             exc.add_note(f"failed receipt cleanup: {type(cleanup_error).__name__}")
