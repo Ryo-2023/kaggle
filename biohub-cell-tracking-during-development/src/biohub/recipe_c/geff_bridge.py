@@ -303,6 +303,41 @@ def _remove_owned_empty_directory(path: Path, identity: tuple[int, int] | None) 
         pass
 
 
+def _cleanup_owned_build(
+    parent: Path,
+    parent_identity: tuple[int, int] | None,
+    child: Path,
+    child_identity: tuple[int, int] | None,
+) -> None:
+    """Remove only a build child whose private parent is still ours.
+
+    The parent identity is the ownership anchor.  If a caller or competitor
+    replaced it, even a child with the expected name must not be removed.
+    Before the serializer returns there is no child identity to compare, but
+    an intact private parent is still exclusively owned by this invocation;
+    in that case a partial child is safe to clean up.
+    """
+
+    if parent_identity is None:
+        return
+    try:
+        current_parent = _entry_identity(parent)
+    except FileNotFoundError:
+        return
+    if current_parent != parent_identity:
+        return
+    if child_identity is not None:
+        _remove_owned_directory(child, child_identity)
+    else:
+        try:
+            child_stat = child.lstat()
+        except FileNotFoundError:
+            child_stat = None
+        if child_stat is not None and stat.S_ISDIR(child_stat.st_mode):
+            _remove_owned_directory(child, (child_stat.st_dev, child_stat.st_ino))
+    _remove_owned_empty_directory(parent, parent_identity)
+
+
 def _build_geff(destination: Path, bucket: Mapping[str, Any], *, overwrite: bool = False) -> None:
     import polars as pl
     import tracksdata as td
@@ -346,17 +381,33 @@ def postprocessed_csv_to_geffs(
             on_published(output_root, output_root_identity)
         parsed = _parse_submission(csv_path, sample_ids, None)
         for sample_id in sample_ids:
+            if _entry_identity(output_root) != output_root_identity:
+                raise OSError("prediction output root identity changed during publication")
             final = output_root / f"{sample_id}.geff"
             if final.exists() or final.is_symlink():
                 raise FileExistsError(final)
-            temporary = output_root / f".{sample_id}.geff.{secrets.token_hex(8)}.tmp"
-            temporary.mkdir(exist_ok=False)
-            temporary_identity = _entry_identity(temporary)
+            build_parent = output_root / f".{sample_id}.geff.build-{secrets.token_hex(8)}.tmp"
+            temporary = build_parent / f"{sample_id}.geff"
+            build_parent_identity: tuple[int, int] | None = None
+            temporary_identity: tuple[int, int] | None = None
             final_identity: tuple[int, int] | None = None
             try:
-                _build_geff(temporary, parsed[sample_id], overwrite=True)
+                build_parent.mkdir(mode=0o700, exist_ok=False)
+                build_parent_identity = _entry_identity(build_parent)
+                os.chmod(build_parent, 0o700)
+                # tracksdata deletes and recreates an existing GEFF directory
+                # even when overwrite=True.  Pass a fresh child and keep the
+                # private build parent as the ownership anchor instead.
+                _build_geff(temporary, parsed[sample_id], overwrite=False)
+                if temporary.is_symlink() or not temporary.is_dir():
+                    raise ValueError("serialized GEFF child is not a regular directory")
+                temporary_identity = _entry_identity(temporary)
+                if _entry_identity(build_parent) != build_parent_identity:
+                    raise OSError("GEFF build parent identity changed during serialization")
                 if _entry_identity(temporary) != temporary_identity:
-                    raise OSError("temporary GEFF identity changed during serialization")
+                    raise OSError("temporary GEFF identity changed before publication")
+                if _entry_identity(output_root) != output_root_identity:
+                    raise OSError("prediction output root identity changed during publication")
                 _rename_noreplace(temporary, final)
                 published_identity = _entry_identity(final)
                 if published_identity != temporary_identity:
@@ -365,6 +416,8 @@ def postprocessed_csv_to_geffs(
                 published[final] = final_identity
                 if on_published is not None:
                     on_published(final, final_identity)
+                if _entry_identity(output_root) != output_root_identity:
+                    raise OSError("prediction output root identity changed after publication")
                 _fsync_directory(output_root)
                 signature = _read_prediction_signature(final)
                 expected_signature = {
@@ -383,10 +436,11 @@ def postprocessed_csv_to_geffs(
                 if signature != expected_signature:
                     raise ValueError("GEFF roundtrip is not lossless for CSV topology or coordinates")
             except BaseException:
-                _remove_owned_directory(temporary, temporary_identity)
+                _cleanup_owned_build(build_parent, build_parent_identity, temporary, temporary_identity)
                 _remove_owned_directory(final, final_identity)
                 published.pop(final, None)
                 raise
+            _cleanup_owned_build(build_parent, build_parent_identity, temporary, temporary_identity)
             written[sample_id] = final
     except BaseException:
         # Only remove directories created by this invocation; never touch an

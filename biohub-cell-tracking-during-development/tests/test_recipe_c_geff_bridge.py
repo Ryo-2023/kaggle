@@ -84,6 +84,79 @@ def test_bridge_roundtrips_fork_and_uses_exact_sample_name(tmp_path: Path) -> No
     }
 
 
+def test_bridge_serializes_to_absent_child_without_overwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    calls: list[tuple[Path, bool, bool, int]] = []
+    original = bridge_module._build_geff
+
+    def observe_serializer(
+        destination: Path, bucket: dict[str, object], *, overwrite: bool = False
+    ) -> None:
+        calls.append((destination, destination.exists(), overwrite, destination.parent.stat().st_mode & 0o777))
+        original(destination, bucket, overwrite=overwrite)
+
+    monkeypatch.setattr(bridge_module, "_build_geff", observe_serializer)
+    output_root = tmp_path / "predictions"
+    postprocessed_csv_to_geffs(
+        csv_path, output_root, sample_ids=(SAMPLE,), provenance={}
+    )
+
+    assert calls and calls[0][1:] == (False, False, 0o700)
+    assert not list(output_root.glob(".*.build-*.tmp"))
+
+
+def test_bridge_does_not_remove_replaced_private_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+
+    def replace_parent_then_fail(source: Path, destination: Path) -> None:
+        parent = Path(source).parent
+        competitor = parent.with_name(parent.name + ".competitor")
+        shutil.rmtree(parent)
+        competitor.mkdir()
+        (competitor / "keep").write_bytes(b"competitor")
+        competitor.rename(parent)
+        raise OSError("synthetic parent replacement")
+
+    monkeypatch.setattr(bridge_module, "_rename_noreplace", replace_parent_then_fail)
+    with pytest.raises(OSError, match="parent replacement"):
+        postprocessed_csv_to_geffs(csv_path, output_root, sample_ids=(SAMPLE,), provenance={})
+
+    parents = list(output_root.glob(".*.build-*.tmp"))
+    assert len(parents) == 1
+    assert (parents[0] / "keep").read_bytes() == b"competitor"
+
+
+def test_bridge_does_not_remove_replaced_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+    original_rename = bridge_module._rename_noreplace
+
+    def replace_child_then_publish(source: Path, destination: Path) -> None:
+        competitor = source.parent / ".competitor.geff"
+        competitor.mkdir()
+        (competitor / "keep").write_bytes(b"competitor")
+        shutil.rmtree(source)
+        original_rename(competitor, destination)
+
+    monkeypatch.setattr(bridge_module, "_rename_noreplace", replace_child_then_publish)
+    with pytest.raises(OSError, match="temporary GEFF identity"):
+        postprocessed_csv_to_geffs(csv_path, output_root, sample_ids=(SAMPLE,), provenance={})
+
+    final = output_root / f"{SAMPLE}.geff"
+    assert (final / "keep").read_bytes() == b"competitor"
+    assert not list(output_root.glob(".*.build-*.tmp"))
+
+
 def test_bridge_roundtrips_sparse_node_ids_from_raw_geff_via_source_csv(tmp_path: Path) -> None:
     raw_geff = tmp_path / "raw.geff"
     bridge_module._build_geff(
@@ -428,6 +501,7 @@ def test_bridge_partial_build_failure_with_callback_removes_owned_root(
     output_root = tmp_path / "predictions"
 
     def partial_build(destination: Path, bucket: dict[str, object], *, overwrite: bool = False) -> None:
+        destination.mkdir()
         (destination / "partial").write_bytes(b"partial")
         raise OSError("synthetic serializer failure")
 
