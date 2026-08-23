@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze the immutable Biohub 0.95 Recipe C selection lock.
-
-Only the pre-registration ``freeze`` command belongs in this task.  Inference
-and evaluation deliberately live in later task modules, so this CLI cannot
-accidentally open ground truth or select a panel dynamically.
-"""
+"""Freeze and run the immutable Biohub 0.95 Recipe C protocol."""
 
 from __future__ import annotations
 
@@ -13,7 +8,8 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +19,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from biohub.recipe_c.protocol import (  # noqa: E402
+    PANEL_V1,
     ExperimentSpec,
     build_selection_lock,
     write_selection_lock,
@@ -200,6 +197,96 @@ def _infer(args: argparse.Namespace) -> int:
         stage.close()
 
 
+def _require_fresh_target(path: Path, *, label: str) -> Path:
+    target = Path(path)
+    if target.exists() or target.is_symlink():
+        raise ValueError(f"{label} must be fresh: {target}")
+    return target
+
+
+def _reject_symlinked_parent(path: Path, *, label: str) -> None:
+    absolute = Path(path).absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:-1]:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"{label} has a symlinked parent: {current}")
+
+
+def _infer_panel(args: argparse.Namespace) -> int:
+    """Run one fixed, full-length, GT-free PANEL_V1 inference."""
+
+    from biohub.recipe_c.runner import run_recipe_c_inference
+
+    stage_destination = _resolve_project_path(args.stage_destination)
+    output_root = _resolve_project_path(args.output_root)
+    _reject_symlinked_parent(stage_destination, label="stage destination")
+    _reject_symlinked_parent(output_root, label="output root")
+    _require_fresh_target(stage_destination, label="stage destination")
+    _require_fresh_target(output_root, label="output root")
+    stage_absolute = stage_destination.absolute()
+    output_absolute = output_root.absolute()
+    if (
+        stage_absolute == output_absolute
+        or stage_absolute in output_absolute.parents
+        or output_absolute in stage_absolute.parents
+    ):
+        raise ValueError("stage destination and output root must not overlap")
+    stage = stage_recipe_c_runtime(
+        _resolve_project_path(args.source),
+        _resolve_project_path(args.primary_support),
+        _resolve_project_path(args.secondary_support),
+        stage_destination,
+        _resolve_project_path(args.selection_lock),
+    )
+    try:
+        receipt = run_recipe_c_inference(
+            _resolve_project_path(args.image_root),
+            PANEL_V1,
+            stage,
+            _resolve_project_path(args.selection_lock),
+            output_root,
+            None,
+        )
+        print(json.dumps(asdict(receipt), sort_keys=True))
+        return 0
+    finally:
+        stage.close()
+
+
+def _evaluate_panel(args: argparse.Namespace) -> int:
+    """Evaluate the locked panel after GT-free prediction handoff."""
+
+    from biohub.recipe_c import evaluation
+
+    output = _resolve_project_path(args.output)
+    gt_root = _resolve_project_path(args.gt_root)
+    ground_truth_map = {sample: gt_root / f"{sample}.geff" for sample in PANEL_V1}
+    output_targets = [output, *(output.parent / f"{sample}.metric_receipt.json" for sample in PANEL_V1)]
+    if len({target.absolute() for target in output_targets}) != len(output_targets):
+        raise ValueError("panel receipt and sample receipt targets must be distinct")
+    for target in output_targets:
+        safe_target = evaluation._safe_write_target(target)
+        _require_fresh_target(safe_target, label="evaluation output")
+
+    result = evaluation.evaluate_panel(
+        selection_lock=_resolve_project_path(args.selection_lock),
+        prediction_root=_resolve_project_path(args.prediction_root),
+        output=output,
+        inference_receipt=_resolve_project_path(args.inference_receipt),
+        ground_truth_map=ground_truth_map,
+        reproduction_command=args.reproduction_command,
+    )
+    if not isinstance(result, Mapping):
+        raise ValueError("evaluate_panel must return a mapping")
+    try:
+        encoded = json.dumps(result, sort_keys=True)
+    except TypeError as exc:
+        raise ValueError("evaluate_panel returned a non-JSON result") from exc
+    print(encoded)
+    return 0 if result.get("status") == "READY" and result.get("panel_status") == "READY" else 2
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Freeze the Biohub 0.95 Recipe C selection lock.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -255,6 +342,27 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"fixed GT-free smoke horizon ({RECIPE_C_SMOKE_FRAMES} frames); omit for full inference",
     )
     infer.set_defaults(handler=_infer)
+    infer_panel = subparsers.add_parser(
+        "infer-panel", help="run one fixed full-length GT-free PANEL_V1 inference"
+    )
+    infer_panel.add_argument("--source", type=Path, required=True)
+    infer_panel.add_argument("--primary-support", type=Path, required=True)
+    infer_panel.add_argument("--secondary-support", type=Path, required=True)
+    infer_panel.add_argument("--selection-lock", type=Path, required=True)
+    infer_panel.add_argument("--stage-destination", type=Path, required=True)
+    infer_panel.add_argument("--image-root", type=Path, required=True)
+    infer_panel.add_argument("--output-root", type=Path, required=True)
+    infer_panel.set_defaults(handler=_infer_panel)
+    evaluate_panel = subparsers.add_parser(
+        "evaluate-panel", help="evaluate a fixed PANEL_V1 prediction handoff"
+    )
+    evaluate_panel.add_argument("--selection-lock", type=Path, required=True)
+    evaluate_panel.add_argument("--prediction-root", type=Path, required=True)
+    evaluate_panel.add_argument("--inference-receipt", type=Path, required=True)
+    evaluate_panel.add_argument("--gt-root", type=Path, required=True)
+    evaluate_panel.add_argument("--output", type=Path, required=True)
+    evaluate_panel.add_argument("--reproduction-command", default="")
+    evaluate_panel.set_defaults(handler=_evaluate_panel)
     return parser
 
 
