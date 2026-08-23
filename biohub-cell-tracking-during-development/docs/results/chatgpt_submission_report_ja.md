@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新直前の0.95 campaign remote HEAD: `e56e561`（`02a0b7f` derived fd publisher + `e56e561` same-inode same-size post-fsync verification fix、push済み）
+本レポート更新直前の0.95 campaign remote HEAD: `45423b0`（Task4の`42f9181`/`45423b0`を含む、いずれもpush済み。Task3.5時点の`e56e561`から更新）
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
@@ -28,6 +28,7 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
 - HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、入力契約・依存・checkpoint・source確認の不足により、今回の公式スコア比較には含めていない。
+- Task4のround-4/round-5 code reviewはともに **APPROVED**。実画像2-frame smokeはGT-freeで実施したが、旧path失敗後の修正版もchild完走後に0-nodeでFAILEDとなり、Recipe Cの本repo公式スコアはまだ得ていない。
 
 ### 1.1 0.95 Performance Goalの現在地
 
@@ -38,13 +39,13 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 | 固定panel | `0113`、`0b`、`0c`、`0db`、divisionを含む`12df`の5件。除外しない |
 | macro target | `0.95` |
 | Current BestKnown（既存実測best） | `harmonic_v1` macro `0.7944143977140719` |
-| targetとの差 | `+0.1555856022859281` |
+| target gap（`0.95 - Current BestKnown`） | `0.1555856022859281` |
 | 第一候補 | 公開 `Recipe C` dual-seed、D4 TTA、ILP、gap/safe-division/track repair |
 | 一次source | `https://github.com/asapacsin/biohub-cell-tracking`、commit `843a47fdd531bdf7e6377673135519c54b69ae28`、Apache-2.0 |
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
-| source側5件参考macro | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。こちらの公式metricでは未再現） |
+| Recipe C source側5件参考macro（非公式・未測定） | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。本repoの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | Task1〜Task3.5完了。Task4 GT-free runner/GEFF bridgeをTDD実装中。実画像smokeはTask4 reviewとclean selection lock後に実施 |
+| 現在の作業 | Task1〜Task3.5完了。Task4 round-4/5 reviewはAPPROVED、`42f9181`/`45423b0`はpush済み。修正版2-frame smokeは0-node FAILED、次はGT-free zero-node診断 |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -385,7 +386,8 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - historical race branch: `codex/biohub-multi-method-race`
 - current performance branch: `codex/biohub-095-performance`
 - 0.95 campaignの初期設計・計画commit: `de582ef`
-- 本レポート更新前に確認したremote commit: `e56e561`
+- 本レポート更新前に確認したremote commit: `45423b0`（Task4 commits `42f9181`、`45423b0` push済み）
+- Task3.5完了時点のremote commit: `e56e561`
 - Task1実装完了時のコードHEAD: `17135f0`
 - Task1完了履歴: `2a60cc0`、`87cf762`、`6887576`、`17135f0`
 - validation receipt実装commit: `fbfbf26`
@@ -449,18 +451,18 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の設定差があるが、現panelでは実効kernelが同じである。
 6. high-level viewerの`matched_node_id` / `match_node_id`不一致でGUI表示は未完了。ただしheadless overlay evidenceは保存済み。
 7. 現行Dockerの全laneはCPU-only。detector-fixedはCUDA→MPS→CPUの自動fallbackを実装済みだが、GPU実測性能はまだ主張していない。
-8. 公開Recipe Cはsource側参考macro `0.9560058787896148` があるが、本repoのvendored official metricは未取得である。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値もない。
+8. 公開Recipe Cは非公式・未測定のsource側参考macro `0.9560058787896148` があるが、本repoのvendored official metricは未取得である。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値もない。
 9. Kaggle competitionはnotebook-only submissionである。ローカルprediction生成は外部提出許可を意味せず、GPU runtimeとoffline packagingは未検証である。
 
 ### 次の一手
 
-1. Task4のGT-free runner/GEFF bridgeをTDDで実装し、Task4 reviewで契約・テストを確認する。
-2. Task4 review後にclean commitを選び、PANEL_V1、source/config/checkpoint、code commit、仮説、control、採否基準を含むselection lockを確定する。
-3. clean lockを変更せず、2-frame GT-free smokeを実行する。
-4. Task5でprediction GEFF/manifestの永続化・hash検証後にGTを開くofficial metric boundaryを確認する。GTは同じrunの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
-5. Task5 boundary確認後、5 sampleを除外なしで逐次推論・公式評価する。macro `>=0.95` の実receiptが得られるまで未評価・未達成扱いにする。
+1. 修正版Task4 smokeの0-nodeをGT-freeで診断し、child出力、raw GEFF、bridgeのnode/edge受け渡し境界を切り分ける。失敗したlock/outputは再利用しない。
+2. zero-node原因を修正した場合は、新しいclean commitと新しいselection lockを作り、既存lock/outputを変更せずに再smokeする。
+3. 2-frame smokeがGT-freeで成功した後、固定5 sampleを除外なし・逐次で推論し、各prediction GEFF/manifestをhash検証する。
+4. 全5件の永続化・hash検証後にだけGTを開き、vendored official metricで評価する。GTは同じrunの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
+5. 本repoの実測macro `>=0.95` のreceiptが得られるまで、Recipe C参考値 `0.9560058787896148` を達成値とせず、0.95は未評価・未達成扱いにする。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証は完了したが、Task4実装中でRecipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証とTask4 round-4/5 code reviewは完了したが、Recipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -684,8 +686,27 @@ Task3の履歴は initial `b8b895d`、hardening `49674c4`、race修正 `afb8517`
 
 ## 22. Task3.5 派生asset publish boundary 最終承認（2026-08-23更新）
 
-Task3.5は、`02a0b7f` の fd-backed derived publisher に、同一inode・同一sizeの内容改変をpost-fsync後に再検証する `e56e561` のfixを加えた状態で完了した。remote HEADは `e56e561` までpush済み。fresh re-reviewは P1-1 **ADDRESSED**、新規blocking issue `0`、最終判定 **APPROVED** だった。
+Task3.5は、`02a0b7f` の fd-backed derived publisher に、同一inode・同一sizeの内容改変をpost-fsync後に再検証する `e56e561` のfixを加えた状態で完了した。Task3.5完了時点のremote HEADは `e56e561`。fresh re-reviewは P1-1 **ADDRESSED**、新規blocking issue `0`、最終判定 **APPROVED** だった。
 
 実際のDocker `biohub-dev` と virtiofs mount上のfresh ignored stageで、派生predictorとPANEL_V1 splitsをpublishし、readback、SHA-256、receiptのdevice/inode/size/fsyncedを確認した。同一roleの再publishはno-clobberで拒否され、canonical predictor/config/checkpointとsource/support treeは不変、stage内symlinkは0、close後のfd/read/publish/cached view APIは拒否された。実assetを用いたstaging-only functional smokeも **APPROVED** である。
 
 root fresh verificationは source/protocol/staging combined `211 passed`、同時進行中のTask4 testsを明示除外したfull相当 `604 passed, 9 skipped, 2 warnings`、Ruff/compile passだった。今回のpayloadはcompileable smoke predictorとexact PANEL_V1 splitsであり、GT、画像/Zarr、実推論、official metric、Task4 full runnerは実行していない。したがって0.95は引き続き **未評価・未達成** である。
+
+## 23. Task4 Recipe C actual smoke 最新状態（2026-08-23更新）
+
+Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を `42f9181`、data-role修正を `45423b0` としてpush済みである。round-4は旧path回帰を含むtargeted suiteが `123 passed in 4.24s`、round-5はrunner targeted `68 passed`、runner/bridge/source/protocol/staging combined `335 passed` だった。full suiteは修正前後で `727 passed` → `728 passed`（各 `9 skipped, 2 warnings`）。対象Ruff、compile、`git diff --check`もpassした。
+
+初回production freezeはDocker worktreeの`.git`がhostの絶対worktree pathを指すGit環境衝突でHEAD読取に失敗し、production selection lockは生成されなかった。この失敗をlockありとして扱わず、後続commitごとにwrite-once lockを新規作成した。
+
+以下のlock/FAILED receiptはすべて `artifacts/biohub_095/` 配下にあり、GT内容は開かずJSONメタデータだけを確認した。両FAILED receiptの `command_sha256` は `3752c31fe6d434db041b0b766d7bd570bd907195d87e3229bc4d7be92879b11a` である。
+
+| code commit | selection lock ID | lock JSON SHA-256 | FAILED receipt（GT-free） |
+|---|---|---|---|
+| `42f918172a860f535b6f22abd2d9ec267612f076` | `8232fe546a0328440ec5b6b97e6866078c0a6fbb5cc3230bdf7a8e26b4614088` | `99a9072e1ae346ca7b678971d2ef7b97100451ba00243719f62472505c42dcb2` | `smoke-2frame-output/FAILED.json` と `smoke-debug1-output/FAILED.json`、receipt SHA-256 `3e1f847fc54485a424b28246311d56941602b7b212b1def4eb7c53784f975515`、`phase=subprocess` / `CalledProcessError` / `reusable=false` |
+| `45423b05fdb345b0e9ca7809948d29fcd054183d` | `3cc6240acb10cf9c526145354bc6733fb7d757329b7763c8ee6034b383d1d6ab` | `42b5b6af4931018406ec9ddb75167c8245e2239f23d29b272438c928ff8b9821` | `smoke-2frame-output/FAILED.json`、receipt SHA-256 `5df918e27dda21ed5dd92b80f5d3435c4d1c4d4cc77f45904085801f909d8de2`、`phase=raw_persist` / `ValueError` / `reusable=false` |
+
+`42f9181`の旧path smokeはchildが画像を開く前のsubprocess境界で失敗し、出力は再利用不可だった（旧path failure境界を含むround-4 evidenceは `4.24 s`）。data-role修正後の`45423b0` smokeはchild predictorが `device=cpu` を出力して完走したが、生成結果が0-nodeとなり、約 `195.59 s` のCPU実行後にraw persistenceでFAILEDとなった。いずれもGTを開かず、official metricも呼び出しておらず、Recipe Cのprediction score・5-panel macroは生成していない。
+
+device policyは `CUDA → MPS → CPU` の優先順で、requestは`auto`。現行`biohub-dev`はCPU-onlyのため、実際のsmoke deviceはCPUであり、GPU性能は主張しない。次は失敗出力・lockを再利用せず、zero-nodeの原因をGT-freeで診断し、解消後に固定5 sampleをGT-freeで逐次実行する。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
+
+Current BestKnownは既存実測の `0.7944143977140719`、target gapは `0.1555856022859281` のままである。Recipe C source側の `0.9560058787896148` は非公式・未測定の参考値であり、本repoの0.95到達値ではない。従って本repoの0.95目標は **未評価・未達成** である。
