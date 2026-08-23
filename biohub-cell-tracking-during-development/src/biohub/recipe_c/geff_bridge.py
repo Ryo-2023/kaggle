@@ -41,12 +41,31 @@ CSV_HEADER = (
 _RENAME_NOREPLACE = 1
 _AT_FDCWD = -100
 _MAX_PROVENANCE_KEY_LENGTH = 64
+_RESERVED_MANIFEST_KEYS = frozenset(
+    {
+        "schema_version",
+        "prediction_role",
+        "prediction_path",
+        "prediction_name",
+        "selection_lock_id",
+        "ground_truth_included",
+        "ground_truth_inputs",
+        "manifest_created_at",
+        "directory_sha256",
+        "files",
+        "total_bytes",
+        "hash_algorithm",
+        "nodes",
+        "edges",
+        "forks",
+    }
+)
 
 
 def _strict_int(value: object, *, field: str) -> int:
     if isinstance(value, bool):
         raise ValueError(f"{field} must be an integer")
-    text = str(value).strip()
+    text = str(value)
     if not text or text[0] == "+" or (text[0] == "-" and len(text) == 1):
         raise ValueError(f"{field} must be an integer")
     if text[0] == "-":
@@ -193,12 +212,64 @@ def _rename_noreplace(source: Path, destination: Path) -> None:
         raise OSError(error, os.strerror(error), str(destination))
 
 
+def publish_directory_noreplace(source: Path, destination: Path) -> None:
+    """Publish an already-fsynced directory without replacing a final entry."""
+
+    _rename_noreplace(Path(source), Path(destination))
+
+
+def publish_file_noreplace(source: Path, destination: Path) -> None:
+    """Publish one regular file by exclusive hard-link, then remove its owner name."""
+
+    source = Path(source)
+    destination = Path(destination)
+    if source.is_symlink() or not source.is_file():
+        raise ValueError("file publish source must be a regular file")
+    source_stat = source.lstat()
+    source_identity = (source_stat.st_dev, source_stat.st_ino)
+    descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.link(source, destination, follow_symlinks=False)
+    try:
+        _fsync_directory(destination.parent)
+    except BaseException:
+        try:
+            destination_stat = destination.lstat()
+            if (destination_stat.st_dev, destination_stat.st_ino) == source_identity:
+                destination.unlink()
+                _fsync_directory(destination.parent)
+        except BaseException:
+            pass
+        raise
+    try:
+        source.unlink()
+        _fsync_directory(source.parent)
+    except BaseException:
+        try:
+            destination_stat = destination.lstat()
+            if (destination_stat.st_dev, destination_stat.st_ino) == source_identity:
+                destination.unlink()
+                _fsync_directory(destination.parent)
+        except BaseException:
+            pass
+        raise
+
+
 def _fsync_directory(path: Path) -> None:
     descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def fsync_directory(path: Path) -> None:
+    """Fsync one directory entry set for callers publishing sibling artifacts."""
+
+    _fsync_directory(Path(path))
 
 
 def _build_geff(destination: Path, bucket: Mapping[str, Any]) -> None:
@@ -353,28 +424,71 @@ def validate_prediction_geff(
     }
 
 
-def _write_manifest_exclusive(path: Path, payload: Mapping[str, object]) -> None:
+def write_json_exclusive(path: Path, payload: Mapping[str, object], *, mode: int = 0o600) -> None:
     path = Path(path)
-    if path.exists() or path.is_symlink():
-        raise FileExistsError(path)
     temporary = path.parent / f".{path.name}.{secrets.token_hex(8)}.tmp"
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    descriptor: int | None = None
+    published_identity: tuple[int, int] | None = None
+    temporary_identity: tuple[int, int] | None = None
     try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+        created = os.fstat(descriptor)
+        temporary_identity = (created.st_dev, created.st_ino)
         encoded = (json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
-        written = os.write(descriptor, encoded)
-        if written != len(encoded):
-            raise OSError("short manifest write")
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(descriptor, encoded[offset:])
+            if written <= 0:
+                raise OSError("short manifest write")
+            offset += written
         os.fsync(descriptor)
-    finally:
+        stat_result = os.fstat(descriptor)
+        if stat_result.st_size != len(encoded):
+            raise OSError("short manifest write")
+        if (stat_result.st_dev, stat_result.st_ino) != temporary_identity:
+            raise OSError("receipt temporary identity changed")
         os.close(descriptor)
-    try:
+        descriptor = None
         os.link(temporary, path, follow_symlinks=False)
+        published_identity = temporary_identity
         _fsync_directory(path.parent)
-    finally:
+        temporary_stat = temporary.lstat()
+        if temporary_identity is None or (
+            temporary_stat.st_dev,
+            temporary_stat.st_ino,
+        ) != temporary_identity:
+            raise OSError("receipt temporary identity changed")
+        temporary.unlink()
+        _fsync_directory(path.parent)
+    except BaseException as exc:
+        if descriptor is not None:
+            os.close(descriptor)
+        if published_identity is not None:
+            try:
+                final_stat = path.lstat()
+                if (final_stat.st_dev, final_stat.st_ino) == published_identity:
+                    path.unlink()
+                    _fsync_directory(path.parent)
+            except FileNotFoundError:
+                pass
+            except BaseException as cleanup_error:
+                exc.add_note(f"receipt final cleanup failed: {type(cleanup_error).__name__}")
         try:
-            temporary.unlink()
+            temporary_stat = temporary.lstat()
+            if temporary_identity is not None and (
+                temporary_stat.st_dev,
+                temporary_stat.st_ino,
+            ) == temporary_identity:
+                temporary.unlink()
         except FileNotFoundError:
             pass
+        except BaseException as cleanup_error:
+            exc.add_note(f"receipt temporary cleanup failed: {type(cleanup_error).__name__}")
+        raise
+
+
+def _write_manifest_exclusive(path: Path, payload: Mapping[str, object]) -> None:
+    write_json_exclusive(path, payload)
 
 
 def write_prediction_manifest(
@@ -404,6 +518,9 @@ def write_prediction_manifest(
         "hash_algorithm": report["hash_algorithm"],
         **counts,
     }
+    collisions = sorted({str(key) for key in provenance if str(key) in _RESERVED_MANIFEST_KEYS})
+    if collisions:
+        raise ValueError(f"provenance contains reserved manifest keys: {', '.join(collisions)}")
     payload.update(_safe_provenance(provenance))
     _write_manifest_exclusive(manifest_path, payload)
     return manifest_path
@@ -411,7 +528,11 @@ def write_prediction_manifest(
 
 __all__ = [
     "CSV_HEADER",
+    "fsync_directory",
     "postprocessed_csv_to_geffs",
+    "publish_directory_noreplace",
+    "publish_file_noreplace",
     "validate_prediction_geff",
+    "write_json_exclusive",
     "write_prediction_manifest",
 ]

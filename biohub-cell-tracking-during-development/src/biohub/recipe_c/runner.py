@@ -7,6 +7,7 @@ import importlib
 import json
 import os
 import py_compile
+import re
 import shutil
 import subprocess
 import sys
@@ -19,8 +20,12 @@ from typing import Any, Literal
 
 import biohub.device as device_module
 from biohub.recipe_c.geff_bridge import (
+    fsync_directory,
     postprocessed_csv_to_geffs,
+    publish_directory_noreplace,
+    publish_file_noreplace,
     validate_prediction_geff,
+    write_json_exclusive,
     write_prediction_manifest,
 )
 from biohub.recipe_c.protocol import (
@@ -62,6 +67,7 @@ class InferenceReceipt:
     source_commit: str
     config_sha256: str
     predictor_sha256_before: str
+    stage_predictor_sha256_after: str
     predictor_sha256_after: str
     primary_checkpoint_sha256: str
     secondary_checkpoint_sha256: str
@@ -74,6 +80,9 @@ class InferenceReceipt:
     cwd_role: str
     pythonpath: str
     resolved_device: str
+    child_device: str
+    child_stdout_sha256: str
+    child_stderr_sha256: str
     device_candidates: tuple[str, ...]
     runtime_role: str
     patch_flags: Mapping[str, bool]
@@ -140,9 +149,25 @@ def _assert_stage_lock_identity(stage: Any, lock: Mapping[str, object]) -> None:
     receipt = getattr(stage, "receipt", {})
     if not isinstance(receipt, Mapping):
         raise ValueError("runtime stage receipt is missing")
+    if receipt.get("status") != "READY":
+        raise ValueError("runtime stage receipt is not READY")
+    if receipt.get("selection_lock_id") != lock.get("selection_lock_id"):
+        raise ValueError("runtime stage receipt selection lock identity mismatch")
+    expected_roles = {
+        "repo": "repo",
+        "weights": "repo/weights",
+        "source_root": "source_root",
+        "config": RECIPE_C_SOURCE.config_relative_path,
+        "predictor": RECIPE_C_SOURCE.predictor_relative_path,
+        "primary_checkpoint": RECIPE_C_SOURCE.primary_checkpoint_relative_path,
+        "secondary_checkpoint": RECIPE_C_SOURCE.secondary_staging_relative_path,
+    }
+    if receipt.get("roles") != expected_roles:
+        raise ValueError("runtime stage receipt role identity mismatch")
     required_receipt_fields = (
         "config_sha256",
         "predictor_sha256_before",
+        "predictor_sha256_after",
         "primary_checkpoint_sha256",
         "secondary_checkpoint_sha256",
         "resolved_device_candidates",
@@ -176,6 +201,8 @@ def _assert_stage_lock_identity(stage: Any, lock: Mapping[str, object]) -> None:
         raise ValueError("runtime stage predictor preimage/postimage identity is missing")
     if lock["predictor_sha256"] != preimage:
         raise ValueError("selection lock predictor preimage mismatch")
+    if receipt["predictor_sha256_after"] != postimage:
+        raise ValueError("runtime stage receipt predictor postimage mismatch")
     if lock.get("secondary_staging_relative_path") != RECIPE_C_SOURCE.secondary_staging_relative_path:
         raise ValueError("selection lock secondary checkpoint role mismatch")
 
@@ -264,7 +291,47 @@ def _prepare_image_data(
         destination_array = destination.create_array("0", **array_options)
         destination_array.attrs.update(dict(source_array.attrs))
         destination_array[:] = source_array[:max_frames]
+        _verify_image_subset(source, source_array, data_root / f"{sample_id}.zarr", max_frames)
     return data_root
+
+
+def _verify_image_subset(
+    source: Any, source_array: Any, destination_path: Path, max_frames: int
+) -> None:
+    """Reopen the written subset and verify bytes plus the pinned Zarr contract."""
+
+    import numpy as np
+    import zarr
+
+    reopened = zarr.open_group(str(destination_path), mode="r")
+    if "0" not in reopened:
+        raise ValueError("reopened image subset is missing array 0")
+    copied = reopened["0"]
+    if tuple(copied.shape) != (max_frames, *tuple(source_array.shape[1:])):
+        raise ValueError("reopened image subset shape mismatch")
+    if copied.dtype != source_array.dtype or tuple(copied.chunks) != tuple(source_array.chunks):
+        raise ValueError("reopened image subset dtype/chunks mismatch")
+    if copied.fill_value != getattr(source_array, "fill_value", None):
+        raise ValueError("reopened image subset fill value mismatch")
+    if dict(reopened.attrs) != dict(getattr(source, "attrs", {})):
+        raise ValueError("reopened image subset root metadata mismatch")
+    if dict(copied.attrs) != dict(getattr(source_array, "attrs", {})):
+        raise ValueError("reopened image subset array metadata mismatch")
+    source_metadata = getattr(source_array, "metadata", None)
+    copied_metadata = getattr(copied, "metadata", None)
+    if source_metadata is not None and copied_metadata is not None:
+        if getattr(copied_metadata, "dimension_names", None) != getattr(
+            source_metadata, "dimension_names", None
+        ):
+            raise ValueError("reopened image subset dimension names mismatch")
+        if getattr(copied_metadata, "codecs", None) != getattr(source_metadata, "codecs", None):
+            raise ValueError("reopened image subset codecs mismatch")
+    if getattr(source_metadata, "zarr_format", None) == 2:
+        for key in ("compressor", "filters"):
+            if getattr(copied, key, None) != getattr(source_array, key, None):
+                raise ValueError(f"reopened image subset {key} mismatch")
+    if not np.array_equal(copied[:], source_array[:max_frames]):
+        raise ValueError("reopened image subset frame bytes mismatch")
 
 
 def _load_source_api(stage: Any) -> _SourceApi:
@@ -325,7 +392,7 @@ def _load_source_api(stage: Any) -> _SourceApi:
     )
 
 
-def _write_scratch_repo(stage: Any, root: Path) -> tuple[Path, Path, Path, Path]:
+def _write_scratch_repo(stage: Any, root: Path) -> tuple[Path, Path, Path, Path, Path]:
     repo = root / "repo"
     repo.mkdir()
     for relative in _REPO_FILES:
@@ -337,15 +404,60 @@ def _write_scratch_repo(stage: Any, root: Path) -> tuple[Path, Path, Path, Path]
     secondary = repo / _SECONDARY_RELATIVE
     primary.parent.mkdir(parents=True, exist_ok=True)
     secondary.parent.mkdir(parents=True, exist_ok=True)
-    primary.write_bytes(stage.primary_checkpoint_path.read_bytes())
-    secondary.write_bytes(stage.secondary_checkpoint_path.read_bytes())
+    primary_payload = stage.primary_checkpoint_path.read_bytes()
+    secondary_payload = stage.secondary_checkpoint_path.read_bytes()
+    primary.write_bytes(primary_payload)
+    secondary.write_bytes(secondary_payload)
     config = root / "recipe_c.yaml"
-    config.write_bytes(stage.staged_config.read_bytes())
-    return repo, predictor, primary, config
+    config_payload = stage.staged_config.read_bytes()
+    config.write_bytes(config_payload)
+
+    receipt = getattr(stage, "receipt", None)
+    if not isinstance(receipt, Mapping):
+        raise ValueError("runtime stage receipt is missing for scratch identity")
+    expected = {
+        "predictor_sha256_after": getattr(stage, "predictor_sha256_postimage", None),
+        "config_sha256": receipt.get("config_sha256"),
+        "primary_checkpoint_sha256": receipt.get("primary_checkpoint_sha256"),
+        "secondary_checkpoint_sha256": receipt.get("secondary_checkpoint_sha256"),
+    }
+    actual = {
+        "predictor_sha256_after": _sha256(predictor.read_bytes()),
+        "config_sha256": _sha256(config_payload),
+        "primary_checkpoint_sha256": _sha256(primary_payload),
+        "secondary_checkpoint_sha256": _sha256(secondary_payload),
+    }
+    for key, value in actual.items():
+        expected_hash = expected[key]
+        if not isinstance(expected_hash, str) or value != expected_hash:
+            raise ValueError(f"scratch artifact identity mismatch: {key}")
+    return repo, predictor, primary, secondary, config
 
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _assert_scratch_lock_identity(
+    stage: Any,
+    lock: Mapping[str, object],
+    predictor: Path,
+    primary: Path,
+    secondary: Path,
+    config: Path,
+) -> None:
+    values = {
+        "config_sha256": _sha256(config.read_bytes()),
+        "primary_checkpoint_sha256": _sha256(primary.read_bytes()),
+        "secondary_checkpoint_sha256": _sha256(secondary.read_bytes()),
+    }
+    for key, actual in values.items():
+        if lock.get(key) != actual:
+            raise ValueError(f"scratch artifact does not match selection lock: {key}")
+    stage_postimage = getattr(stage, "predictor_sha256_postimage", None)
+    actual_predictor = _sha256(predictor.read_bytes())
+    if not isinstance(stage_postimage, str) or actual_predictor != stage_postimage:
+        raise ValueError("scratch predictor does not match stage postimage")
 
 
 def _argv_sha256(argv: Sequence[str]) -> str:
@@ -468,14 +580,41 @@ def _copy_raw_prediction(source: Path, destination: Path) -> None:
         raise ValueError(f"raw prediction is not a regular GEFF directory: {source.name}")
     if destination.exists() or destination.is_symlink():
         raise FileExistsError(destination)
-    temporary = destination.parent / f".{destination.name}.tmp"
-    shutil.copytree(source, temporary, symlinks=False)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{destination.name}.", dir=destination.parent))
+    temporary_stat = temporary.lstat()
+    temporary_identity = (temporary_stat.st_dev, temporary_stat.st_ino)
     try:
-        os.rename(temporary, destination)
+        shutil.copytree(source, temporary, symlinks=False, dirs_exist_ok=True)
+        _fsync_tree(temporary)
+        publish_directory_noreplace(temporary, destination)
+        fsync_directory(destination.parent)
     except BaseException:
-        if temporary.exists():
-            shutil.rmtree(temporary)
+        try:
+            current = temporary.lstat()
+            if (current.st_dev, current.st_ino) == temporary_identity:
+                shutil.rmtree(temporary)
+        except FileNotFoundError:
+            pass
         raise
+
+
+def _fsync_file(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _fsync_tree(root: Path) -> None:
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise ValueError("prediction tree contains a symlink")
+        if path.is_file():
+            _fsync_file(path)
+    for path in sorted((path for path in root.rglob("*") if path.is_dir()), reverse=True):
+        fsync_directory(path)
+    fsync_directory(root)
 
 
 def _role_path(path: Path, output_root: Path) -> str:
@@ -488,16 +627,47 @@ def _safe_failure_message(exc: BaseException) -> str:
     return type(exc).__name__
 
 
-def _write_failed(output_root: Path, lock_id: str, phase: str, exc: BaseException, command: Sequence[str]) -> None:
+def _entry_identity(path: Path) -> tuple[int, int]:
+    stat_result = path.lstat()
+    return stat_result.st_dev, stat_result.st_ino
+
+
+def _cleanup_owned_entries(
+    owned_entries: Mapping[Path, tuple[int, int]], recursive_entries: set[Path] | None = None
+) -> None:
+    recursive_entries = recursive_entries or set()
+    for path, identity in sorted(owned_entries.items(), key=lambda item: len(item[0].parts), reverse=True):
+        try:
+            stat_result = path.lstat()
+        except FileNotFoundError:
+            continue
+        if (stat_result.st_dev, stat_result.st_ino) != identity:
+            continue
+        if path in recursive_entries and path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        elif path.is_dir() and not path.is_symlink():
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+        else:
+            path.unlink()
+
+
+def _write_failed(
+    output_root: Path,
+    lock_id: str,
+    phase: str,
+    exc: BaseException,
+    command: Sequence[str],
+    *,
+    owned_entries: Mapping[Path, tuple[int, int]] | None = None,
+    recursive_entries: set[Path] | None = None,
+) -> None:
     if not output_root.is_dir():
         return
-    for child in list(output_root.iterdir()):
-        if child.name == "FAILED.json":
-            continue
-        if child.is_dir() and not child.is_symlink():
-            shutil.rmtree(child)
-        elif child.is_symlink() or not child.is_dir():
-            child.unlink()
+    if owned_entries:
+        _cleanup_owned_entries(owned_entries, recursive_entries or set())
     payload = {
         "status": "FAILED",
         "selection_lock_id": lock_id,
@@ -506,9 +676,7 @@ def _write_failed(output_root: Path, lock_id: str, phase: str, exc: BaseExceptio
         "command_sha256": _sha256(json.dumps(list(command), separators=(",", ":")).encode()),
         "reusable": False,
     }
-    temporary = output_root / ".FAILED.json.tmp"
-    temporary.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
-    os.replace(temporary, output_root / "FAILED.json")
+    write_json_exclusive(output_root / "FAILED.json", payload, mode=0o644)
 
 
 def _resolve_device(requested_device: str) -> str:
@@ -519,13 +687,15 @@ def _resolve_device(requested_device: str) -> str:
     return device_name
 
 
+def _extract_child_device(stdout: str, expected: str) -> str:
+    matches = re.findall(r"(?<![A-Za-z0-9_])device=(cuda|mps|cpu)(?![A-Za-z0-9_])", stdout)
+    if len(matches) != 1 or matches[0] != expected:
+        raise ValueError("child predictor device output is missing, duplicated, or mismatched")
+    return matches[0]
+
+
 def _write_ready_receipt(output_root: Path, receipt: InferenceReceipt) -> None:
-    target = output_root / "receipt.json"
-    if target.exists() or target.is_symlink():
-        raise FileExistsError(target)
-    temporary = output_root / ".receipt.json.tmp"
-    temporary.write_text(json.dumps(asdict(receipt), sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, target)
+    write_json_exclusive(output_root / "receipt.json", asdict(receipt), mode=0o644)
 
 
 def run_recipe_c_inference(
@@ -539,32 +709,61 @@ def run_recipe_c_inference(
     """Run the pinned source recipe with no GT/evaluation boundary crossing."""
 
     started = datetime.now(UTC).isoformat()
-    lock = _validate_selection_lock(selection_lock)
-    chosen_samples = _sample_selection(sample_ids, lock, max_frames)
-    _assert_stage_lock_identity(runtime_stage, lock)
-    requested_device = lock.get("requested_device")
-    if not isinstance(requested_device, str) or not requested_device:
-        raise ValueError("selection lock requested_device is missing")
-    resolved_device = _resolve_device(requested_device)
-    if resolved_device not in tuple(runtime_stage.device_candidates):
-        raise ValueError("resolved device is not present in the runtime stage candidates")
     output_root = Path(output_root)
     if output_root.exists() or output_root.is_symlink():
         raise FileExistsError(f"output root must be fresh: {output_root.name}")
     output_root.mkdir(parents=True, exist_ok=False)
+    lock: dict[str, object] | None = None
+    lock_id = "unvalidated"
     phase = "preflight"
     command: tuple[str, ...] = ()
     execution_argv_sha256 = ""
+    resolved_device = ""
+    child_device = ""
+    child_stdout_sha256 = ""
+    child_stderr_sha256 = ""
     source_api: Any = None
+    owned_entries: dict[Path, tuple[int, int]] = {}
+    recursive_entries: set[Path] = set()
+
+    def remember(path: Path, *, recursive: bool = False) -> None:
+        owned_entries[path] = _entry_identity(path)
+        if recursive:
+            recursive_entries.add(path)
+
     try:
+        lock = _validate_selection_lock(selection_lock)
+        candidate_lock_id = lock.get("selection_lock_id")
+        if isinstance(candidate_lock_id, str) and candidate_lock_id:
+            lock_id = candidate_lock_id
+        chosen_samples = _sample_selection(sample_ids, lock, max_frames)
+        _assert_stage_lock_identity(runtime_stage, lock)
+        requested_device = lock.get("requested_device")
+        if requested_device != "auto":
+            raise ValueError("selection lock requested_device must be exactly auto")
+        resolved_device = _resolve_device(requested_device)
+        if resolved_device not in tuple(runtime_stage.device_candidates):
+            raise ValueError("resolved device is not present in the runtime stage candidates")
         _preflight_images(Path(image_root), chosen_samples, max_frames)
         with runtime_stage:
             source_api = _load_source_api(runtime_stage)
             phase = "patch"
             with tempfile.TemporaryDirectory(prefix="recipe-c-") as scratch_name:
                 scratch = Path(scratch_name)
-                scratch_repo, scratch_predictor, scratch_primary, scratch_config = _write_scratch_repo(
-                    runtime_stage, scratch
+                (
+                    scratch_repo,
+                    scratch_predictor,
+                    scratch_primary,
+                    scratch_secondary,
+                    scratch_config,
+                ) = _write_scratch_repo(runtime_stage, scratch)
+                _assert_scratch_lock_identity(
+                    runtime_stage,
+                    lock,
+                    scratch_predictor,
+                    scratch_primary,
+                    scratch_secondary,
+                    scratch_config,
                 )
                 data_root = _prepare_image_data(Path(image_root), chosen_samples, max_frames, scratch)
                 patched = source_api.apply_spatial_d4_patch(scratch_repo, "scripts/predict_unet_transformer.py")
@@ -572,13 +771,12 @@ def run_recipe_c_inference(
                     raise RuntimeError("spatial D4 patch did not report a fresh postimage")
                 py_compile.compile(str(scratch_predictor), doraise=True)
                 predictor_payload = scratch_predictor.read_bytes()
-                expected_predictor_postimage = getattr(runtime_stage, "predictor_sha256_postimage", None)
-                if (
-                    isinstance(expected_predictor_postimage, str)
-                    and expected_predictor_postimage
-                    and _sha256(predictor_payload) != expected_predictor_postimage
-                ):
-                    raise ValueError("spatial D4 predictor postimage hash does not match the staged identity")
+                stage_predictor_postimage = getattr(runtime_stage, "predictor_sha256_postimage", None)
+                if not isinstance(stage_predictor_postimage, str):
+                    raise ValueError("runtime stage predictor postimage is missing")
+                predictor_sha256_after = _sha256(predictor_payload)
+                if predictor_sha256_after == stage_predictor_postimage:
+                    raise ValueError("spatial D4 did not produce a distinct runtime predictor postimage")
                 config = source_api.load_config(scratch_config)
                 raw_command, splits_path = source_api.build_predict_command(
                     config,
@@ -621,7 +819,7 @@ def run_recipe_c_inference(
                     _SECONDARY_RELATIVE,
                 )
                 execution_argv_sha256 = _argv_sha256(execution_command)
-                subprocess.run(
+                completed = subprocess.run(
                     list(execution_command),
                     cwd=repo_cwd,
                     pass_fds=(runtime_stage.repo_fd,),
@@ -631,6 +829,11 @@ def run_recipe_c_inference(
                     capture_output=True,
                     text=True,
                 )
+                child_stdout = completed.stdout or ""
+                child_stderr = completed.stderr or ""
+                child_device = _extract_child_device(child_stdout, resolved_device)
+                child_stdout_sha256 = _sha256(child_stdout.encode("utf-8"))
+                child_stderr_sha256 = _sha256(child_stderr.encode("utf-8"))
                 username = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
                 stage_predictions = Path(repo_cwd) / "predictions" / username / "unet_transformer" / "split_0"
                 raw_sources = sorted(stage_predictions.glob("*.geff"))
@@ -641,11 +844,13 @@ def run_recipe_c_inference(
                 phase = "raw_persist"
                 raw_root = output_root / "raw"
                 raw_root.mkdir()
+                remember(raw_root)
                 raw_geffs: dict[str, Path] = {}
                 raw_counts: dict[str, object] = {}
                 for source in raw_sources:
                     destination = raw_root / source.name
                     _copy_raw_prediction(source, destination)
+                    remember(destination, recursive=True)
                     counts = validate_prediction_geff(
                         destination,
                         source.stem,
@@ -658,7 +863,15 @@ def run_recipe_c_inference(
                     }
                 phase = "postprocess"
                 csv_path = output_root / "submission.csv"
-                source_api.write_submission_from_geff(list(raw_geffs.values()), config, data_root, csv_path)
+                csv_temporary = output_root / ".submission.csv.tmp"
+                csv_temporary.touch(exist_ok=False)
+                remember(csv_temporary)
+                source_api.write_submission_from_geff(
+                    list(raw_geffs.values()), config, data_root, csv_temporary
+                )
+                publish_file_noreplace(csv_temporary, csv_path)
+                owned_entries.pop(csv_temporary, None)
+                remember(csv_path)
                 from biohub.submission.validator import validate_submission
 
                 report = validate_submission(
@@ -685,6 +898,9 @@ def run_recipe_c_inference(
                     sample_ids=chosen_samples,
                     provenance={"source_commit": runtime_stage.receipt.get("source_commit", "")},
                 )
+                remember(final_root)
+                for final in final_geffs.values():
+                    remember(final, recursive=True)
                 final_counts: dict[str, object] = {}
                 for sample_id, final in final_geffs.items():
                     counts = validate_prediction_geff(
@@ -705,8 +921,9 @@ def run_recipe_c_inference(
                             "predictor_sha256_before": runtime_stage.receipt.get(
                                 "predictor_sha256_before", ""
                             ),
-                            "predictor_sha256": runtime_stage.predictor_sha256_postimage,
-                            "predictor_sha256_after": runtime_stage.predictor_sha256_postimage,
+                            "predictor_sha256": predictor_sha256_after,
+                            "predictor_sha256_after": predictor_sha256_after,
+                            "stage_predictor_sha256_after": stage_predictor_postimage,
                             "primary_checkpoint_sha256": runtime_stage.receipt.get(
                                 "primary_checkpoint_sha256", ""
                             ),
@@ -720,10 +937,14 @@ def run_recipe_c_inference(
                             "runtime_role": "live_stage_repo",
                             "command_sha256": _argv_sha256(command),
                             "execution_argv_sha256": execution_argv_sha256,
+                            "child_device": child_device,
+                            "child_stdout_sha256": child_stdout_sha256,
+                            "child_stderr_sha256": child_stderr_sha256,
                         },
                     )
                     mint_prediction_token(final)
                     manifests[sample_id] = manifest
+                    remember(manifest)
                 finished = datetime.now(UTC).isoformat()
                 receipt = InferenceReceipt(
                     status="READY",
@@ -731,7 +952,8 @@ def run_recipe_c_inference(
                     source_commit=str(lock["source_commit"]),
                     config_sha256=str(lock["config_sha256"]),
                     predictor_sha256_before=str(lock["predictor_sha256"]),
-                    predictor_sha256_after=str(runtime_stage.predictor_sha256_postimage),
+                    stage_predictor_sha256_after=stage_predictor_postimage,
+                    predictor_sha256_after=predictor_sha256_after,
                     primary_checkpoint_sha256=str(lock["primary_checkpoint_sha256"]),
                     secondary_checkpoint_sha256=str(lock["secondary_checkpoint_sha256"]),
                     sample_ids=tuple(chosen_samples),
@@ -743,9 +965,17 @@ def run_recipe_c_inference(
                     cwd_role="repo",
                     pythonpath="src",
                     resolved_device=resolved_device,
+                    child_device=child_device,
+                    child_stdout_sha256=child_stdout_sha256,
+                    child_stderr_sha256=child_stderr_sha256,
                     device_candidates=tuple(runtime_stage.device_candidates),
                     runtime_role="live_stage_repo",
-                    patch_flags={"spatial_d4": True, "builder": True},
+                    patch_flags={
+                        "spatial_d4": True,
+                        "builder": True,
+                        "stage_device_postimage_verified": True,
+                        "runtime_d4_postimage_verified": True,
+                    },
                     raw_geffs={sample: _role_path(path, output_root) for sample, path in raw_geffs.items()},
                     postprocessed_csv=_role_path(csv_path, output_root),
                     final_geffs={sample: _role_path(path, output_root) for sample, path in final_geffs.items()},
@@ -763,7 +993,15 @@ def run_recipe_c_inference(
                 return receipt
     except BaseException as exc:
         try:
-            _write_failed(output_root, str(lock["selection_lock_id"]), phase, exc, command)
+            _write_failed(
+                output_root,
+                lock_id,
+                phase,
+                exc,
+                command,
+                owned_entries=owned_entries,
+                recursive_entries=recursive_entries,
+            )
         except BaseException as cleanup_error:
             exc.add_note(f"failed receipt cleanup: {type(cleanup_error).__name__}")
         raise

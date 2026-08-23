@@ -8,6 +8,7 @@ import hashlib
 import json
 import subprocess
 import types
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +18,11 @@ import tracksdata as td
 import biohub.recipe_c.runner as runner_module
 from biohub.recipe_c.protocol import PANEL_V1
 from biohub.recipe_c.runner import InferenceReceipt, run_recipe_c_inference
+
+_STAGE_DEVICE_PREDICTOR = b"print('predictor')\n"
+_D4_RUNTIME_PREDICTOR = b"print('d4 predictor')\n"
+_STAGE_DEVICE_PREDICTOR_SHA256 = hashlib.sha256(_STAGE_DEVICE_PREDICTOR).hexdigest()
+_D4_RUNTIME_PREDICTOR_SHA256 = hashlib.sha256(_D4_RUNTIME_PREDICTOR).hexdigest()
 
 
 class _FakePath:
@@ -44,7 +50,7 @@ class _FakeReceipt:
 class _FakeStage:
     selection_lock_id = "b" * 64
     predictor_sha256_preimage = "c" * 64
-    predictor_sha256_postimage = "76130475a0beaa303576e87a94edaa74b5c2e39f56f35051c0d1b5cbc81a5046"
+    predictor_sha256_postimage = _STAGE_DEVICE_PREDICTOR_SHA256
     device_candidates = ("cuda", "mps", "cpu")
     repo_fd = 42
 
@@ -55,14 +61,27 @@ class _FakeStage:
         self.repo_dir = _FakePath(root / "repo")
         self.staged_config = _FakePath(root / "config.yaml", b"config: synthetic\n")
         self.predictor_path = _FakePath(root / "repo" / "scripts" / "predict_unet_transformer.py")
+        self.predictor_payload = _STAGE_DEVICE_PREDICTOR
         self.primary_checkpoint_path = _FakePath(root / "repo" / "weights" / "primary.pth", b"primary")
         self.secondary_checkpoint_path = _FakePath(root / "repo" / "weights" / "secondary.pth", b"secondary")
         self.receipt = {
+            "status": "READY",
+            "selection_lock_id": self.selection_lock_id,
+            "roles": {
+                "repo": "repo",
+                "weights": "repo/weights",
+                "source_root": "source_root",
+                "config": "configs/experiments/recipe_c_motion_off_edge_0_40_det0_96875.yaml",
+                "predictor": "repo/scripts/predict_unet_transformer.py",
+                "primary_checkpoint": "weights/unet_transformer/split_0/edge_predictor_best.pth",
+                "secondary_checkpoint": "weights/unet_transformer/seed_314159/edge_predictor_best.pth",
+            },
             "source_commit": "843a47fdd531bdf7e6377673135519c54b69ae28",
-            "config_sha256": "e" * 64,
+            "config_sha256": "bb994d357f3db3af0541c1e64c8862ec6ade85b85857c8eead1c06c95780fd1e",
             "predictor_sha256_before": "c" * 64,
-            "primary_checkpoint_sha256": "f" * 64,
-            "secondary_checkpoint_sha256": "1" * 64,
+            "predictor_sha256_after": self.predictor_sha256_postimage,
+            "primary_checkpoint_sha256": "986a1b7135f4986150aa5fa0028feeaa66cdaf3ed6a00a355dd86e042f7fb494",
+            "secondary_checkpoint_sha256": "c0f69e19ba252767f183158737ab1bc44f42380d2473ece23a4f276ae7c80dff",
             "resolved_device_candidates": ["cuda", "mps", "cpu"],
         }
         self.published: list[tuple[str, bytes]] = []
@@ -77,6 +96,8 @@ class _FakeStage:
         self.closed = True
 
     def read_repo_bytes(self, relative: object) -> bytes:
+        if str(relative).endswith("scripts/predict_unet_transformer.py"):
+            return self.predictor_payload
         return b"scratch predictor\n"
 
     def publish_repo_bytes(self, relative: object, payload: bytes, *, expected: str) -> _FakeReceipt:
@@ -90,13 +111,50 @@ def _lock() -> dict[str, object]:
         "selection_lock_id": "b" * 64,
         "panel": {"panel_id": "PANEL_V1", "sample_ids": list(PANEL_V1)},
         "source_commit": "843a47fdd531bdf7e6377673135519c54b69ae28",
-        "config_sha256": "e" * 64,
+        "config_sha256": "bb994d357f3db3af0541c1e64c8862ec6ade85b85857c8eead1c06c95780fd1e",
         "predictor_sha256": "c" * 64,
-        "primary_checkpoint_sha256": "f" * 64,
-        "secondary_checkpoint_sha256": "1" * 64,
+        "primary_checkpoint_sha256": "986a1b7135f4986150aa5fa0028feeaa66cdaf3ed6a00a355dd86e042f7fb494",
+        "secondary_checkpoint_sha256": "c0f69e19ba252767f183158737ab1bc44f42380d2473ece23a4f276ae7c80dff",
         "secondary_staging_relative_path": "weights/unet_transformer/seed_314159/edge_predictor_best.pth",
         "requested_device": "auto",
     }
+
+
+def _minimal_receipt(marker: str) -> InferenceReceipt:
+    return InferenceReceipt(
+        status="READY",
+        selection_lock_id="b" * 64,
+        source_commit=marker,
+        config_sha256="c" * 64,
+        predictor_sha256_before="d" * 64,
+        stage_predictor_sha256_after="e" * 64,
+        predictor_sha256_after="f" * 64,
+        primary_checkpoint_sha256="1" * 64,
+        secondary_checkpoint_sha256="2" * 64,
+        sample_ids=(PANEL_V1[0],),
+        mode="smoke_2frame",
+        max_frames=2,
+        command=("python", "predict"),
+        command_sha256="3" * 64,
+        execution_argv_sha256="4" * 64,
+        cwd_role="repo",
+        pythonpath="src",
+        resolved_device="cpu",
+        child_device="cpu",
+        child_stdout_sha256="5" * 64,
+        child_stderr_sha256="6" * 64,
+        device_candidates=("cuda", "mps", "cpu"),
+        runtime_role="live_stage_repo",
+        patch_flags={"spatial_d4": True},
+        raw_geffs={},
+        postprocessed_csv=None,
+        final_geffs={},
+        manifests={},
+        counts={},
+        started_at="2026-01-01T00:00:00+00:00",
+        finished_at="2026-01-01T00:00:01+00:00",
+        failure=None,
+    )
 
 
 def test_runner_requires_exact_panel_and_lock_before_side_effects(
@@ -161,6 +219,10 @@ def test_stage_lock_identity_rejects_hash_and_device_candidate_mismatch(tmp_path
     stage.receipt["resolved_device_candidates"] = ["cpu"]
     with pytest.raises(ValueError, match="device candidates"):
         runner_module._assert_stage_lock_identity(stage, lock)
+    stage.receipt["resolved_device_candidates"] = ["cuda", "mps", "cpu"]
+    lock["source_commit"] = "wrong-commit"
+    with pytest.raises(ValueError, match="source commit"):
+        runner_module._assert_stage_lock_identity(stage, lock)
 
 
 @pytest.mark.parametrize("attribute", ["predictor_sha256_preimage", "predictor_sha256_postimage"])
@@ -179,6 +241,42 @@ def test_stage_lock_identity_requires_secondary_staging_role(tmp_path: Path) -> 
     lock.pop("secondary_staging_relative_path")
     with pytest.raises(ValueError, match="secondary checkpoint role"):
         runner_module._assert_stage_lock_identity(stage, lock)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("status", "FAILED"),
+        ("selection_lock_id", "x" * 64),
+        ("roles", {}),
+        ("predictor_sha256_after", "x" * 64),
+    ],
+)
+def test_stage_receipt_requires_ready_role_and_postimage_identity(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    stage.receipt[field] = value
+    with pytest.raises(ValueError, match=r"receipt|identity|role|postimage|READY"):
+        runner_module._assert_stage_lock_identity(stage, _lock())
+
+
+@pytest.mark.parametrize("artifact", ["config", "primary", "secondary", "predictor"])
+def test_scratch_artifact_bytes_are_rehashed_against_stage_receipt(
+    tmp_path: Path, artifact: str
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    if artifact == "config":
+        stage.staged_config.payload = b"tampered config"
+    elif artifact == "primary":
+        stage.primary_checkpoint_path.payload = b"tampered checkpoint"
+    elif artifact == "secondary":
+        stage.secondary_checkpoint_path.payload = b"tampered checkpoint"
+    else:
+        stage.predictor_payload = b"tampered predictor"
+    (tmp_path / "scratch").mkdir()
+    with pytest.raises(ValueError, match=r"scratch|checkpoint|identity|hash"):
+        runner_module._write_scratch_repo(stage, tmp_path / "scratch")
 
 
 def test_device_resolver_errors_are_not_hidden(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -379,6 +477,76 @@ def test_smoke_subset_preserves_zarr_metadata_and_array_encoding(tmp_path: Path)
     np.testing.assert_array_equal(copied[:], values[:2])
 
 
+def test_smoke_subset_is_reopened_and_verified_after_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    zarr = pytest.importorskip("zarr")
+    import numpy as np
+
+    sample = PANEL_V1[0]
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    source_path = image_root / f"{sample}.zarr"
+    source = zarr.open_group(str(source_path), mode="w", zarr_format=3)
+    source.attrs.update(
+        {
+            "multiscales": [
+                {"datasets": [{"coordinateTransformations": [{"scale": [1.0, 1.625, 0.40625, 0.40625]}]}]}
+            ],
+            "image_statistics": {"quantiles": [0.0, 1.0]},
+        }
+    )
+    source.create_array("0", data=np.zeros((4, 2, 2, 2), dtype=np.uint8), chunks=(1, 2, 2, 2))
+    original_open_group = zarr.open_group
+    calls: list[tuple[str, object]] = []
+
+    def tracked_open_group(*args: object, **kwargs: object):
+        calls.append((str(args[0]) if args else "", kwargs.get("mode")))
+        return original_open_group(*args, **kwargs)
+
+    monkeypatch.setattr(zarr, "open_group", tracked_open_group)
+    (tmp_path / "scratch").mkdir()
+    runner_module._prepare_image_data(image_root, (sample,), 2, tmp_path / "scratch")
+    assert any(mode == "r" and path.endswith(f"{sample}.zarr") for path, mode in calls)
+
+
+@pytest.mark.parametrize("corruption", ["data", "metadata"])
+def test_smoke_subset_reopen_rejects_backing_store_corruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
+) -> None:
+    zarr = pytest.importorskip("zarr")
+    import numpy as np
+
+    sample = PANEL_V1[0]
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    source_path = image_root / f"{sample}.zarr"
+    source = zarr.open_group(str(source_path), mode="w", zarr_format=3)
+    source.attrs.update(
+        {
+            "multiscales": [{"datasets": [{"coordinateTransformations": [{"scale": [1.0, 1.625, 0.40625, 0.40625]}]}]}],
+            "image_statistics": {"quantiles": [0.0, 1.0]},
+        }
+    )
+    source.create_array("0", data=np.zeros((4, 2, 2, 2), dtype=np.uint8), chunks=(1, 2, 2, 2))
+    original_open_group = zarr.open_group
+
+    def corrupt_then_open(*args: object, **kwargs: object):
+        path = str(args[0]) if args else ""
+        if kwargs.get("mode") == "r" and path.endswith(f"{sample}.zarr") and "input" in path:
+            writable = original_open_group(path, mode="a")
+            if corruption == "data":
+                writable["0"][0, 0, 0, 0] = 7
+            else:
+                writable.attrs["image_statistics"] = {"quantiles": [0.0, 0.5]}
+        return original_open_group(*args, **kwargs)
+
+    monkeypatch.setattr(zarr, "open_group", corrupt_then_open)
+    (tmp_path / "scratch").mkdir()
+    with pytest.raises(ValueError, match=r"metadata|bytes|frame"):
+        runner_module._prepare_image_data(image_root, (sample,), 2, tmp_path / "scratch")
+
+
 def test_preflight_failure_persists_only_nonreusable_failed_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -401,6 +569,113 @@ def test_preflight_failure_persists_only_nonreusable_failed_receipt(
     assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
 
 
+def test_invalid_lock_is_claimed_then_records_unvalidated_failed_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    output = tmp_path / "output"
+
+    def reject(_value: object) -> dict[str, object]:
+        raise ValueError("invalid lock")
+
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", reject)
+    with pytest.raises(ValueError, match="invalid lock"):
+        run_recipe_c_inference(tmp_path / "images", (PANEL_V1[0],), stage, {}, output, max_frames=2)
+    failed = json.loads((output / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["selection_lock_id"] == "unvalidated"
+    assert failed["phase"] == "preflight"
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+
+
+def test_only_auto_requested_device_is_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    lock = _lock()
+    lock["requested_device"] = "cpu"
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda _value: lock)
+    with pytest.raises(ValueError, match="exactly auto"):
+        run_recipe_c_inference(tmp_path / "images", (PANEL_V1[0],), stage, lock, tmp_path / "output", max_frames=2)
+    failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["phase"] == "preflight"
+
+
+@pytest.mark.parametrize("stdout", ["", "device=cpu\ndevice=cpu\n", "device=mps\n"])
+def test_child_device_output_must_be_exactly_one_resolved_device(stdout: str) -> None:
+    with pytest.raises(ValueError, match="device"):
+        runner_module._extract_child_device(stdout, "cpu")
+
+
+def test_raw_prediction_publish_keeps_competitor_on_no_replace_race(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.geff"
+    source.mkdir()
+    (source / "source.bin").write_bytes(b"source")
+    destination = tmp_path / "destination.geff"
+
+    def race(_temporary: Path, final: Path) -> None:
+        final.mkdir()
+        (final / "competitor").write_bytes(b"keep")
+        raise FileExistsError(final)
+
+    monkeypatch.setattr(runner_module, "publish_directory_noreplace", race)
+    with pytest.raises(FileExistsError):
+        runner_module._copy_raw_prediction(source, destination)
+    assert (destination / "competitor").read_bytes() == b"keep"
+
+
+def test_failed_receipt_never_replaces_competitor(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    output.mkdir()
+    target = output / "FAILED.json"
+    target.write_text('{"status":"competitor"}\n', encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        runner_module._write_failed(output, "unvalidated", "preflight", ValueError("x"), ())
+    assert json.loads(target.read_text(encoding="utf-8"))["status"] == "competitor"
+
+
+def test_failed_cleanup_does_not_rmtree_unowned_competitor_child(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    output.mkdir()
+    raw = output / "raw"
+    raw.mkdir()
+    competitor = raw / "competitor.geff"
+    competitor.mkdir()
+    (competitor / "sentinel").write_bytes(b"keep")
+    identity = runner_module._entry_identity(raw)
+    runner_module._write_failed(
+        output,
+        "unvalidated",
+        "raw_persist",
+        RuntimeError("synthetic"),
+        (),
+        owned_entries={raw: identity},
+    )
+    assert (competitor / "sentinel").read_bytes() == b"keep"
+    assert (output / "FAILED.json").is_file()
+
+
+def test_ready_receipt_exclusive_publish_has_one_winner(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    output.mkdir()
+    receipts = (_minimal_receipt("winner-a"), _minimal_receipt("winner-b"))
+
+    def publish(receipt: InferenceReceipt) -> str:
+        try:
+            runner_module._write_ready_receipt(output, receipt)
+        except FileExistsError:
+            return "lost"
+        return "won"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(publish, receipts))
+    assert sorted(outcomes) == ["lost", "won"]
+    payload = json.loads((output / "receipt.json").read_text(encoding="utf-8"))
+    assert payload["source_commit"] in {"winner-a", "winner-b"}
+    assert not list(output.glob(".receipt.json.*.tmp"))
+
+
 def test_existing_output_root_is_rejected_without_failed_side_effect(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -415,6 +690,42 @@ def test_existing_output_root_is_rejected_without_failed_side_effect(
         run_recipe_c_inference(tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2)
     assert sentinel.read_text(encoding="utf-8") == "keep"
     assert not (output / "FAILED.json").exists()
+
+
+@pytest.mark.parametrize("kind", ["file", "directory", "symlink", "dangling", "failed"])
+def test_all_existing_output_root_kinds_are_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    output = tmp_path / "output"
+    if kind == "file":
+        output.write_bytes(b"keep")
+    elif kind == "directory":
+        output.mkdir()
+        (output / "sentinel").write_bytes(b"keep")
+    elif kind == "failed":
+        output.mkdir()
+        (output / "FAILED.json").write_text('{"status":"old"}\n', encoding="utf-8")
+    else:
+        target = tmp_path / "target"
+        if kind == "symlink":
+            target.mkdir()
+        output.symlink_to(target, target_is_directory=kind == "symlink")
+    monkeypatch.setattr(
+        runner_module,
+        "_validate_selection_lock",
+        lambda _value: (_ for _ in ()).throw(AssertionError("existing output must reject first")),
+    )
+    with pytest.raises(FileExistsError, match="fresh"):
+        run_recipe_c_inference(tmp_path / "images", (PANEL_V1[0],), stage, {}, output, max_frames=2)
+    if kind == "file":
+        assert output.read_bytes() == b"keep"
+    elif kind == "directory":
+        assert (output / "sentinel").read_bytes() == b"keep"
+    elif kind == "failed":
+        assert json.loads((output / "FAILED.json").read_text(encoding="utf-8"))["status"] == "old"
+    else:
+        assert output.is_symlink()
 
 
 def test_builder_preflight_failure_uses_allowed_patch_phase(
@@ -432,7 +743,7 @@ def test_builder_preflight_failure_uses_allowed_patch_phase(
     (tmp_path / "input").mkdir()
 
     def d4(repo_dir: Path, prediction_script: str) -> bool:
-        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
         return True
 
     monkeypatch.setattr(
@@ -469,7 +780,7 @@ def test_d4_postimage_hash_mismatch_fails_before_builder(
     (tmp_path / "input").mkdir()
 
     def d4(repo_dir: Path, prediction_script: str) -> bool:
-        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
         return True
 
     calls = {"builder": 0}
@@ -494,7 +805,7 @@ def test_d4_postimage_hash_mismatch_fails_before_builder(
         )
     assert calls["builder"] == 0
     failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
-    assert failed["phase"] == "patch"
+    assert failed["phase"] == "preflight"
 
 
 @pytest.mark.parametrize(
@@ -520,7 +831,7 @@ def test_subprocess_failures_are_nonreusable_and_phase_labeled(
     (tmp_path / "input").mkdir()
 
     def d4(repo_dir: Path, prediction_script: str) -> bool:
-        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
         return True
 
     def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
@@ -555,10 +866,23 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
     stage = _FakeStage(tmp_path / "stage")
     lock = _lock()
     calls = {"d4": 0, "builder": 0, "writer": 0, "run": 0}
+    forbidden_calls = {"gt": 0, "metric": 0}
+
+    def forbidden_gt(*args: object, **kwargs: object) -> None:
+        forbidden_calls["gt"] += 1
+        raise AssertionError("ground truth must not be opened by Recipe C")
+
+    def forbidden_metric(*args: object, **kwargs: object) -> None:
+        forbidden_calls["metric"] += 1
+        raise AssertionError("official metrics must not be called by Recipe C")
+
+    monkeypatch.setattr("biohub.reproducibility.gt_guard.open_ground_truth", forbidden_gt)
+    monkeypatch.setattr("biohub.submission.validator.load_ground_truth_nodes", forbidden_gt)
+    monkeypatch.setattr("biohub.official_metrics.metrics.evaluate", forbidden_metric)
 
     def d4(repo_dir: Path, prediction_script: str) -> bool:
         calls["d4"] += 1
-        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        (repo_dir / prediction_script).write_bytes(_D4_RUNTIME_PREDICTOR)
         return True
 
     def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
@@ -620,7 +944,7 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
         assert kwargs["env"]["PYTHONPATH"] == "src"  # type: ignore[index]
         assert all(not value.startswith("/") for value in argv)
         write_raw_geff(str(kwargs["cwd"]))
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="Fold 0: synthetic | device=cpu | done\n", stderr="")
 
     def writer(geffs: list[Path], config: object, test_dir: Path, output: Path) -> dict[str, int]:
         calls["writer"] += 1
@@ -671,11 +995,20 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
     assert receipt.status == "READY"
     assert receipt.mode == "smoke_2frame"
     assert calls == {"d4": 1, "builder": 1, "writer": 1, "run": 1}
+    assert forbidden_calls == {"gt": 0, "metric": 0}
     assert len(stage.published) == 2
     assert (tmp_path / "output" / "receipt.json").is_file()
     assert not (tmp_path / "output" / "FAILED.json").exists()
     assert len(receipt.command_sha256) == 64
     assert len(receipt.execution_argv_sha256) == 64
+    assert receipt.stage_predictor_sha256_after == _STAGE_DEVICE_PREDICTOR_SHA256
+    assert receipt.predictor_sha256_after == _D4_RUNTIME_PREDICTOR_SHA256
+    assert stage.predictor_sha256_postimage == _STAGE_DEVICE_PREDICTOR_SHA256
+    assert stage.receipt["predictor_sha256_after"] == _STAGE_DEVICE_PREDICTOR_SHA256
+    assert receipt.child_device == "cpu"
+    assert len(receipt.child_stdout_sha256) == 64
+    assert len(receipt.child_stderr_sha256) == 64
+    assert receipt.counts["publish"]["predictor"]["sha256"] == _D4_RUNTIME_PREDICTOR_SHA256  # type: ignore[index]
     manifest_path = tmp_path / "output" / "predictions" / f"{sample}.geff.manifest.json"
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     for key in (
@@ -688,5 +1021,12 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
         "resolved_device",
         "command_sha256",
         "execution_argv_sha256",
+        "stage_predictor_sha256_after",
+        "child_device",
+        "child_stdout_sha256",
+        "child_stderr_sha256",
     ):
         assert key in manifest_payload
+    assert manifest_payload["predictor_sha256"] == _D4_RUNTIME_PREDICTOR_SHA256
+    assert manifest_payload["predictor_sha256_after"] == _D4_RUNTIME_PREDICTOR_SHA256
+    assert manifest_payload["stage_predictor_sha256_after"] == _STAGE_DEVICE_PREDICTOR_SHA256

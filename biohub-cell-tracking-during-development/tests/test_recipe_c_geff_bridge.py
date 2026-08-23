@@ -69,7 +69,7 @@ def test_bridge_roundtrips_fork_and_uses_exact_sample_name(tmp_path: Path) -> No
         csv_path,
         tmp_path / "predictions",
         sample_ids=(SAMPLE,),
-        provenance={"recipe": "C", "ground_truth_included": False},
+        provenance={"recipe": "C"},
     )
 
     prediction = written[SAMPLE]
@@ -96,6 +96,102 @@ def test_bridge_rejects_invalid_sentinels_and_noncontiguous_rows(tmp_path: Path)
         postprocessed_csv_to_geffs(csv_path, tmp_path / "predictions-2", sample_ids=(SAMPLE,), provenance={})
 
 
+def test_bridge_rejects_whitespace_padded_integer_fields(tmp_path: Path) -> None:
+    csv_path = tmp_path / "bad.csv"
+    row = _node(0, 0, 0)
+    row["id"] = " 0"
+    _write_csv(csv_path, [row])
+    with pytest.raises(ValueError, match="integer"):
+        postprocessed_csv_to_geffs(csv_path, tmp_path / "predictions", sample_ids=(SAMPLE,), provenance={})
+
+
+@pytest.mark.parametrize("field", ["id", "node_id", "t", "z", "y", "x", "source_id", "target_id"])
+@pytest.mark.parametrize("padding", ["leading", "trailing", "tab"])
+def test_csv_integer_fields_reject_surrounding_whitespace(
+    tmp_path: Path, field: str, padding: str
+) -> None:
+    csv_path = tmp_path / "bad.csv"
+    rows = [_node(0, 0, 0), _node(1, 1, 1), _edge(2, 0, 1)]
+    row = rows[0] if field in {"id", "node_id", "t", "z", "y", "x"} else rows[2]
+    value = str(row[field])
+    row[field] = {"leading": f" {value}", "trailing": f"{value} ", "tab": f"\t{value}"}[padding]
+    _write_csv(csv_path, rows)
+    with pytest.raises(ValueError, match="integer"):
+        postprocessed_csv_to_geffs(
+            csv_path,
+            tmp_path / f"predictions-{field}-{padding}",
+            sample_ids=(SAMPLE,),
+            provenance={},
+        )
+
+
+def test_manifest_rejects_reserved_provenance_collision(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    prediction = postprocessed_csv_to_geffs(
+        csv_path, tmp_path / "predictions", sample_ids=(SAMPLE,), provenance={}
+    )[SAMPLE]
+    with pytest.raises(ValueError, match="reserved"):
+        write_prediction_manifest(prediction, selection_lock_id="a" * 64, provenance={"nodes": 99})
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "selection_lock_id",
+        "ground_truth_included",
+        "ground_truth_inputs",
+        "directory_sha256",
+        "files",
+        "total_bytes",
+        "hash_algorithm",
+        "nodes",
+        "edges",
+        "forks",
+        "manifest_created_at",
+        "prediction_path",
+        "prediction_name",
+        "schema_version",
+    ],
+)
+def test_manifest_rejects_each_reserved_provenance_key(tmp_path: Path, key: str) -> None:
+    csv_path = tmp_path / f"submission-{key}.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    prediction = postprocessed_csv_to_geffs(
+        csv_path, tmp_path / f"predictions-{key}", sample_ids=(SAMPLE,), provenance={}
+    )[SAMPLE]
+    with pytest.raises(ValueError, match="reserved"):
+        write_prediction_manifest(prediction, selection_lock_id="a" * 64, provenance={key: "forged"})
+    assert not prediction_manifest_path(prediction).exists()
+
+
+def test_json_exclusive_cleans_owned_temp_on_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "receipt.json"
+
+    def fail_write(_fd: int, _payload: bytes) -> int:
+        raise OSError("synthetic write failure")
+
+    monkeypatch.setattr(bridge_module.os, "write", fail_write)
+    with pytest.raises(OSError, match="synthetic write failure"):
+        bridge_module.write_json_exclusive(target, {"status": "READY"})
+    assert not target.exists()
+    assert not list(tmp_path.glob(".receipt.json.*.tmp"))
+
+
+def test_json_exclusive_rejects_zero_byte_write_without_looping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "receipt.json"
+
+    monkeypatch.setattr(bridge_module.os, "write", lambda _fd, _payload: 0)
+    with pytest.raises(OSError, match="short"):
+        bridge_module.write_json_exclusive(target, {"status": "READY"})
+    assert not target.exists()
+    assert not list(tmp_path.glob(".receipt.json.*.tmp"))
+
+
 def test_bridge_rejects_non_adjacent_edge_and_degree_violation(tmp_path: Path) -> None:
     csv_path = tmp_path / "bad.csv"
     rows = [_node(0, 0, 0), _node(1, 1, 2), _edge(2, 0, 1)]
@@ -117,19 +213,18 @@ def test_manifest_is_geff_sibling_and_contains_no_absolute_or_gt_path(tmp_path: 
         csv_path,
         tmp_path / "predictions",
         sample_ids=(SAMPLE,),
-        provenance={"selection_lock_id": "a" * 64, "ground_truth_inputs": []},
+        provenance={"recipe": "C"},
     )[SAMPLE]
 
     manifest = write_prediction_manifest(
         prediction,
         selection_lock_id="a" * 64,
-        provenance={"role": "prediction", "ground_truth_included": False},
+        provenance={"role": "prediction"},
     )
     assert manifest == prediction_manifest_path(prediction)
     assert manifest.name == f"{prediction.name}.manifest.json"
     payload = json.loads(manifest.read_text(encoding="utf-8"))
     assert payload["ground_truth_included"] is False
-    assert payload["ground_truth_inputs"] == []
     assert payload["ground_truth_inputs"] == []
     assert "gt/" not in json.dumps(payload).lower()
     created = datetime.fromisoformat(payload["manifest_created_at"])
