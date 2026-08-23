@@ -148,10 +148,22 @@ def _iso_now() -> str:
     return _now().isoformat()
 
 
-def _finite(value: object, *, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
-        raise MetricBoundaryError(f"{field} must be finite numeric")
-    return float(value)
+def _finite(
+    value: object,
+    *,
+    field: str,
+    phase: str = "preflight",
+    sample_id: str | None = None,
+) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise MetricBoundaryError(f"{field} must be finite numeric", phase=phase, sample_id=sample_id)
+    try:
+        normalized = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise MetricBoundaryError(f"{field} must be finite numeric", phase=phase, sample_id=sample_id) from exc
+    if not math.isfinite(normalized):
+        raise MetricBoundaryError(f"{field} must be finite numeric", phase=phase, sample_id=sample_id)
+    return normalized
 
 
 def _json_value(value: Any) -> MetricValue:
@@ -353,7 +365,7 @@ def _load_ground_truth(path: Path) -> GroundTruthOpened:
         raise MetricBoundaryError(
             f"ground-truth GEFF is missing estimated_number_of_nodes: {path}", phase="metric"
         ) from exc
-    result = _finite(value, field="ground-truth estimated_number_of_nodes")
+    result = _finite(value, field="ground-truth estimated_number_of_nodes", phase="metric")
     if result <= 0.0:
         raise MetricBoundaryError("ground-truth estimated_number_of_nodes must be positive", phase="metric")
     return GroundTruthOpened(graph=graph, estimated_number_of_nodes=result)
@@ -521,6 +533,12 @@ def _mint_for_artifact(artifact: Mapping[str, Any], *, sample_id: str) -> Predic
         token = mint_prediction_token(Path(artifact["prediction_path"]))
     except GroundTruthOrderingError as exc:
         raise MetricBoundaryError(str(exc), sample_id=sample_id) from exc
+    except Exception as exc:
+        raise MetricBoundaryError(
+            f"prediction persistence token mint failed: {type(exc).__name__}: {exc}",
+            phase="prediction_persist",
+            sample_id=sample_id,
+        ) from exc
     if token.manifest_path != Path(artifact["manifest_path"]) or token.directory_sha256 != artifact["directory_sha256"]:
         raise MetricBoundaryError("minted token does not match the preflight digest", sample_id=sample_id)
     if _sha256_file(Path(artifact["manifest_path"])) != artifact["manifest_sha256"]:
@@ -652,9 +670,19 @@ _OFFICIAL_ROW_FLOAT_FIELDS = (
 _OFFICIAL_ROW_FIELDS = frozenset((*_OFFICIAL_ROW_COUNT_FIELDS, *_OFFICIAL_ROW_FLOAT_FIELDS))
 
 
-def _nonnegative_int(value: object, *, field: str) -> int:
+def _nonnegative_int(
+    value: object,
+    *,
+    field: str,
+    phase: str = "preflight",
+    sample_id: str | None = None,
+) -> int:
     if type(value) is not int or value < 0:
-        raise MetricBoundaryError(f"{field} must be an exact non-negative integer")
+        raise MetricBoundaryError(
+            f"{field} must be an exact non-negative integer",
+            phase=phase,
+            sample_id=sample_id,
+        )
     return value
 
 
@@ -663,9 +691,14 @@ def _validate_official_row(row: Mapping[str, object], *, sample_id: str) -> dict
     if set(value) != _OFFICIAL_ROW_FIELDS:
         raise MetricBoundaryError("official metric row schema is not exact", phase="metric", sample_id=sample_id)
     for field in _OFFICIAL_ROW_COUNT_FIELDS:
-        _nonnegative_int(value[field], field=f"official metric row {field}")
+        _nonnegative_int(
+            value[field],
+            field=f"official metric row {field}",
+            phase="metric",
+            sample_id=sample_id,
+        )
     for field in _OFFICIAL_ROW_FLOAT_FIELDS:
-        _finite(value[field], field=f"official metric row {field}")
+        _finite(value[field], field=f"official metric row {field}", phase="metric", sample_id=sample_id)
     return value
 
 
@@ -707,6 +740,18 @@ def _evaluate_prevalidated(
         opened = _open_gt(Path(gt_path), token)
     except GroundTruthOrderingError as exc:
         raise MetricBoundaryError(str(exc), phase="gt_open", sample_id=sample_id) from exc
+    except MetricBoundaryError as exc:
+        if exc.sample_id is not None:
+            raise
+        raise MetricBoundaryError(str(exc), phase=exc.phase, sample_id=sample_id) from exc
+    except Exception as exc:
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        raise MetricBoundaryError(
+            f"ground-truth opener failed: {type(exc).__name__}: {exc}",
+            phase="gt_open",
+            sample_id=sample_id,
+        ) from exc
     if not isinstance(opened, tuple) or len(opened) != 2:
         raise MetricBoundaryError(
             "GT opener must return (GroundTruthOpened, guard receipt)", phase="gt_open", sample_id=sample_id
@@ -722,6 +767,8 @@ def _evaluate_prevalidated(
     estimated_nodes = _finite(
         ground_truth_opened.estimated_number_of_nodes,
         field="ground-truth estimated_number_of_nodes",
+        phase="metric",
+        sample_id=sample_id,
     )
     if estimated_nodes <= 0.0:
         raise MetricBoundaryError(
@@ -753,7 +800,12 @@ def _evaluate_prevalidated(
     row = _validate_official_row(row, sample_id=sample_id)
     counts = artifact["counts"]
     result_counts = {
-        field: _nonnegative_int(getattr(evaluation_result, field), field=f"evaluation result {field}")
+        field: _nonnegative_int(
+            getattr(evaluation_result, field),
+            field=f"evaluation result {field}",
+            phase="metric",
+            sample_id=sample_id,
+        )
         for field in ("edge_tp", "edge_fp", "edge_fn", "division_tp", "division_fp", "division_fn")
     }
     for field in ("edge_tp", "edge_fp", "edge_fn", "division_tp", "division_fp", "division_fn"):
@@ -764,7 +816,10 @@ def _evaluate_prevalidated(
                 sample_id=sample_id,
             )
     if row["num_pred_nodes"] != _nonnegative_int(
-        evaluation_result.num_pred_nodes, field="evaluation result num_pred_nodes"
+        evaluation_result.num_pred_nodes,
+        field="evaluation result num_pred_nodes",
+        phase="metric",
+        sample_id=sample_id,
     ):
         raise MetricBoundaryError(
             "official metric row num_pred_nodes disagrees with evaluation result",
@@ -776,7 +831,7 @@ def _evaluate_prevalidated(
         if field not in summary:
             raise MetricBoundaryError(f"official summary is missing {field}", phase="metric", sample_id=sample_id)
     for field in ("edge_jaccard", "adj_edge_jaccard", "score"):
-        _finite(summary[field], field=f"official summary {field}")
+        _finite(summary[field], field=f"official summary {field}", phase="metric", sample_id=sample_id)
     if division_total == 0:
         if summary.get("division_jaccard") is not None and not (
             isinstance(summary.get("division_jaccard"), float)
@@ -788,16 +843,21 @@ def _evaluate_prevalidated(
                 sample_id=sample_id,
             )
     else:
-        _finite(summary.get("division_jaccard"), field="official summary division_jaccard")
+        _finite(
+            summary.get("division_jaccard"),
+            field="official summary division_jaccard",
+            phase="metric",
+            sample_id=sample_id,
+        )
     division_jaccard = _json_value(summary.get("division_jaccard"))
     final_score = summary.get("score")
     adjusted = summary.get("adj_edge_jaccard")
-    _finite(final_score, field="final_score")
-    _finite(adjusted, field="adjusted_edge_jaccard")
+    _finite(final_score, field="final_score", phase="metric", sample_id=sample_id)
+    _finite(adjusted, field="adjusted_edge_jaccard", phase="metric", sample_id=sample_id)
     if division_total == 0:
         division_jaccard = None
     else:
-        _finite(division_jaccard, field="division_jaccard")
+        _finite(division_jaccard, field="division_jaccard", phase="metric", sample_id=sample_id)
     values: dict[str, object] = {
         "schema_version": METRIC_SCHEMA_VERSION,
         "status": "READY",
@@ -940,11 +1000,19 @@ def _validate_sample_receipt(
         "prediction_edge_count",
         "prediction_fork_count",
     ):
-        number = value.get(field)
-        if isinstance(number, bool) or not isinstance(number, int) or number < 0:
-            raise MetricBoundaryError(f"sample receipt {field} is not a non-negative integer", sample_id=sample_id)
+        _nonnegative_int(
+            value.get(field),
+            field=f"sample receipt {field}",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
     for field in ("node_recall", "total_node_ratio", "edge_jaccard", "adjusted_edge_jaccard", "final_score"):
-        _finite(value.get(field), field=f"sample receipt {field}")
+        _finite(
+            value.get(field),
+            field=f"sample receipt {field}",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
     try:
         metric_started = parse_timestamp(value.get("metric_started_at"), field="metric_started_at")
         metric_finished = parse_timestamp(value.get("metric_finished_at"), field="metric_finished_at")
@@ -957,7 +1025,12 @@ def _validate_sample_receipt(
         if value.get("division_jaccard") is not None or value.get("division_term_live") is not False:
             raise MetricBoundaryError("zero-division sample must carry null division_jaccard", sample_id=sample_id)
     else:
-        _finite(value.get("division_jaccard"), field="sample receipt division_jaccard")
+        _finite(
+            value.get("division_jaccard"),
+            field="sample receipt division_jaccard",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
         if value.get("division_term_live") is not True:
             raise MetricBoundaryError(
                 "division term must be live when its denominator is positive",
@@ -974,8 +1047,12 @@ def _validate_sample_receipt(
         raise MetricBoundaryError("sample receipt lacks documented gt_guard ordering evidence", sample_id=sample_id)
     for field in ("prediction_files", "prediction_total_bytes"):
         number = guard.get(field)
-        if type(number) is not int or number < 0:
-            raise MetricBoundaryError(f"sample receipt guard {field} is invalid", sample_id=sample_id)
+        _nonnegative_int(
+            number,
+            field=f"sample receipt guard {field}",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
         if field in value and value[field] != number:
             raise MetricBoundaryError(f"sample receipt guard {field} disagrees", sample_id=sample_id)
     for field in ("prediction_path", "prediction_manifest_path", "prediction_directory_sha256"):
@@ -991,7 +1068,12 @@ def _validate_sample_receipt(
         raise MetricBoundaryError("sample receipt guard timestamps are out of order", sample_id=sample_id)
     if opened > _now():
         raise MetricBoundaryError("sample receipt guard claims a future GT open", sample_id=sample_id)
-    row = _receipt_row(value)
+    try:
+        row = _receipt_row(value)
+    except MetricBoundaryError as exc:
+        if exc.sample_id is not None:
+            raise
+        raise MetricBoundaryError(str(exc), phase=exc.phase, sample_id=sample_id) from exc
     row = _validate_official_row(row, sample_id=sample_id)
     for field in _OFFICIAL_ROW_COUNT_FIELDS:
         number = row.get(field)
@@ -1006,8 +1088,18 @@ def _validate_sample_receipt(
         ("edge_jaccard", "edge_jaccard"),
         ("adj_edge_jaccard", "adjusted_edge_jaccard"),
     ):
-        row_value = _finite(row[row_field], field=f"sample receipt metric row {row_field}")
-        receipt_value = _finite(value[receipt_field], field=f"sample receipt {receipt_field}")
+        row_value = _finite(
+            row[row_field],
+            field=f"sample receipt metric row {row_field}",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
+        receipt_value = _finite(
+            value[receipt_field],
+            field=f"sample receipt {receipt_field}",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
         if not math.isclose(row_value, receipt_value, rel_tol=1e-12, abs_tol=1e-12):
             raise MetricBoundaryError(f"sample receipt metric row {row_field} disagrees", sample_id=sample_id)
     return value
@@ -1024,6 +1116,8 @@ def _assert_summary_matches_receipt(
     receipt: Mapping[str, object],
     row: Mapping[str, object],
     summary: Mapping[str, object],
+    *,
+    sample_id: str | None = None,
 ) -> None:
     """Reject score fields that disagree with a fresh official-row summary."""
 
@@ -1033,16 +1127,31 @@ def _assert_summary_matches_receipt(
             expected_value = None
         if expected_value is None:
             if actual is not None:
-                raise MetricBoundaryError(f"sample receipt {field} disagrees with summarise([row])", phase="aggregate")
+                raise MetricBoundaryError(
+                    f"sample receipt {field} disagrees with summarise([row])",
+                    phase="aggregate",
+                    sample_id=sample_id,
+                )
             return
         try:
-            actual_value = _finite(actual, field=f"sample receipt {field}")
+            actual_value = _finite(
+                actual,
+                field=f"sample receipt {field}",
+                phase="aggregate",
+                sample_id=sample_id,
+            )
         except MetricBoundaryError as exc:
             raise MetricBoundaryError(
-                f"sample receipt {field} disagrees with summarise([row])", phase="aggregate"
+                f"sample receipt {field} disagrees with summarise([row])",
+                phase="aggregate",
+                sample_id=sample_id,
             ) from exc
         if not math.isclose(actual_value, expected_value, rel_tol=1e-12, abs_tol=1e-12):
-            raise MetricBoundaryError(f"sample receipt {field} disagrees with summarise([row])", phase="aggregate")
+            raise MetricBoundaryError(
+                f"sample receipt {field} disagrees with summarise([row])",
+                phase="aggregate",
+                sample_id=sample_id,
+            )
 
     matches(receipt["edge_jaccard"], summary.get("edge_jaccard"), field="edge_jaccard")
     matches(receipt["adjusted_edge_jaccard"], summary.get("adj_edge_jaccard"), field="adjusted_edge_jaccard")
@@ -1055,7 +1164,11 @@ def _assert_summary_matches_receipt(
         int(row["division_tp"]) + int(row["division_fp"]) + int(row["division_fn"]) > 0
     )
     if receipt.get("division_term_live") is not division_live:
-        raise MetricBoundaryError("sample receipt division_term_live disagrees with official row", phase="aggregate")
+        raise MetricBoundaryError(
+            "sample receipt division_term_live disagrees with official row",
+            phase="aggregate",
+            sample_id=sample_id,
+        )
 
 
 def aggregate_panel_receipts(
@@ -1114,7 +1227,12 @@ def aggregate_panel_receipts(
                 f"official metric row could not be summarised: {type(exc).__name__}: {exc}",
                 phase="aggregate",
             ) from exc
-        _assert_summary_matches_receipt(receipt, row, sample_summary)
+        _assert_summary_matches_receipt(
+            receipt,
+            row,
+            sample_summary,
+            sample_id=str(receipt["sample_id"]),
+        )
     summary = summarise(rows)
     for field in ("edge_jaccard", "adj_edge_jaccard", "score", "node_recall"):
         _finite(summary.get(field), field=f"official panel summary {field}")
@@ -1213,13 +1331,19 @@ def _task4_public_receipt_keys() -> frozenset[str]:
         ) from exc
 
 
-def _require_sha256(value: object, *, field: str, phase: str = "inference_receipt") -> str:
+def _require_sha256(
+    value: object,
+    *,
+    field: str,
+    phase: str = "inference_receipt",
+    sample_id: str | None = None,
+) -> str:
     if not isinstance(value, str) or len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
-        raise MetricBoundaryError(f"{field} must be a lowercase SHA-256", phase=phase)
+        raise MetricBoundaryError(f"{field} must be a lowercase SHA-256", phase=phase, sample_id=sample_id)
     return value
 
 
-def _validate_role_reference(value: object, *, field: str) -> Path:
+def _validate_role_reference(value: object, *, field: str, sample_id: str | None = None) -> Path:
     if (
         not isinstance(value, str)
         or not value.strip()
@@ -1230,20 +1354,27 @@ def _validate_role_reference(value: object, *, field: str) -> Path:
         raise MetricBoundaryError(
             f"{field} must be a non-empty normalized POSIX role path",
             phase="inference_receipt",
+            sample_id=sample_id,
         )
     if any(part in ("", ".", "..") for part in value.split("/")):
         raise MetricBoundaryError(
             f"{field} must be relative and contain no traversal",
             phase="inference_receipt",
+            sample_id=sample_id,
         )
     role = Path(value)
     if role.is_absolute() or not role.parts or any(part in ("", ".", "..") for part in role.parts):
         raise MetricBoundaryError(
             f"{field} must be relative and contain no traversal",
             phase="inference_receipt",
+            sample_id=sample_id,
         )
     if glob.has_magic(value):
-        raise MetricBoundaryError(f"{field} must not contain glob syntax", phase="inference_receipt")
+        raise MetricBoundaryError(
+            f"{field} must not contain glob syntax",
+            phase="inference_receipt",
+            sample_id=sample_id,
+        )
     return role
 
 
@@ -1326,16 +1457,32 @@ def _validate_inference_receipt(
         value = receipt.get(field)
         if not isinstance(value, str) or not value.strip():
             raise MetricBoundaryError(f"Task 4 receipt {field} is invalid", phase="inference_receipt")
-    if receipt.get("resolved_device") != selection_lock.get("requested_device"):
-        raise MetricBoundaryError("Task 4 resolved device differs from the selection lock", phase="inference_receipt")
+    if selection_lock.get("requested_device") != "auto":
+        raise MetricBoundaryError(
+            "Task 5 requires selection lock requested_device='auto'",
+            phase="inference_receipt",
+        )
     candidates = receipt.get("device_candidates")
     if not isinstance(candidates, (list, tuple)) or not candidates or any(
         not isinstance(item, str) or not item.strip() for item in candidates
     ):
         raise MetricBoundaryError("Task 4 receipt device_candidates is invalid", phase="inference_receipt")
-    if receipt.get("resolved_device") not in candidates or receipt.get("child_device") not in candidates:
+    normalized_candidates = tuple(candidates)
+    expected_candidates = ("cuda", "mps", "cpu")
+    if normalized_candidates != expected_candidates:
         raise MetricBoundaryError(
-            "Task 4 resolved/child device is absent from device_candidates",
+            "Task 4 receipt device_candidates do not match the pinned policy order",
+            phase="inference_receipt",
+        )
+    resolved_device = receipt.get("resolved_device")
+    if resolved_device not in expected_candidates:
+        raise MetricBoundaryError(
+            "Task 4 resolved device is absent from the pinned device_candidates",
+            phase="inference_receipt",
+        )
+    if receipt.get("child_device") != resolved_device:
+        raise MetricBoundaryError(
+            "Task 4 child_device does not equal resolved_device",
             phase="inference_receipt",
         )
     patch_flags = receipt.get("patch_flags")
@@ -1372,9 +1519,17 @@ def _validate_inference_receipt(
     final: dict[str, Path] = {}
     manifests: dict[str, Path] = {}
     for sample_id in PANEL_V1:
-        final[sample_id] = _validate_role_reference(final_raw[sample_id], field=f"final_geffs[{sample_id}]")
-        manifests[sample_id] = _validate_role_reference(manifests_raw[sample_id], field=f"manifests[{sample_id}]")
-        _validate_role_reference(raw_raw[sample_id], field=f"raw_geffs[{sample_id}]")
+        final[sample_id] = _validate_role_reference(
+            final_raw[sample_id],
+            field=f"final_geffs[{sample_id}]",
+            sample_id=sample_id,
+        )
+        manifests[sample_id] = _validate_role_reference(
+            manifests_raw[sample_id],
+            field=f"manifests[{sample_id}]",
+            sample_id=sample_id,
+        )
+        _validate_role_reference(raw_raw[sample_id], field=f"raw_geffs[{sample_id}]", sample_id=sample_id)
     postprocessed_csv = receipt.get("postprocessed_csv")
     if postprocessed_csv is None:
         raise MetricBoundaryError("full Task 4 receipt must name postprocessed_csv", phase="inference_receipt")
@@ -1387,8 +1542,12 @@ def _validate_inference_receipt(
     else:
         _validate_role_reference(diagnostics, field="diagnostics")
         _require_sha256(diagnostics_sha256, field="diagnostics_sha256")
-    if type(receipt.get("cuda_equivalence_validated")) is not bool:
-        raise MetricBoundaryError("cuda_equivalence_validated must be boolean", phase="inference_receipt")
+    if "cuda_equivalence_validated" in expected_keys:
+        if receipt.get("cuda_equivalence_validated") is not False:
+            raise MetricBoundaryError(
+                "cuda_equivalence_validated must remain false at the Task 5 boundary",
+                phase="inference_receipt",
+            )
 
     counts = receipt.get("counts")
     if not isinstance(counts, Mapping) or set(counts) != {"raw", "final", "publish", "diagnostic"}:
@@ -1408,24 +1567,34 @@ def _validate_inference_receipt(
                 raise MetricBoundaryError(
                     f"counts.{collection_name}[{sample_id}] is invalid",
                     phase="inference_receipt",
+                    sample_id=sample_id,
                 )
             for field in ("nodes", "edges", "forks"):
-                _nonnegative_int(sample_counts.get(field), field=f"counts.{collection_name}[{sample_id}].{field}")
+                _nonnegative_int(
+                    sample_counts.get(field),
+                    field=f"counts.{collection_name}[{sample_id}].{field}",
+                    phase="inference_receipt",
+                    sample_id=sample_id,
+                )
             if collection_name == "final":
                 _require_sha256(
                     sample_counts.get("directory_sha256"),
                     field=f"counts.final[{sample_id}].directory_sha256",
                     phase="inference_receipt",
+                    sample_id=sample_id,
                 )
                 for field in ("files", "total_bytes"):
                     _nonnegative_int(
                         sample_counts.get(field),
                         field=f"counts.final[{sample_id}].{field}",
+                        phase="inference_receipt",
+                        sample_id=sample_id,
                     )
                 if sample_counts.get("hash_algorithm") != PREDICTION_DIRECTORY_HASH_ALGORITHM:
                     raise MetricBoundaryError(
                         f"counts.final[{sample_id}].hash_algorithm is not pinned",
                         phase="inference_receipt",
+                        sample_id=sample_id,
                     )
 
     try:
@@ -1570,12 +1739,23 @@ def _validate_task4_handoff(
     for sample_id in PANEL_V1:
         final_path = _resolve_sample_role_path(final_roles[sample_id], root=root, sample_id=sample_id)
         manifest_path = _resolve_sample_role_path(manifest_roles[sample_id], root=root, sample_id=sample_id)
-        artifact = _validate_prediction_artifact(
-            final_path,
-            sample_id,
-            selection_lock_id=str(selection_lock["selection_lock_id"]),
-            expected_manifest_path=manifest_path,
-        )
+        try:
+            artifact = _validate_prediction_artifact(
+                final_path,
+                sample_id,
+                selection_lock_id=str(selection_lock["selection_lock_id"]),
+                expected_manifest_path=manifest_path,
+            )
+        except MetricBoundaryError as exc:
+            if exc.sample_id is not None:
+                raise
+            raise MetricBoundaryError(str(exc), phase=exc.phase, sample_id=sample_id) from exc
+        except Exception as exc:
+            raise MetricBoundaryError(
+                f"prediction artifact validation failed: {type(exc).__name__}: {exc}",
+                phase="inference_receipt",
+                sample_id=sample_id,
+            ) from exc
         _assert_manifest_matches_handoff(artifact, inference_receipt, sample_id=sample_id)
         recorded_counts = final_counts[sample_id]
         if not isinstance(recorded_counts, Mapping):
@@ -1741,7 +1921,11 @@ def evaluate_panel(
         for sample in PANEL_V1:
             raw_path = ground_truth_map[sample]
             if not isinstance(raw_path, (Path, str)):
-                raise MetricBoundaryError("ground_truth_map values must be explicit paths", phase="gt_map")
+                raise MetricBoundaryError(
+                    "ground_truth_map values must be explicit paths",
+                    phase="gt_map",
+                    sample_id=sample,
+                )
             try:
                 gt_paths[sample] = _validate_explicit_gt_path(raw_path, phase="gt_map")
             except MetricBoundaryError as exc:

@@ -64,7 +64,7 @@ def _manifest(prediction: Path, **overrides: Any) -> Path:
         "primary_checkpoint_sha256": lock["primary_checkpoint_sha256"],
         "secondary_checkpoint_sha256": lock["secondary_checkpoint_sha256"],
         "resolved_device": "cpu",
-        "device_candidates": "cpu",
+        "device_candidates": "cuda,mps,cpu",
         "patch_spatial_d4": True,
         "patch_builder": True,
         "runtime_role": "live_stage_repo",
@@ -86,7 +86,7 @@ def _lock() -> dict[str, Any]:
         source,
         Path(__file__).parents[1] / "configs" / "biohub_095_recipe_c.yaml",
         "a" * 40,
-        "cpu",
+        "auto",
         ExperimentSpec(
             experiment_id="task5_test",
             method_family="recipe_c",
@@ -141,7 +141,7 @@ def _task4_receipt(root: Path, lock: dict[str, Any], **overrides: Any) -> dict[s
         "child_device": "cpu",
         "child_stdout_sha256": first_manifest.get("child_stdout_sha256", "f" * 64),
         "child_stderr_sha256": first_manifest.get("child_stderr_sha256", "1" * 64),
-        "device_candidates": [str(first_manifest.get("device_candidates", "cpu"))],
+        "device_candidates": str(first_manifest.get("device_candidates", "cuda,mps,cpu")).split(","),
         "runtime_role": "live_stage_repo",
         "patch_flags": {
             "spatial_d4": first_manifest.get("patch_spatial_d4", True),
@@ -168,6 +168,10 @@ def _task4_receipt(root: Path, lock: dict[str, Any], **overrides: Any) -> dict[s
         "diagnostics": "diagnostics.json",
         "diagnostics_sha256": "2" * 64,
         "cuda_equivalence_validated": False,
+        "ground_truth_open_count": 0,
+        "ground_truth_opened": False,
+        "metric_call_count": 0,
+        "metric_status": "not_run_gt_guard",
     }
     diagnostics_path = root / "diagnostics.json"
     if not diagnostics_path.exists():
@@ -409,6 +413,40 @@ def test_task4_handoff_requires_full_panel_mode_and_public_receipt_schema() -> N
         evaluation._validate_inference_receipt(payload, selection_lock=_lock())
 
 
+def test_auto_device_policy_accepts_cpu_resolved_full_handoff(tmp_path: Path) -> None:
+    _root, inference, _ = _panel_inputs(tmp_path)
+
+    final, manifests = evaluation._validate_inference_receipt(inference, selection_lock=_lock())
+
+    assert tuple(inference["device_candidates"]) == ("cuda", "mps", "cpu")
+    assert inference["resolved_device"] == "cpu"
+    assert inference["child_device"] == "cpu"
+    assert final.keys() == manifests.keys() == set(PANEL_V1)
+
+
+@pytest.mark.parametrize(
+    ("candidates", "resolved", "child"),
+    [
+        (["cuda", "tpu", "cpu"], "cpu", "cpu"),
+        (["cuda", "mps", "cpu"], "mps", "cpu"),
+        (["cpu", "mps", "cuda"], "cpu", "cpu"),
+    ],
+)
+def test_auto_device_policy_rejects_unknown_mismatch_and_reordered_candidates(
+    tmp_path: Path,
+    candidates: list[str],
+    resolved: str,
+    child: str,
+) -> None:
+    _root, inference, _ = _panel_inputs(tmp_path)
+    inference["device_candidates"] = candidates
+    inference["resolved_device"] = resolved
+    inference["child_device"] = child
+
+    with pytest.raises(ValueError, match=r"device|candidate|order"):
+        evaluation._validate_inference_receipt(inference, selection_lock=_lock())
+
+
 def test_aggregate_requires_artifact_root_and_canonical_task4_receipt() -> None:
     rows = [_sample_receipt(sample, 0.9) for sample in PANEL_V1]
     with pytest.raises(TypeError, match=r"prediction_root|inference_receipt"):
@@ -468,6 +506,85 @@ def test_nonfinite_official_row_never_becomes_ready(
     )
     with pytest.raises(ValueError, match=r"finite|node_recall|metric"):
         evaluation.evaluate_locked_prediction(prediction, tmp_path / "ground-truth.geff", _lock())
+
+
+def test_panel_nonfinite_official_row_failure_receipt_names_sample(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, inference, _ = _panel_inputs(tmp_path)
+    events: list[str] = []
+    _patch_fake_metric(monkeypatch, events)
+    monkeypatch.setattr(
+        evaluation,
+        "per_sample_metrics",
+        lambda er, n_total, node_recall: {
+            "edge_tp": 1,
+            "edge_fp": 0,
+            "edge_fn": 0,
+            "division_tp": 0,
+            "division_fp": 0,
+            "division_fn": 0,
+            "num_pred_nodes": 2,
+            "node_recall": float("nan"),
+            "total_node_ratio": 0.0,
+            "edge_jaccard": 1.0,
+            "adj_edge_jaccard": 1.0,
+        },
+    )
+    output = tmp_path / "panel.json"
+    ground_truth_map = {sample: tmp_path / f"{sample}.gt.geff" for sample in PANEL_V1}
+
+    result = evaluation.evaluate_panel(
+        _lock(),
+        root,
+        output=output,
+        inference_receipt=inference,
+        ground_truth_map=ground_truth_map,
+    )
+
+    assert result["status"] == "FAILED"
+    assert result["failure"]["sample_id"] == PANEL_V1[0]
+    persisted = json.loads(output.read_text(encoding="utf-8"))
+    assert persisted["failure"]["sample_id"] == PANEL_V1[0]
+    assert persisted["failure"]["phase"] == "metric"
+
+
+@pytest.mark.parametrize("invalid_kind", ["role", "count"])
+def test_panel_invalid_task4_sample_failure_receipt_names_sample(
+    tmp_path: Path,
+    invalid_kind: str,
+) -> None:
+    root, inference, _ = _panel_inputs(tmp_path)
+    sample_id = PANEL_V1[1]
+    inference = dict(inference)
+    inference["final_geffs"] = dict(inference["final_geffs"])
+    inference["manifests"] = dict(inference["manifests"])
+    inference["raw_geffs"] = dict(inference["raw_geffs"])
+    inference["counts"] = {
+        name: (dict(value) if isinstance(value, Mapping) else value)
+        for name, value in inference["counts"].items()
+    }
+    if invalid_kind == "role":
+        inference["final_geffs"][sample_id] = "predictions/../escape.geff"
+    else:
+        final_counts = dict(inference["counts"]["final"])
+        final_counts[sample_id] = dict(final_counts[sample_id])
+        final_counts[sample_id]["nodes"] = -1
+        inference["counts"]["final"] = final_counts
+
+    output = tmp_path / f"panel-{invalid_kind}.json"
+    ground_truth_map = {sample: tmp_path / f"{sample}.gt.geff" for sample in PANEL_V1}
+    with pytest.raises(ValueError):
+        evaluation.evaluate_panel(
+            _lock(),
+            root,
+            output=output,
+            inference_receipt=inference,
+            ground_truth_map=ground_truth_map,
+        )
+
+    persisted = json.loads(output.read_text(encoding="utf-8"))
+    assert persisted["failure"]["sample_id"] == sample_id
 
 
 def test_manifest_boolean_schema_version_is_rejected_before_gt_open(
