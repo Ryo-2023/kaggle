@@ -62,7 +62,7 @@ _REPO_FILES = (
 )
 _PREDICTOR_DERIVED = PurePosixPath("scripts/predict_unet_transformer_recipe_c_runtime.py")
 _SPLITS_DERIVED = PurePosixPath("clean_v106_test_splits_recipe_c_runtime.json")
-_TRACE_DERIVED = PurePosixPath("src/biohub_pipeline/postprocess_stage_trace_recipe_c_runtime.py")
+_TRACE_DERIVED = PurePosixPath("scripts/postprocess_stage_trace_recipe_c_runtime.py")
 _PRIMARY_RELATIVE = PurePosixPath(RECIPE_C_SOURCE.primary_checkpoint_relative_path)
 _SECONDARY_RELATIVE = PurePosixPath(RECIPE_C_SOURCE.secondary_staging_relative_path)
 RECIPE_C_SMOKE_FRAMES = 6

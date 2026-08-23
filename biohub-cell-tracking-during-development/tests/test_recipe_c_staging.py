@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path, PurePath
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,6 +17,8 @@ from biohub.recipe_c.device_patch import (
     prepare_device_fallback_patch,
     publish_device_fallback_patch_at,
 )
+from biohub.recipe_c.diagnostics import DiagnosticRecorder
+from biohub.recipe_c.runner import _TRACE_DERIVED, _publish_derived
 from biohub.recipe_c.source import RECIPE_C_SOURCE
 from biohub.recipe_c.staging import PublishReceipt, RuntimeStage, stage_recipe_c_runtime
 
@@ -139,6 +142,57 @@ def test_runtime_stage_publishes_and_reads_fresh_repo_bytes(
         assert stage.read_repo_bytes(relative) == payload
         assert (stage.repo_dir / relative).is_file()
         assert canonical.read_bytes() == canonical_before
+    finally:
+        stage.close()
+
+
+def test_trace_publication_targets_an_existing_staged_repo_parent(
+    tmp_path: Path,
+    fake_inputs: tuple[Path, Path, Path, dict[str, object]],
+) -> None:
+    """Exercise trace publication against the real fd-backed stage contract."""
+
+    source, primary, secondary, lock = fake_inputs
+    (primary / "repo" / "src" / "biohub_tracking").mkdir(parents=True)
+    (primary / "repo" / "src" / "biohub_tracking" / "__init__.py").write_bytes(b"")
+    stage = stage_recipe_c_runtime(source, primary, secondary, tmp_path / "stage", lock)
+    trace_source = tmp_path / "postprocess_stage_trace.py"
+    trace_source.write_text(
+        "def filter_output_graph_traced(nodes, edges, **kwargs):\n"
+        "    snapshot = {'stage': 'final', 'n_nodes': len(nodes), 'n_edges': len(edges)}\n"
+        "    return nodes, edges, {}, {'stage_snapshots': [snapshot]}\n",
+        encoding="utf-8",
+    )
+    try:
+        repo = stage.repo_dir.logical_path
+        assert (repo / "scripts").is_dir()
+        assert (repo / "src" / "biohub_tracking").is_dir()
+        assert not (repo / "src" / "biohub_pipeline").exists()
+
+        recorder = DiagnosticRecorder.create(("sample",), "cpu")
+        trace_function = recorder.prepare_trace(
+            SimpleNamespace(
+                trace_filter_output_graph=lambda nodes, edges, **kwargs: (
+                    nodes,
+                    edges,
+                    {},
+                    {"stage_snapshots": [{"stage": "final", "n_nodes": len(nodes), "n_edges": len(edges)}]},
+                ),
+                trace_module_path=trace_source,
+            ),
+            tmp_path / "derived_trace.py",
+            _TRACE_DERIVED,
+            lambda relative, payload: _publish_derived(stage, relative, payload),
+        )
+
+        assert callable(trace_function)
+        assert recorder.trace_publish is not None
+        assert recorder.trace_publish["relative_path"] == _TRACE_DERIVED.as_posix()
+        derived_payload = (tmp_path / "derived_trace.py").read_bytes()
+        assert stage.read_repo_bytes(_TRACE_DERIVED) == derived_payload
+        with pytest.raises(FileExistsError, match="already exists"):
+            _publish_derived(stage, _TRACE_DERIVED, b"replacement")
+        assert stage.read_repo_bytes(_TRACE_DERIVED) == derived_payload
     finally:
         stage.close()
 
