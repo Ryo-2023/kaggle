@@ -62,7 +62,7 @@ Recipe Cは次の2つのKaggle assetを必要とする。primary packだけで�
 
 | asset | 内容 | 期待SHA-256 |
 |---|---|---|
-| `pilkwang/biohub-tracking-support-pack-50ep-v1` | predictor repo + primary `split_0` checkpoint、v10 / CC0 | predictor `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b`、primary checkpoint `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` |
+| `pilkwang/biohub-tracking-support-pack-50ep-v1` | predictor repo + primary `split_0` checkpoint、v10 / CC0 | predictor `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`、primary checkpoint `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` |
 | `pilkwang/biohub-temporal-unet3d-seed314159-v1` | secondary seed checkpoint、v2 / CC0。run-localで`seed_314159` pathへstage | `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` |
 | ignored artifactの取得量 | primary v10 runtime 13/13 + primary checkpoint + secondary v2 checkpoint。full datasetは未取得 | support合計 約16.4 MiB、source cloneは別に約4.2 MiB |
 
