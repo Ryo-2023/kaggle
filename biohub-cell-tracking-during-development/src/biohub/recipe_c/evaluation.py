@@ -531,18 +531,20 @@ def _validate_prediction_artifact(
 def _mint_for_artifact(artifact: Mapping[str, Any], *, sample_id: str) -> PredictionPersistedToken:
     try:
         token = mint_prediction_token(Path(artifact["prediction_path"]))
-    except GroundTruthOrderingError as exc:
-        raise MetricBoundaryError(str(exc), sample_id=sample_id) from exc
+        if token.manifest_path != Path(artifact["manifest_path"]):
+            raise ValueError("minted token manifest path does not match the preflight artifact")
+        if token.directory_sha256 != artifact["directory_sha256"]:
+            raise ValueError("minted token digest does not match the preflight artifact")
+        if _sha256_file(Path(artifact["manifest_path"])) != artifact["manifest_sha256"]:
+            raise ValueError("prediction manifest changed during token mint")
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception as exc:
         raise MetricBoundaryError(
-            f"prediction persistence token mint failed: {type(exc).__name__}: {exc}",
+            f"prediction persistence failed: {type(exc).__name__}: {exc}",
             phase="prediction_persist",
             sample_id=sample_id,
         ) from exc
-    if token.manifest_path != Path(artifact["manifest_path"]) or token.directory_sha256 != artifact["directory_sha256"]:
-        raise MetricBoundaryError("minted token does not match the preflight digest", sample_id=sample_id)
-    if _sha256_file(Path(artifact["manifest_path"])) != artifact["manifest_sha256"]:
-        raise MetricBoundaryError("prediction manifest changed during token mint", sample_id=sample_id)
     return token
 
 
@@ -1122,36 +1124,40 @@ def _assert_summary_matches_receipt(
     """Reject score fields that disagree with a fresh official-row summary."""
 
     def matches(actual: object, expected: object, *, field: str) -> None:
-        expected_value = float(expected) if isinstance(expected, (int, float)) else expected
-        if isinstance(expected_value, float) and not math.isfinite(expected_value):
-            expected_value = None
-        if expected_value is None:
-            if actual is not None:
-                raise MetricBoundaryError(
-                    f"sample receipt {field} disagrees with summarise([row])",
-                    phase="aggregate",
-                    sample_id=sample_id,
-                )
-            return
         try:
+            expected_value = float(expected) if isinstance(expected, (int, float)) else expected
+            if isinstance(expected_value, float) and not math.isfinite(expected_value):
+                expected_value = None
+            if expected_value is None:
+                if actual is not None:
+                    raise MetricBoundaryError(
+                        f"sample receipt {field} disagrees with summarise([row])",
+                        phase="aggregate",
+                        sample_id=sample_id,
+                    )
+                return
             actual_value = _finite(
                 actual,
                 field=f"sample receipt {field}",
                 phase="aggregate",
                 sample_id=sample_id,
             )
-        except MetricBoundaryError as exc:
+            if not math.isclose(actual_value, expected_value, rel_tol=1e-12, abs_tol=1e-12):
+                raise MetricBoundaryError(
+                    f"sample receipt {field} disagrees with summarise([row])",
+                    phase="aggregate",
+                    sample_id=sample_id,
+                )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except MetricBoundaryError:
+            raise
+        except Exception as exc:
             raise MetricBoundaryError(
                 f"sample receipt {field} disagrees with summarise([row])",
                 phase="aggregate",
                 sample_id=sample_id,
             ) from exc
-        if not math.isclose(actual_value, expected_value, rel_tol=1e-12, abs_tol=1e-12):
-            raise MetricBoundaryError(
-                f"sample receipt {field} disagrees with summarise([row])",
-                phase="aggregate",
-                sample_id=sample_id,
-            )
 
     matches(receipt["edge_jaccard"], summary.get("edge_jaccard"), field="edge_jaccard")
     matches(receipt["adjusted_edge_jaccard"], summary.get("adj_edge_jaccard"), field="adjusted_edge_jaccard")
@@ -1218,7 +1224,17 @@ def aggregate_panel_receipts(
             }
         )
 
-    rows = [_receipt_row(item) for item in loaded]
+    rows: list[dict[str, object]] = []
+    for receipt in loaded:
+        sample_id = str(receipt["sample_id"])
+        try:
+            rows.append(_receipt_row(receipt))
+        except MetricBoundaryError as exc:
+            raise MetricBoundaryError(
+                str(exc),
+                phase="aggregate",
+                sample_id=sample_id,
+            ) from exc
     for receipt, row in zip(loaded, rows, strict=True):
         try:
             sample_summary = summarise([row])
@@ -1226,6 +1242,7 @@ def aggregate_panel_receipts(
             raise MetricBoundaryError(
                 f"official metric row could not be summarised: {type(exc).__name__}: {exc}",
                 phase="aggregate",
+                sample_id=str(receipt["sample_id"]),
             ) from exc
         _assert_summary_matches_receipt(
             receipt,
@@ -1630,9 +1647,11 @@ def _resolve_sample_role_path(path: Path, *, root: Path, sample_id: str) -> Path
     try:
         return _resolve_role_path(path, root=root)
     except MetricBoundaryError as exc:
-        if exc.sample_id is not None:
-            raise
-        raise MetricBoundaryError(str(exc), phase=exc.phase, sample_id=sample_id) from exc
+        raise MetricBoundaryError(
+            str(exc),
+            phase="inference_receipt",
+            sample_id=sample_id,
+        ) from exc
 
 
 def _assert_manifest_matches_handoff(
@@ -1645,7 +1664,11 @@ def _assert_manifest_matches_handoff(
 
     manifest = artifact.get("manifest_payload")
     if not isinstance(manifest, Mapping):
-        raise MetricBoundaryError("validated prediction manifest is not a mapping", sample_id=sample_id)
+        raise MetricBoundaryError(
+            "validated prediction manifest is not a mapping",
+            phase="inference_receipt",
+            sample_id=sample_id,
+        )
     expected: dict[str, object] = {
         "source_commit": inference_receipt.get("source_commit"),
         "config_sha256": inference_receipt.get("config_sha256"),
@@ -1670,11 +1693,13 @@ def _assert_manifest_matches_handoff(
         if field in required_identity_fields and field not in manifest:
             raise MetricBoundaryError(
                 f"prediction manifest is missing Task 4 identity field {field}",
+                phase="inference_receipt",
                 sample_id=sample_id,
             )
         if field in manifest and manifest[field] != value:
             raise MetricBoundaryError(
                 f"prediction manifest {field} disagrees with Task 4 inference receipt",
+                phase="inference_receipt",
                 sample_id=sample_id,
             )
     candidates = manifest.get("device_candidates")
@@ -1682,12 +1707,14 @@ def _assert_manifest_matches_handoff(
     if candidates is None:
         raise MetricBoundaryError(
             "prediction manifest is missing device_candidates",
+            phase="inference_receipt",
             sample_id=sample_id,
         )
     expected_candidates = ",".join(str(item) for item in receipt_candidates or ())
     if candidates != expected_candidates:
         raise MetricBoundaryError(
             "prediction manifest device_candidates disagrees with Task 4 receipt",
+            phase="inference_receipt",
             sample_id=sample_id,
         )
     patch_flags = inference_receipt.get("patch_flags")
@@ -1696,11 +1723,13 @@ def _assert_manifest_matches_handoff(
             if manifest_field not in manifest:
                 raise MetricBoundaryError(
                     f"prediction manifest is missing {manifest_field}",
+                    phase="inference_receipt",
                     sample_id=sample_id,
                 )
             if manifest[manifest_field] != patch_flags.get(receipt_field):
                 raise MetricBoundaryError(
                     f"prediction manifest {manifest_field} disagrees with Task 4 receipt",
+                    phase="inference_receipt",
                     sample_id=sample_id,
                 )
 
@@ -1747,9 +1776,11 @@ def _validate_task4_handoff(
                 expected_manifest_path=manifest_path,
             )
         except MetricBoundaryError as exc:
-            if exc.sample_id is not None:
-                raise
-            raise MetricBoundaryError(str(exc), phase=exc.phase, sample_id=sample_id) from exc
+            raise MetricBoundaryError(
+                str(exc),
+                phase="inference_receipt",
+                sample_id=sample_id,
+            ) from exc
         except Exception as exc:
             raise MetricBoundaryError(
                 f"prediction artifact validation failed: {type(exc).__name__}: {exc}",
@@ -1759,11 +1790,16 @@ def _validate_task4_handoff(
         _assert_manifest_matches_handoff(artifact, inference_receipt, sample_id=sample_id)
         recorded_counts = final_counts[sample_id]
         if not isinstance(recorded_counts, Mapping):
-            raise MetricBoundaryError("Task 4 final count entry is invalid", sample_id=sample_id)
+            raise MetricBoundaryError(
+                "Task 4 final count entry is invalid",
+                phase="inference_receipt",
+                sample_id=sample_id,
+            )
         for field in ("nodes", "edges", "forks"):
             if recorded_counts.get(field) != artifact["counts"][field]:
                 raise MetricBoundaryError(
                     f"Task 4 final count {field} disagrees with persisted GEFF",
+                    phase="inference_receipt",
                     sample_id=sample_id,
                 )
         for field, artifact_field in (
@@ -1778,6 +1814,7 @@ def _validate_task4_handoff(
             ):
                 raise MetricBoundaryError(
                     f"Task 4 final count {field} disagrees with persisted GEFF",
+                    phase="inference_receipt",
                     sample_id=sample_id,
                 )
         artifacts[sample_id] = artifact
@@ -2004,6 +2041,7 @@ def evaluate_panel(
         )
     except Exception as exc:
         failure = {
+            "sample_id": getattr(exc, "sample_id", None),
             "phase": "aggregate",
             "error_type": type(exc).__name__,
             "message": _safe_failure_message(exc),

@@ -480,6 +480,64 @@ def test_panel_preflight_failure_writes_failure_receipt_atomically(
     assert "gt" not in events
 
 
+@pytest.mark.parametrize("failure_kind", ["mint", "identity", "manifest_hash"])
+def test_panel_persistence_failure_receipt_names_sample_and_phase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_kind: str,
+) -> None:
+    root, inference, artifacts = _panel_inputs(tmp_path)
+    sample_id = PANEL_V1[0]
+    target_manifest = Path(artifacts[sample_id]["manifest_path"])
+    monkeypatch.setattr(
+        evaluation,
+        "validate_prediction_geff",
+        lambda path, sample_id, expected_volume_shape_tzyx=None: {"nodes": 2, "edges": 1, "forks": 0},
+    )
+    if failure_kind == "mint":
+        def fail_mint(path: Path) -> Any:
+            raise evaluation.GroundTruthOrderingError("synthetic token mint failure")
+
+        monkeypatch.setattr(evaluation, "mint_prediction_token", fail_mint)
+    elif failure_kind == "identity":
+        monkeypatch.setattr(
+            evaluation,
+            "mint_prediction_token",
+            lambda path: SimpleNamespace(
+                manifest_path=target_manifest,
+                directory_sha256="0" * 64,
+            ),
+        )
+    else:
+        original_sha256_file = evaluation._sha256_file
+        target_seen = False
+
+        def fail_manifest_rehash(path: Path) -> str:
+            nonlocal target_seen
+            if Path(path) == target_manifest:
+                if target_seen:
+                    raise OSError("synthetic manifest re-read failure")
+                target_seen = True
+            return original_sha256_file(path)
+
+        monkeypatch.setattr(evaluation, "_sha256_file", fail_manifest_rehash)
+
+    output = tmp_path / f"panel-{failure_kind}.json"
+    ground_truth_map = {sample: tmp_path / f"{sample}.gt.geff" for sample in PANEL_V1}
+    with pytest.raises(ValueError):
+        evaluation.evaluate_panel(
+            _lock(),
+            root,
+            output=output,
+            inference_receipt=inference,
+            ground_truth_map=ground_truth_map,
+        )
+
+    failure = json.loads(output.read_text(encoding="utf-8"))["failure"]
+    assert failure["sample_id"] == sample_id
+    assert failure["phase"] == "prediction_persist"
+
+
 def test_nonfinite_official_row_never_becomes_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -585,6 +643,75 @@ def test_panel_invalid_task4_sample_failure_receipt_names_sample(
 
     persisted = json.loads(output.read_text(encoding="utf-8"))
     assert persisted["failure"]["sample_id"] == sample_id
+
+
+def test_panel_final_count_crosscheck_failure_receipt_names_sample_and_phase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, inference, _ = _panel_inputs(tmp_path)
+    sample_id = PANEL_V1[0]
+    inference = dict(inference)
+    inference["counts"] = dict(inference["counts"])
+    inference["counts"]["final"] = dict(inference["counts"]["final"])
+    inference["counts"]["final"][sample_id] = dict(inference["counts"]["final"][sample_id])
+    inference["counts"]["final"][sample_id]["nodes"] = 99
+    monkeypatch.setattr(
+        evaluation,
+        "validate_prediction_geff",
+        lambda path, sample_id, expected_volume_shape_tzyx=None: {"nodes": 2, "edges": 1, "forks": 0},
+    )
+    output = tmp_path / "panel-final-count.json"
+    ground_truth_map = {sample: tmp_path / f"{sample}.gt.geff" for sample in PANEL_V1}
+
+    with pytest.raises(ValueError):
+        evaluation.evaluate_panel(
+            _lock(),
+            root,
+            output=output,
+            inference_receipt=inference,
+            ground_truth_map=ground_truth_map,
+        )
+
+    failure = json.loads(output.read_text(encoding="utf-8"))["failure"]
+    assert failure["sample_id"] == sample_id
+    assert failure["phase"] == "inference_receipt"
+
+
+def test_panel_aggregate_summarise_failure_receipt_names_sample_and_phase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, inference, _ = _panel_inputs(tmp_path)
+    events: list[str] = []
+    _patch_fake_metric(monkeypatch, events)
+    fake_summarise = evaluation.summarise
+    summary_calls = 0
+
+    def fail_on_first_aggregate_row(rows: Any) -> dict[str, Any]:
+        nonlocal summary_calls
+        summary_calls += 1
+        if summary_calls == len(PANEL_V1) + 1:
+            raise RuntimeError("synthetic aggregate per-sample summary failure")
+        return fake_summarise(rows)
+
+    monkeypatch.setattr(evaluation, "summarise", fail_on_first_aggregate_row)
+    output = tmp_path / "panel-aggregate-summary.json"
+    ground_truth_map = {sample: tmp_path / f"{sample}.gt.geff" for sample in PANEL_V1}
+
+    result = evaluation.evaluate_panel(
+        _lock(),
+        root,
+        output=output,
+        inference_receipt=inference,
+        ground_truth_map=ground_truth_map,
+    )
+
+    assert result["status"] == "FAILED"
+    failure = json.loads(output.read_text(encoding="utf-8"))["failure"]
+    assert failure["sample_id"] == PANEL_V1[0]
+    assert failure["phase"] == "aggregate"
+    assert summary_calls == len(PANEL_V1) + 1
 
 
 def test_manifest_boolean_schema_version_is_rejected_before_gt_open(
