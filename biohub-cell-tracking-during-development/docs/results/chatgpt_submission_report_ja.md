@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新直前の0.95 campaign remote HEAD: `6b468da`（Task4実装の`42f9181`/`45423b0`と日本語レポート更新`6b468da`はpush済み。Task3.5時点の`e56e561`から更新）
+本レポート更新直前の0.95 campaign remote HEAD: `e713a16`（Task4実装の`42f9181`/`45423b0`、predictor SHA修正`421eedf`、固定6-frame smoke contract `e713a16`はpush済み。Task3.5時点の`e56e561`から更新）
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
@@ -28,7 +28,7 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
 - HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、入力契約・依存・checkpoint・source確認の不足により、今回の公式スコア比較には含めていない。
-- Task4のround-4/round-5 code reviewはともに **APPROVED**。実画像2-frame smokeはGT-freeで実施し、0-nodeの根因は2-frame smoke horizonとILPの数学的な非互換と確定した。Recipe Cの本repo公式スコアはまだ得ていない。
+- Task4のround-4/round-5 code reviewと固定6-frame smoke contractのfresh reviewは **APPROVED**。実画像2-frame smokeはGT-freeで実施し、0-nodeの根因はILPのraw段階における2-frame smoke horizonとの数学的非互換と確定した（postprocess/bridge未到達）。再smoke前に、ユーザー追加要件のstage別GT-free diagnosticsを実装中である。Recipe Cの本repo公式スコアはまだ得ていない。
 
 ### 1.1 0.95 Performance Goalの現在地
 
@@ -45,7 +45,7 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
 | Recipe C source側5件参考macro（非公式・未測定） | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。本repoの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | Task1〜Task3.5完了。Task4 round-4/5 reviewはAPPROVED、実装`42f9181`/`45423b0`とレポート`6b468da`はpush済み。根因確定後、sourceの`output_min_track_len=6`と整合する固定6-frame smokeをTDDで修正中（未pass・未commit） |
+| 現在の作業 | Task1〜Task3.5完了。Task4 fixed6 contract `e713a16`はpush済み、fresh review APPROVED。root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）で、Ruff/compile/`git diff --check`もpass。2-frame根因はILP raw段階で確定し、再smoke前のstage別GT-free diagnosticsを実装中（未commit・未pass）。Task5 metric boundary初版はfresh review NOT APPROVEDでhardening中 |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -386,7 +386,7 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - historical race branch: `codex/biohub-multi-method-race`
 - current performance branch: `codex/biohub-095-performance`
 - 0.95 campaignの初期設計・計画commit: `de582ef`
-- 本レポート更新前に確認したremote commit: `6b468da`（Task4実装`42f9181`/`45423b0`、日本語レポート`6b468da`はpush済み）
+- 本レポート更新前に確認したremote commit: `e713a16`（Task4実装`42f9181`/`45423b0`、predictor SHA修正`421eedf`、固定6-frame smoke contract `e713a16`はpush済み）
 - Task3.5完了時点のremote commit: `e56e561`
 - Task1実装完了時のコードHEAD: `17135f0`
 - Task1完了履歴: `2a60cc0`、`87cf762`、`6887576`、`17135f0`
@@ -456,13 +456,13 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 
 ### 次の一手
 
-1. GT-free direct diagnosticでdetector出力とILP objectiveを確認し、2-frame smoke horizonとILPの数学的非互換を0-nodeの根因として確定した。threshold、blank input、bridge消失、postprocess未到達を追加原因としない。
-2. sourceの`output_min_track_len=6`と整合する固定6-frame smokeへTDDで修正中である。現時点では未pass・未commitのため、修正完了とは扱わない。
-3. 6-frame smokeがGT-freeで成功した後、新しいclean commitとselection lockを作り、固定5 sampleを除外なし・逐次で推論し、各prediction GEFF/manifestをhash検証する。
+1. GT-free direct diagnosticでdetector出力とILP objectiveを確認し、2-frame smoke horizonとILPの数学的非互換を0-nodeの根因として確定した。根因はILPのraw段階であり、postprocess/bridgeには到達していない。threshold、blank input、bridge消失を追加原因としない。
+2. sourceの`output_min_track_len=6`を根拠に固定6-frame smoke contractを`e713a16`で固定し、fresh review **APPROVED**、root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）、Ruff/compile/`git diff --check` passを確認した。再smoke前にユーザー追加要件のstage別GT-free diagnosticsを実装中（未commit・未pass）である。
+3. stage別diagnosticsと6-frame smokeがGT-freeで成功した後、新しいclean commit・selection lock・outputを作り、固定5 sampleを除外なし・逐次で推論し、各prediction GEFF/manifestをhash検証する。既存の失敗lock/outputは不変のまま保持する。
 4. 全5件の永続化・hash検証後にだけGTを開き、vendored official metricで評価する。GTは同じrunの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
 5. 本repoの実測macro `>=0.95` のreceiptが得られるまで、Recipe C参考値 `0.9560058787896148` を達成値とせず、0.95は未評価・未達成扱いにする。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証とTask4 round-4/5 code reviewは完了したが、Recipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証とTask4 fixed6 contract reviewは完了したが、stage別GT-free diagnosticsは未pass、Task5 metric boundary初版はfresh review **NOT APPROVED** でhardening中である。Recipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -670,7 +670,7 @@ Task2のimmutable protocol/selection lockは完了した。panel、source、conf
 
 次の作業はTask3のstaging/deviceである。公開Recipe Cのsourceと必要assetは、コード・docsとは分離したignored artifactへ取得済みである。一次sourceはApache-2.0、commit `843a47fdd531bdf7e6377673135519c54b69ae28`、`artifacts/biohub_095/source` に保持し、support側のrepoとは混在させていない。
 
-primary supportはKaggle version `10`を明示指定して取得した`repo/` runtime 13/13で、`artifacts/biohub_095/support/primary/repo` に配置した。predictorのcontrolled importは実推論・GT読み込みなしで通過している。predictorは26,008 bytes、SHA-256は `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`、primary checkpointはSHA-256 `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` である。secondaryはKaggle version `2`のcheckpointを `artifacts/biohub_095/support/secondary` に保持し、SHA-256は `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` である。両Kaggle assetはCC0-1.0である。
+primary supportはKaggle version `10`を明示指定して取得した`repo/` runtime 13/13で、`artifacts/biohub_095/support/primary/repo` に配置した。predictorのcontrolled importは実推論・GT読み込みなしで通過している。predictorは26,008 bytes、SHA-256は `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9` であり、63桁の旧記載は`421eedf`で正しい64桁へ修正済みである。primary checkpointはSHA-256 `12f6881ee3620a831697ca098ff8f48e687a24225f4e048b538deec3562fe771` である。secondaryはKaggle version `2`のcheckpointを `artifacts/biohub_095/support/secondary` に保持し、SHA-256は `9bac2fa0dadc4a6fc1899e0caf187f4b553e0a7cd90ba1261a68b35ffe9e305f` である。両Kaggle assetはCC0-1.0である。
 
 取得量はsupport合計約16.4 MiB、source clone約4.2 MiBであり、必要なruntimeとcheckpointだけを取得した。Kaggleのlatest fallbackは使わず、primary v10・secondary v2を固定した。credential/tokenの内容やpathはreportへ出していない。
 
@@ -694,7 +694,7 @@ root fresh verificationは source/protocol/staging combined `211 passed`、同�
 
 ## 23. Task4 Recipe C actual smoke 最新状態（2026-08-23更新）
 
-Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を `42f9181`、data-role修正を `45423b0` としてpush済みである。直前状態を記録した日本語レポートcommit `6b468da` もpush済みである。round-4は旧path回帰を含むtargeted suiteが `123 passed in 4.24s`、round-5はrunner targeted `68 passed`、runner/bridge/source/protocol/staging combined `335 passed` だった。full suiteは修正前後で `727 passed` → `728 passed`（各 `9 skipped, 2 warnings`）。対象Ruff、compile、`git diff --check`もpassした。
+Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を `42f9181`、data-role修正を `45423b0` としてpush済みである。predictor SHAの63桁記載は`421eedf`で正しい64桁 `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`へ修正済みであり、固定6-frame smoke contract `e713a16`もpush済みである。fixed6 contractのfresh reviewは **APPROVED**。root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）で、Ruff、compile、`git diff --check`もpassした。round-4/5の旧suite結果（targeted `123 passed` / `68 passed`、combined `335 passed`、full `727`→`728 passed`）は履歴として保持する。
 
 初回production freezeはDocker worktreeの`.git`がhostの絶対worktree pathを指すGit環境衝突でHEAD読取に失敗し、production selection lockは生成されなかった。この失敗をlockありとして扱わず、後続commitごとにwrite-once lockを新規作成した。
 
@@ -715,6 +715,12 @@ exact Recipe C ILPは edge cost `-p`、appearance `0`、disappearance `1.575` �
 
 同じsolver設定を使うGT-free synthetic確認でも、2-node/1-edge chainは `0 nodes / 0 edges`、6-node/5-edge chainは `6 nodes / 5 edges` となり、目的関数の説明と実挙動が一致した。
 
-device policyは `CUDA → MPS → CPU` の優先順で、requestは`auto`。現行`biohub-dev`はCPU-onlyのため、実際のsmokeおよび今回の診断実測はCPUであり、GPU性能は主張しない。現在はsourceの`output_min_track_len=6`と整合する固定6-frame smokeへTDDで変更中だが、未pass・未commitであり予定段階である。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
+device policyは `CUDA → MPS → CPU` の優先順で、requestは`auto`。現行`biohub-dev`はCPU-onlyのため、実際のsmokeおよび今回の診断実測はCPUであり、CPU/CUDA同値は未検証でGPU性能も主張しない。sourceの`output_min_track_len=6`を根拠とする固定6-frame smoke contractは`e713a16`で固定済みだが、再smoke前にstage別GT-free diagnosticsを実装中（未commit・未pass）である。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
 
 Current BestKnownは既存実測の `0.7944143977140719`、target gapは `0.1555856022859281` のままである。Recipe C source側の `0.9560058787896148` は非公式・未測定の参考値であり、本repoの0.95到達値ではない。従って本repoの0.95目標は **未評価・未達成** である。
+
+## 24. Task5 metric boundary 最新状態（2026-08-23更新）
+
+Task5 metric boundary初版はfresh reviewで **NOT APPROVED** だった。実manifest不整合、guard外でのGT reopen、pin順序、lock bypass、receipt clobber、aggregate tamperを確認し、現在hardening中である。official metricおよびGT実データ評価はまだ実施していない。
+
+再smokeは、ユーザー追加要件のstage別GT-free diagnosticsを実装・検証した後に行う。既存の失敗lock/outputは不変のまま保持し、新しいcommit・new lock・new outputで固定6-frame smokeを再実行する。CPU/CUDA同値は未検証で、device policyは引き続き `CUDA → MPS → CPU` である。
