@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 import tracksdata as td
 
+import biohub.recipe_c.diagnostics as diagnostics_module
 import biohub.recipe_c.runner as runner_module
 from biohub.recipe_c.protocol import PANEL_V1
 from biohub.recipe_c.runner import InferenceReceipt, run_recipe_c_inference
@@ -139,6 +140,83 @@ def _lock() -> dict[str, object]:
         "secondary_checkpoint_sha256": "c0f69e19ba252767f183158737ab1bc44f42380d2473ece23a4f276ae7c80dff",
         "secondary_staging_relative_path": "weights/unet_transformer/seed_314159/edge_predictor_best.pth",
         "requested_device": "auto",
+    }
+
+
+def _fake_trace(
+    nodes: dict[int, dict[str, object]], edges: list[dict[str, object]], **kwargs: object
+) -> tuple[dict[int, dict[str, object]], list[dict[str, object]], dict[str, int], dict[str, object]]:
+    per_frame: dict[str, int] = {}
+    for node in nodes.values():
+        frame = str(int(node["t"]))
+        per_frame[frame] = per_frame.get(frame, 0) + 1
+    snapshots = [
+        {
+            "stage": stage,
+            "n_nodes": len(nodes),
+            "n_edges": len(edges),
+            "per_frame_node_counts": dict(per_frame),
+        }
+        for stage in diagnostics_module._TRACE_STAGES
+    ]
+    return nodes, edges, {}, {"stage_snapshots": snapshots}
+
+
+def _fake_graph_rows(
+    dataset: str,
+    nodes: dict[int, dict[str, object]],
+    edges: list[dict[str, object]],
+    start_id: int = 0,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    row_id = start_id
+    for node_id in sorted(nodes):
+        node = nodes[node_id]
+        rows.append(
+            {
+                "id": row_id,
+                "dataset": dataset,
+                "row_type": "node",
+                "node_id": int(node_id),
+                "t": int(node["t"]),
+                "z": max(0, round(float(node["z"]))),
+                "y": max(0, round(float(node["y"]))),
+                "x": max(0, round(float(node["x"]))),
+                "source_id": -1,
+                "target_id": -1,
+            }
+        )
+        row_id += 1
+    for edge in edges:
+        rows.append(
+            {
+                "id": row_id,
+                "dataset": dataset,
+                "row_type": "edge",
+                "node_id": -1,
+                "t": -1,
+                "z": -1,
+                "y": -1,
+                "x": -1,
+                "source_id": int(edge["source_id"]),
+                "target_id": int(edge["target_id"]),
+            }
+        )
+        row_id += 1
+    return rows
+
+
+def _fake_source_diagnostics() -> dict[str, object]:
+    """Explicit pathless doubles used only by runner unit tests."""
+
+    return {
+        "trace_filter_output_graph": _fake_trace,
+        "trace_module_path": None,
+        "configure_postprocessing": lambda config, test_dir: None,
+        "submission_graph_rows": _fake_graph_rows,
+        "source_root": None,
+        "source_module_paths": {},
+        "source_module_provenance_before": {},
     }
 
 
@@ -370,7 +448,17 @@ def test_source_import_uses_pinned_root_and_restores_module_namespace(tmp_path: 
         encoding="utf-8",
     )
     (package / "submission.py").write_text(
-        "def write_submission_from_geff(*args):\n    return {}\n", encoding="utf-8"
+        "def write_submission_from_geff(*args):\n    return {}\n"
+        "def graph_rows(dataset, nodes, edges, start_id=0):\n    return []\n",
+        encoding="utf-8",
+    )
+    (package / "postprocess_stage_trace.py").write_text(
+        "def filter_output_graph_traced(nodes, edges, **kwargs):\n"
+        "    return nodes, edges, {}, {'stage_snapshots': []}\n",
+        encoding="utf-8",
+    )
+    (package / "postprocessing.py").write_text(
+        "def configure(settings, test_dir=None):\n    return None\n", encoding="utf-8"
     )
     stage = _FakeStage(tmp_path / "stage")
     stage.source_root = _FakePath(pinned_source)
@@ -391,6 +479,26 @@ def test_source_import_uses_pinned_root_and_restores_module_namespace(tmp_path: 
             sys.modules.pop("biohub_pipeline", None)
         else:
             sys.modules["biohub_pipeline"] = old
+
+
+def test_source_import_rejects_missing_required_trace_modules(tmp_path: Path) -> None:
+    pinned_source = tmp_path / "pinned-source"
+    package = pinned_source / "src" / "biohub_pipeline"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    (package / "config.py").write_text("def load_config(path): return object()\n", encoding="utf-8")
+    (package / "inference.py").write_text(
+        "def apply_spatial_d4_patch(*args): return True\n"
+        "def build_predict_command(*args): return ([], None)\n",
+        encoding="utf-8",
+    )
+    (package / "submission.py").write_text(
+        "def write_submission_from_geff(*args): return {}\n", encoding="utf-8"
+    )
+    stage = _FakeStage(tmp_path / "stage")
+    stage.source_root = _FakePath(pinned_source)
+    with pytest.raises(ValueError, match=r"trace|postprocessing|source"):
+        runner_module._load_source_api(stage)
 
 
 def _command_for_rewrite(*extra: str) -> list[str]:
@@ -474,6 +582,7 @@ def _configure_failure_pipeline(
             apply_spatial_d4_patch=d4,
             build_predict_command=builder,
             write_submission_from_geff=writer,
+            **_fake_source_diagnostics(),
         ),
     )
 
@@ -932,6 +1041,7 @@ def test_raw_publish_callback_uses_supplied_identity_after_replacement(
             apply_spatial_d4_patch=d4,
             build_predict_command=builder,
             write_submission_from_geff=lambda *args: None,
+            **_fake_source_diagnostics(),
         ),
     )
 
@@ -1105,6 +1215,7 @@ def test_builder_preflight_failure_uses_allowed_patch_phase(
             apply_spatial_d4_patch=d4,
             build_predict_command=lambda *args: ([], Path("splits.json")),
             write_submission_from_geff=lambda *args: {},
+            **_fake_source_diagnostics(),
         ),
     )
     with pytest.raises(RuntimeError, match="builder preflight"):
@@ -1149,6 +1260,7 @@ def test_d4_postimage_hash_mismatch_fails_before_builder(
             apply_spatial_d4_patch=d4,
             build_predict_command=builder,
             write_submission_from_geff=lambda *args: {},
+            **_fake_source_diagnostics(),
         ),
     )
     with pytest.raises(ValueError, match="postimage"):
@@ -1201,6 +1313,7 @@ def test_subprocess_failures_are_nonreusable_and_phase_labeled(
             apply_spatial_d4_patch=d4,
             build_predict_command=builder,
             write_submission_from_geff=lambda *args: {},
+            **_fake_source_diagnostics(),
         ),
     )
     monkeypatch.setattr(runner_module.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(failure))
@@ -1339,6 +1452,7 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
             apply_spatial_d4_patch=d4,
             build_predict_command=builder,
             write_submission_from_geff=writer,
+            **_fake_source_diagnostics(),
         ),
     )
     monkeypatch.setattr("biohub.recipe_c.runner.subprocess.run", fake_run)
@@ -1372,7 +1486,25 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
     assert receipt.child_device == "cpu"
     assert len(receipt.child_stdout_sha256) == 64
     assert len(receipt.child_stderr_sha256) == 64
+    assert receipt.ground_truth_open_count == 0
+    assert receipt.ground_truth_opened is False
+    assert receipt.metric_call_count == 0
+    assert receipt.metric_status == "not_run_gt_guard"
     assert receipt.counts["publish"]["predictor"]["sha256"] == _BUILDER_RUNTIME_PREDICTOR_SHA256  # type: ignore[index]
+    diagnostic_payload = json.loads((tmp_path / "output" / "diagnostics.json").read_text(encoding="utf-8"))
+    assert diagnostic_payload["ground_truth_open_count"] == 0
+    assert diagnostic_payload["ground_truth_opened"] is False
+    assert diagnostic_payload["metric_call_count"] == 0
+    assert diagnostic_payload["metric_status"] == "not_run_gt_guard"
+    assert diagnostic_payload["trace_execution"]["mode"] == "shadow_trace"
+    assert diagnostic_payload["trace_execution"]["production_output_authoritative"] is True
+    assert diagnostic_payload["trace_execution"]["observer_execution_order"] == [
+        "shadow_trace",
+        "production_csv",
+        "bridge",
+        "persisted_geff_reload",
+    ]
+    assert diagnostic_payload["samples"][sample]["persisted_reload"]["identity_matches_bridge"] is True
     manifest_path = tmp_path / "output" / "predictions" / f"{sample}.geff.manifest.json"
     manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     for key in (
@@ -1443,6 +1575,7 @@ def _run_manifest_mint_failure(
             write_submission_from_geff=lambda geffs, config, data_dir, output: output.write_text(
                 "synthetic", encoding="utf-8"
             ),
+            **_fake_source_diagnostics(),
         ),
     )
 

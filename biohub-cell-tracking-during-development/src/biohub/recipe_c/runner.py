@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -22,8 +22,10 @@ from typing import Any, Literal
 import biohub.device as device_module
 from biohub.recipe_c.diagnostics import (
     DiagnosticRecorder,
+    _capture_source_provenance,
     _json_safe,
     _sha256_file,
+    _verify_source_provenance,
 )
 from biohub.recipe_c.geff_bridge import (
     fsync_directory,
@@ -106,6 +108,10 @@ class InferenceReceipt:
     diagnostics: str | None = None
     diagnostics_sha256: str | None = None
     cuda_equivalence_validated: bool = False
+    ground_truth_open_count: int = 0
+    ground_truth_opened: bool = False
+    metric_call_count: int = 0
+    metric_status: str = "not_run_gt_guard"
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +124,11 @@ class _SourceApi:
     trace_filter_output_graph: Any = None
     trace_module_path: Path | None = None
     postprocessing_module_sha256: str | None = None
+    configure_postprocessing: Any = None
+    submission_graph_rows: Any = None
+    source_root: Path | None = None
+    source_module_paths: Mapping[str, Path] = field(default_factory=dict)
+    source_module_provenance_before: Mapping[str, object] = field(default_factory=dict)
 
     def restore(self) -> None:
         if self._restore_modules is not None:
@@ -375,25 +386,15 @@ def _load_source_api(stage: Any) -> _SourceApi:
     source_src_text = os.fspath(source_src)
     sys.path.insert(0, source_src_text)
     try:
-        config_module = importlib.import_module("biohub_pipeline.config")
-        inference_module = importlib.import_module("biohub_pipeline.inference")
-        submission_module = importlib.import_module("biohub_pipeline.submission")
         try:
+            config_module = importlib.import_module("biohub_pipeline.config")
+            inference_module = importlib.import_module("biohub_pipeline.inference")
+            submission_module = importlib.import_module("biohub_pipeline.submission")
             trace_module = importlib.import_module("biohub_pipeline.postprocess_stage_trace")
             postprocessing_module = importlib.import_module("biohub_pipeline.postprocessing")
         except ModuleNotFoundError as exc:
-            # Small fake source trees used by unit tests predate the pinned
-            # diagnostic module.  Real pinned Recipe C runs must provide it;
-            # the runner keeps the compatibility path for those isolated tests.
-            if not str(exc).startswith("No module named 'biohub_pipeline"):
-                raise
-            trace_module = None
-            postprocessing_module = None
-        modules = (config_module, inference_module, submission_module)
-        if trace_module is not None:
-            modules += (trace_module,)
-        if postprocessing_module is not None:
-            modules += (postprocessing_module,)
+            raise ValueError("pinned source required diagnostics module is missing") from exc
+        modules = (config_module, inference_module, submission_module, trace_module, postprocessing_module)
         for module in modules:
             module_file = getattr(module, "__file__", None)
             if not isinstance(module_file, str):
@@ -414,11 +415,23 @@ def _load_source_api(stage: Any) -> _SourceApi:
         )
         trace_function = (
             getattr(trace_module, "filter_output_graph_traced", None)
-            if trace_module is not None
-            else None
         )
-        if trace_module is not None and not callable(trace_function):
+        configure_function = getattr(postprocessing_module, "configure", None)
+        submission_graph_rows = getattr(submission_module, "graph_rows", None)
+        if not callable(trace_function):
             raise ValueError("pinned source trace function is missing")
+        if not callable(configure_function):
+            raise ValueError("pinned source postprocessing configure function is missing")
+        if not callable(submission_graph_rows):
+            raise ValueError("pinned source submission canonicalizer is missing")
+        module_paths = {
+            "config": Path(config_module.__file__).resolve(strict=True),
+            "inference": Path(inference_module.__file__).resolve(strict=True),
+            "submission": Path(submission_module.__file__).resolve(strict=True),
+            "postprocess_stage_trace": Path(trace_module.__file__).resolve(strict=True),
+            "postprocessing": Path(postprocessing_module.__file__).resolve(strict=True),
+        }
+        provenance_before = _capture_source_provenance(module_paths, source_root)
     except BaseException:
         sys.path.remove(source_src_text)
         for name in tuple(sys.modules):
@@ -452,6 +465,13 @@ def _load_source_api(stage: Any) -> _SourceApi:
         postprocessing_module_sha256=(
             _sha256_file(postprocessing_path) if postprocessing_path is not None else None
         ),
+        configure_postprocessing=lambda config, test_dir: configure_function(
+            config.postprocessing, test_dir
+        ),
+        submission_graph_rows=submission_graph_rows,
+        source_root=source_root,
+        source_module_paths=module_paths,
+        source_module_provenance_before=provenance_before,
     )
 
 
@@ -905,15 +925,17 @@ def run_recipe_c_inference(
                     scratch_secondary,
                     scratch_config,
                 )
+                data_root = _prepare_image_data(Path(image_root), chosen_samples, max_frames, scratch)
+                diagnostic_run.record_image_input(
+                    _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
+                )
+                config = source_api.load_config(scratch_config)
+                source_api.configure_postprocessing(config, data_root)
                 trace_function = diagnostic_run.prepare_trace(
                     source_api,
                     scratch / "diagnostics" / _TRACE_DERIVED.name,
                     _TRACE_DERIVED,
                     lambda relative, payload: _publish_derived(runtime_stage, relative, payload),
-                )
-                data_root = _prepare_image_data(Path(image_root), chosen_samples, max_frames, scratch)
-                diagnostic_run.record_image_input(
-                    _VOLUME_SMOKE if max_frames is not None else _VOLUME_FULL
                 )
                 patched = source_api.apply_spatial_d4_patch(scratch_repo, "scripts/predict_unet_transformer.py")
                 if patched is not True:
@@ -926,7 +948,6 @@ def run_recipe_c_inference(
                 d4_predictor_sha256_after = _sha256(d4_predictor_payload)
                 if d4_predictor_sha256_after == stage_predictor_postimage:
                     raise ValueError("spatial D4 did not produce a distinct runtime predictor postimage")
-                config = source_api.load_config(scratch_config)
                 raw_command, splits_path = source_api.build_predict_command(
                     config,
                     data_root,
@@ -947,7 +968,11 @@ def run_recipe_c_inference(
                     scratch_predictor,
                     lambda path: py_compile.compile(str(path), doraise=True),
                 )
-                if trace_function is not None and not diagnostic_run.predictor_diagnostic_instrumented:
+                if (
+                    trace_function is not None
+                    and getattr(source_api, "trace_module_path", None) is not None
+                    and not diagnostic_run.predictor_diagnostic_instrumented
+                ):
                     raise ValueError("child predictor diagnostic instrumentation was not applied")
                 predictor_sha256_after = _sha256(predictor_payload)
                 if predictor_sha256_after == d4_predictor_sha256_after:
@@ -1010,7 +1035,9 @@ def run_recipe_c_inference(
                 raw_geffs: dict[str, Path] = {}
                 raw_counts: dict[str, object] = {}
                 raw_graphs: dict[str, tuple[dict[int, dict[str, object]], list[dict[str, object]]]] = {}
-                strict_diagnostics = diagnostic_run.predictor_diagnostic_instrumented or trace_function is not None
+                strict_diagnostics = trace_function is not None and getattr(
+                    source_api, "trace_module_path", None
+                ) is not None
                 for source in raw_sources:
                     destination = raw_root / source.name
                     _copy_raw_prediction(
@@ -1035,6 +1062,11 @@ def run_recipe_c_inference(
                         directory_digest_report(destination),
                         strict=strict_diagnostics,
                     )
+                diagnostic_run.record_shadow_trace(
+                    raw_graphs,
+                    trace_function,
+                    strict=True,
+                )
                 phase = "postprocess"
                 csv_path = output_root / "submission.csv"
                 csv_temporary = output_root / ".submission.csv.tmp"
@@ -1062,7 +1094,7 @@ def run_recipe_c_inference(
                 csv_graphs = diagnostic_run.record_csv_and_trace(
                     csv_path,
                     raw_graphs,
-                    trace_function,
+                    None,
                     strict=strict_diagnostics,
                     trace_module_sha256=diagnostic_run.trace_module_sha256,
                 )
@@ -1102,10 +1134,16 @@ def run_recipe_c_inference(
                         directory_digest_report(final),
                         csv_graphs[sample_id],
                         strict=strict_diagnostics,
+                        digest_function=directory_digest_report,
                     )
                 if max_frames == RECIPE_C_SMOKE_FRAMES:
                     diagnostic_run.assert_six_frame_contract()
                 diagnostics_path = output_root / "diagnostics.json"
+                source_module_provenance_after = _verify_source_provenance(
+                    getattr(source_api, "source_module_paths", {}),
+                    getattr(source_api, "source_root", Path.cwd()),
+                    getattr(source_api, "source_module_provenance_before", {}),
+                )
                 diagnostic_provenance = diagnostic_run.provenance(
                     source_commit=str(lock["source_commit"]),
                     predictor_sha256_before=str(lock["predictor_sha256"]),
@@ -1114,6 +1152,10 @@ def run_recipe_c_inference(
                         source_api, "postprocessing_module_sha256", None
                     ),
                     child_stdout_sha256=child_stdout_sha256,
+                    source_module_provenance_before=getattr(
+                        source_api, "source_module_provenance_before", {}
+                    ),
+                    source_module_provenance_after=source_module_provenance_after,
                 )
                 diagnostics_sha256 = diagnostic_run.finalize(
                     diagnostics_path,
@@ -1159,6 +1201,12 @@ def run_recipe_c_inference(
                     remember(manifest)
                     mint_prediction_token(final)
                     manifests[sample_id] = manifest
+                if _verify_source_provenance(
+                    getattr(source_api, "source_module_paths", {}),
+                    getattr(source_api, "source_root", Path.cwd()),
+                    getattr(source_api, "source_module_provenance_before", {}),
+                ) != source_module_provenance_after:
+                    raise ValueError("pinned source module provenance changed before READY")
                 finished = datetime.now(UTC).isoformat()
                 receipt = InferenceReceipt(
                     status="READY",
@@ -1220,6 +1268,10 @@ def run_recipe_c_inference(
                     diagnostics=_role_path(diagnostics_path, output_root) if diagnostics_path is not None else None,
                     diagnostics_sha256=diagnostics_sha256,
                     cuda_equivalence_validated=False,
+                    ground_truth_open_count=0,
+                    ground_truth_opened=False,
+                    metric_call_count=0,
+                    metric_status="not_run_gt_guard",
                 )
                 _write_ready_receipt(output_root, receipt)
                 return receipt
