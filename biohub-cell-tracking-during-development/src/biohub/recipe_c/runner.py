@@ -9,6 +9,7 @@ import os
 import py_compile
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -650,6 +651,43 @@ def _role_path(path: Path, output_root: Path) -> str:
     return path.relative_to(output_root).as_posix()
 
 
+def _execution_data_role(runtime_stage: Any, data_root: Path) -> str:
+    """Return a relative data role that is valid from the physical fd cwd."""
+
+    repo_view = getattr(runtime_stage, "repo_dir", None)
+    logical_repo = getattr(repo_view, "logical_path", None)
+    if not isinstance(logical_repo, Path) or not logical_repo.is_absolute():
+        raise ValueError("runtime stage logical repository path must be absolute")
+    if logical_repo.is_symlink() or not logical_repo.is_dir():
+        raise ValueError("runtime stage logical repository path must be a regular directory")
+
+    repo_fd = getattr(runtime_stage, "repo_fd", None)
+    if not isinstance(repo_fd, int) or repo_fd < 0:
+        raise ValueError("runtime stage repository descriptor is invalid")
+    logical_stat = logical_repo.stat()
+    fd_stat = os.fstat(repo_fd)
+    if not stat.S_ISDIR(fd_stat.st_mode) or (logical_stat.st_dev, logical_stat.st_ino) != (
+        fd_stat.st_dev,
+        fd_stat.st_ino,
+    ):
+        raise ValueError("runtime stage logical repository does not match repository descriptor")
+
+    data_root = Path(data_root)
+    if not data_root.is_absolute() or data_root.is_symlink() or not data_root.is_dir():
+        raise ValueError("execution data root must be an absolute regular directory")
+    resolved_data_root = data_root.resolve(strict=True)
+    role = os.path.relpath(str(resolved_data_root), start=str(logical_repo))
+    if Path(role).is_absolute():
+        raise ValueError("execution data role must be relative")
+    try:
+        resolved_role = (logical_repo / role).resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("execution data role does not resolve to the runner-owned input") from exc
+    if resolved_role != resolved_data_root:
+        raise ValueError("execution data role does not resolve to the runner-owned input")
+    return role
+
+
 def _safe_failure_message(exc: BaseException) -> str:
     # A type-only message is deliberate: failure receipts must not become a
     # side channel for credentials, host paths, or GT paths.
@@ -844,7 +882,7 @@ def run_recipe_c_inference(
                     "BIOHUB_TORCH_DEVICE": resolved_device,
                 }
                 repo_cwd = os.fspath(runtime_stage.repo_dir)
-                execution_data_role = os.path.relpath(str(data_root), start=repo_cwd)
+                execution_data_role = _execution_data_role(runtime_stage, data_root)
                 execution_command = _rewrite_command(
                     raw_command,
                     execution_data_role,

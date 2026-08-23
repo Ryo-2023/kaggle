@@ -6,6 +6,7 @@ import builtins
 import csv
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import types
@@ -29,11 +30,22 @@ _BUILDER_RUNTIME_PREDICTOR_SHA256 = hashlib.sha256(_BUILDER_RUNTIME_PREDICTOR).h
 
 
 class _FakePath:
-    def __init__(self, path: Path, payload: bytes = b"artifact") -> None:
+    def __init__(
+        self,
+        path: Path,
+        payload: bytes = b"artifact",
+        *,
+        fspath: str | None = None,
+    ) -> None:
         self.path = path
         self.payload = payload
+        self.logical_path = path
+        self._fspath = fspath
 
     def __fspath__(self) -> str:
+        return self._fspath or str(self.path)
+
+    def __str__(self) -> str:
         return str(self.path)
 
     def read_bytes(self) -> bytes:
@@ -55,13 +67,13 @@ class _FakeStage:
     predictor_sha256_preimage = "c" * 64
     predictor_sha256_postimage = _STAGE_DEVICE_PREDICTOR_SHA256
     device_candidates = ("cuda", "mps", "cpu")
-    repo_fd = 42
 
     def __init__(self, root: Path) -> None:
         self.root = root
         (root / "repo").mkdir(parents=True)
         self.closed = False
-        self.repo_dir = _FakePath(root / "repo")
+        self._repo_fd = os.open(root / "repo", os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        self.repo_dir = _FakePath(root / "repo", fspath=f"/proc/self/fd/{self._repo_fd}")
         self.staged_config = _FakePath(root / "config.yaml", b"config: synthetic\n")
         self.predictor_path = _FakePath(root / "repo" / "scripts" / "predict_unet_transformer.py")
         self.predictor_payload = _STAGE_DEVICE_PREDICTOR
@@ -96,7 +108,14 @@ class _FakeStage:
         self.close()
 
     def close(self) -> None:
+        if self._repo_fd >= 0:
+            os.close(self._repo_fd)
+            self._repo_fd = -1
         self.closed = True
+
+    @property
+    def repo_fd(self) -> int:
+        return self._repo_fd
 
     def read_repo_bytes(self, relative: object) -> bytes:
         if str(relative).endswith("scripts/predict_unet_transformer.py"):
@@ -572,6 +591,26 @@ def test_command_rewrite_rejects_duplicate_or_untrusted_path_roles(extra: tuple[
             runner_module._PRIMARY_RELATIVE,
             runner_module._SECONDARY_RELATIVE,
         )
+
+
+def test_execution_data_role_uses_physical_logical_repo_not_fd_path(tmp_path: Path) -> None:
+    logical_repo = tmp_path / "very" / "deep" / "stage" / "repo"
+    logical_repo.mkdir(parents=True)
+    data_root = tmp_path / "runner-temp" / "input"
+    data_root.mkdir(parents=True)
+    repo_fd = os.open(logical_repo, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        repo = _FakePath(logical_repo, fspath=f"/proc/self/fd/{repo_fd}")
+        stage = SimpleNamespace(repo_dir=repo, repo_fd=repo_fd)
+        old_role = os.path.relpath(str(data_root), start=os.fspath(repo))
+        assert (logical_repo / old_role).resolve() != data_root.resolve()
+
+        role = runner_module._execution_data_role(stage, data_root)
+
+        assert role == os.path.relpath(data_root, start=logical_repo)
+        assert (logical_repo / role).resolve() == data_root.resolve()
+    finally:
+        os.close(repo_fd)
 
 
 def test_image_preflight_does_not_fail_open_when_zarr_is_unavailable(
@@ -1219,6 +1258,9 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
         assert kwargs["pass_fds"] == (stage.repo_fd,)
         assert kwargs["env"]["PYTHONPATH"] == "src"  # type: ignore[index]
         assert all(not value.startswith("/") for value in argv)
+        data_argument = argv[argv.index("--data-dir") + 1]
+        physical_cwd = stage.repo_dir.logical_path
+        assert (physical_cwd / data_argument).resolve() == (tmp_path / "input").resolve()
         write_raw_geff(str(kwargs["cwd"]))
         return subprocess.CompletedProcess(argv, 0, stdout="Fold 0: synthetic | device=cpu | done\n", stderr="")
 
