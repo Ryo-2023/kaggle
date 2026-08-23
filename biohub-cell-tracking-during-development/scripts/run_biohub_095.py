@@ -255,8 +255,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
         return args.handler(args)
-    except (FileNotFoundError, OSError, ValueError) as exc:
-        print(f"freeze failed: {exc}", file=sys.stderr)
+    except (
+        FileNotFoundError,
+        OSError,
+        ValueError,
+        RuntimeError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        print(f"{args.command} failed: {exc}", file=sys.stderr)
         return 2
 
 

@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import builtins
 import csv
 import hashlib
+import json
 import subprocess
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import tracksdata as td
 
+import biohub.recipe_c.runner as runner_module
 from biohub.recipe_c.protocol import PANEL_V1
 from biohub.recipe_c.runner import InferenceReceipt, run_recipe_c_inference
 
@@ -40,7 +44,7 @@ class _FakeReceipt:
 class _FakeStage:
     selection_lock_id = "b" * 64
     predictor_sha256_preimage = "c" * 64
-    predictor_sha256_postimage = "d" * 64
+    predictor_sha256_postimage = "76130475a0beaa303576e87a94edaa74b5c2e39f56f35051c0d1b5cbc81a5046"
     device_candidates = ("cuda", "mps", "cpu")
     repo_fd = 42
 
@@ -56,6 +60,10 @@ class _FakeStage:
         self.receipt = {
             "source_commit": "843a47fdd531bdf7e6377673135519c54b69ae28",
             "config_sha256": "e" * 64,
+            "predictor_sha256_before": "c" * 64,
+            "primary_checkpoint_sha256": "f" * 64,
+            "secondary_checkpoint_sha256": "1" * 64,
+            "resolved_device_candidates": ["cuda", "mps", "cpu"],
         }
         self.published: list[tuple[str, bytes]] = []
 
@@ -120,6 +128,424 @@ def test_receipt_shape_is_public_and_does_not_allow_gt_fields() -> None:
     fields = set(InferenceReceipt.__dataclass_fields__)
     assert {"status", "selection_lock_id", "sample_ids", "command", "manifests"} <= fields
     assert not fields.intersection({"gt_path", "ground_truth", "metric", "score", "gt_nodes"})
+
+
+@pytest.mark.parametrize("samples", [PANEL_V1[:2], PANEL_V1])
+def test_smoke_requires_exactly_one_sample(
+    samples: tuple[str, ...],
+) -> None:
+    with pytest.raises(ValueError, match=r"exactly one|smoke"):
+        runner_module._sample_selection(samples, _lock(), 2)
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["config_sha256", "predictor_sha256_before", "primary_checkpoint_sha256", "secondary_checkpoint_sha256"],
+)
+def test_stage_receipt_identity_fields_are_required(missing: str, tmp_path: Path) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    lock = _lock()
+    stage.receipt[missing] = "x" * 64
+    stage.receipt.pop(missing)
+    with pytest.raises(ValueError, match=r"missing|identity"):
+        runner_module._assert_stage_lock_identity(stage, lock)
+
+
+def test_stage_lock_identity_rejects_hash_and_device_candidate_mismatch(tmp_path: Path) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    lock = _lock()
+    stage.receipt["primary_checkpoint_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="identity"):
+        runner_module._assert_stage_lock_identity(stage, lock)
+    stage.receipt["primary_checkpoint_sha256"] = lock["primary_checkpoint_sha256"]
+    stage.receipt["resolved_device_candidates"] = ["cpu"]
+    with pytest.raises(ValueError, match="device candidates"):
+        runner_module._assert_stage_lock_identity(stage, lock)
+
+
+@pytest.mark.parametrize("attribute", ["predictor_sha256_preimage", "predictor_sha256_postimage"])
+def test_stage_lock_identity_requires_predictor_preimage_and_postimage(
+    tmp_path: Path, attribute: str
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    setattr(stage, attribute, None)
+    with pytest.raises(ValueError, match="preimage/postimage"):
+        runner_module._assert_stage_lock_identity(stage, _lock())
+
+
+def test_stage_lock_identity_requires_secondary_staging_role(tmp_path: Path) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    lock = _lock()
+    lock.pop("secondary_staging_relative_path")
+    with pytest.raises(ValueError, match="secondary checkpoint role"):
+        runner_module._assert_stage_lock_identity(stage, lock)
+
+
+def test_device_resolver_errors_are_not_hidden(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(requested: str):
+        raise RuntimeError("device probe failed")
+
+    monkeypatch.setattr("biohub.device.resolve_torch_device", fail)
+    with pytest.raises(RuntimeError, match="device probe failed"):
+        runner_module._resolve_device("cuda")
+
+
+def test_device_resolution_uses_canonical_resolver_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def resolve(requested: str):
+        calls.append(requested)
+        return type("Device", (), {"type": "cpu"})()
+
+    monkeypatch.setattr("biohub.device.resolve_torch_device", resolve)
+    assert runner_module._resolve_device("auto") == "cpu"
+    assert calls == ["auto"]
+
+
+def test_source_import_rejects_ambient_module_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stage = _FakeStage(tmp_path / "stage")
+    pinned_source = tmp_path / "pinned-source"
+    (pinned_source / "src").mkdir(parents=True)
+    stage.source_root = _FakePath(pinned_source)
+    ambient = types.SimpleNamespace(
+        __file__="/opt/ambient/biohub_pipeline/config.py",
+        load_config=lambda path: object(),
+        apply_spatial_d4_patch=lambda *args: True,
+        build_predict_command=lambda *args: ([], Path("splits.json")),
+        write_submission_from_geff=lambda *args: {},
+    )
+    monkeypatch.setattr(runner_module.importlib, "import_module", lambda name: ambient)
+    with pytest.raises(ValueError, match=r"pinned|source|provenance"):
+        runner_module._load_source_api(stage)
+
+
+def test_source_import_uses_pinned_root_and_restores_module_namespace(tmp_path: Path) -> None:
+    pinned_source = tmp_path / "pinned-source"
+    package = pinned_source / "src" / "biohub_pipeline"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    (package / "config.py").write_text(
+        "def load_config(path):\n    return 'pinned-config'\n", encoding="utf-8"
+    )
+    (package / "inference.py").write_text(
+        "def apply_spatial_d4_patch(*args):\n    return True\n"
+        "def build_predict_command(*args):\n    return ([], None)\n",
+        encoding="utf-8",
+    )
+    (package / "submission.py").write_text(
+        "def write_submission_from_geff(*args):\n    return {}\n", encoding="utf-8"
+    )
+    stage = _FakeStage(tmp_path / "stage")
+    stage.source_root = _FakePath(pinned_source)
+    ambient = types.ModuleType("biohub_pipeline")
+    ambient.__file__ = "/opt/ambient/biohub_pipeline/__init__.py"
+    import sys
+
+    old = sys.modules.get("biohub_pipeline")
+    sys.modules["biohub_pipeline"] = ambient
+    try:
+        api = runner_module._load_source_api(stage)
+        assert api.load_config(Path("config.yaml")) == "pinned-config"
+        assert api.load_config.__module__ == "biohub_pipeline.config"
+        api.restore()
+        assert sys.modules.get("biohub_pipeline") is ambient
+    finally:
+        if old is None:
+            sys.modules.pop("biohub_pipeline", None)
+        else:
+            sys.modules["biohub_pipeline"] = old
+
+
+def _command_for_rewrite(*extra: str) -> list[str]:
+    return [
+        "/opt/venv/bin/python",
+        "scripts/predict_unet_transformer.py",
+        "--data-dir",
+        "/tmp/input",
+        "--splits",
+        "clean_v106_test_splits.json",
+        "--weights",
+        "weights/unet_transformer/split_0/edge_predictor_best.pth",
+        "--det-threshold",
+        "0.96875",
+        "--edge-threshold",
+        "0.4",
+        "--ensemble-alpha",
+        "0.5",
+        "--ilp-edge-weight",
+        "-1.0",
+        "--ilp-appearance-weight",
+        "0.0",
+        "--ilp-disappearance-weight",
+        "1.575",
+        "--ilp-division-weight",
+        "1.0",
+        "--ensemble-weights",
+        "weights/unet_transformer/seed_314159/edge_predictor_best.pth",
+        "--use-ilp",
+        *extra,
+    ]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ("--data-dir", "/tmp/other-input"),
+        ("--weights", "../outside.pth"),
+        ("--debug-video", "../outside.zarr"),
+    ],
+)
+def test_command_rewrite_rejects_duplicate_or_untrusted_path_roles(extra: tuple[str, str]) -> None:
+    with pytest.raises(ValueError, match=r"duplicate|path|role|traversal|unknown"):
+        runner_module._rewrite_command(
+            _command_for_rewrite(*extra),
+            "../temporary-input",
+            runner_module._PRIMARY_RELATIVE,
+            runner_module._SECONDARY_RELATIVE,
+        )
+
+
+def test_image_preflight_does_not_fail_open_when_zarr_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    (image_root / f"{PANEL_V1[0]}.zarr").mkdir()
+    original_import = builtins.__import__
+
+    def missing_zarr(name: str, *args: object, **kwargs: object):
+        if name == "zarr":
+            raise ModuleNotFoundError("zarr intentionally unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_zarr)
+    with pytest.raises((ImportError, RuntimeError), match=r"zarr|Zarr"):
+        runner_module._preflight_images(image_root, (PANEL_V1[0],), None)
+
+
+def test_smoke_subset_preserves_zarr_metadata_and_array_encoding(tmp_path: Path) -> None:
+    zarr = pytest.importorskip("zarr")
+    import numpy as np
+
+    sample = PANEL_V1[0]
+    image_root = tmp_path / "images"
+    image_root.mkdir()
+    source_path = image_root / f"{sample}.zarr"
+    source = zarr.open_group(str(source_path), mode="w", zarr_format=3)
+    source.attrs.update(
+        {
+            "multiscales": [
+                {
+                    "version": "0.4",
+                    "datasets": [
+                        {
+                            "path": "0",
+                            "coordinateTransformations": [
+                                {"type": "scale", "scale": [1.0, 1.625, 0.40625, 0.40625]}
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "image_statistics": {"quantiles": [0.0, 0.5, 1.0]},
+        }
+    )
+    values = np.arange(4 * 2 * 3 * 4, dtype=np.uint16).reshape(4, 2, 3, 4)
+    array = source.create_array(
+        "0",
+        data=values,
+        chunks=(1, 2, 3, 4),
+        fill_value=17,
+        dimension_names=("t", "z", "y", "x"),
+    )
+    array.attrs["array_marker"] = "preserve-me"
+
+    (tmp_path / "scratch").mkdir()
+    destination_root = runner_module._prepare_image_data(
+        image_root, (sample,), 2, tmp_path / "scratch"
+    )
+    destination = zarr.open_group(str(destination_root / f"{sample}.zarr"), mode="r")
+    copied = destination["0"]
+    assert dict(destination.attrs) == dict(source.attrs)
+    assert dict(copied.attrs) == dict(array.attrs)
+    assert tuple(copied.shape) == (2, 2, 3, 4)
+    assert tuple(copied.chunks) == tuple(array.chunks)
+    assert copied.dtype == array.dtype
+    assert copied.fill_value == array.fill_value
+    assert tuple(copied.metadata.dimension_names) == tuple(array.metadata.dimension_names)
+    assert copied.metadata.codecs == array.metadata.codecs
+    np.testing.assert_array_equal(copied[:], values[:2])
+
+
+def test_preflight_failure_persists_only_nonreusable_failed_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    output = tmp_path / "output"
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda value: _lock())
+    monkeypatch.setattr(
+        runner_module,
+        "_preflight_images",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("synthetic preflight failure")),
+    )
+    with pytest.raises(ValueError, match="preflight"):
+        run_recipe_c_inference(tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2)
+    failed = json.loads((output / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["status"] == "FAILED"
+    assert failed["phase"] == "preflight"
+    assert failed["reusable"] is False
+    assert not (output / "receipt.json").exists()
+    assert sorted(path.name for path in output.iterdir()) == ["FAILED.json"]
+
+
+def test_existing_output_root_is_rejected_without_failed_side_effect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    output = tmp_path / "output"
+    output.mkdir()
+    sentinel = output / "sentinel"
+    sentinel.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda value: _lock())
+    with pytest.raises(FileExistsError, match="fresh"):
+        run_recipe_c_inference(tmp_path / "images", (sample,), stage, _lock(), output, max_frames=2)
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+    assert not (output / "FAILED.json").exists()
+
+
+def test_builder_preflight_failure_uses_allowed_patch_phase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda value: _lock())
+    monkeypatch.setattr(runner_module, "_preflight_images", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runner_module,
+        "_prepare_image_data",
+        lambda image_root, sample_ids, max_frames, scratch: tmp_path / "input",
+    )
+    (tmp_path / "input").mkdir()
+
+    def d4(repo_dir: Path, prediction_script: str) -> bool:
+        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(
+        runner_module,
+        "_load_source_api",
+        lambda stage_value: SimpleNamespace(
+            load_config=lambda path: (_ for _ in ()).throw(RuntimeError("builder preflight failure")),
+            apply_spatial_d4_patch=d4,
+            build_predict_command=lambda *args: ([], Path("splits.json")),
+            write_submission_from_geff=lambda *args: {},
+        ),
+    )
+    with pytest.raises(RuntimeError, match="builder preflight"):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+        )
+    failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["phase"] == "patch"
+
+
+def test_d4_postimage_hash_mismatch_fails_before_builder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    stage.predictor_sha256_postimage = "d" * 64
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda value: _lock())
+    monkeypatch.setattr(runner_module, "_preflight_images", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runner_module,
+        "_prepare_image_data",
+        lambda image_root, sample_ids, max_frames, scratch: tmp_path / "input",
+    )
+    (tmp_path / "input").mkdir()
+
+    def d4(repo_dir: Path, prediction_script: str) -> bool:
+        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        return True
+
+    calls = {"builder": 0}
+
+    def builder(*args: object):
+        calls["builder"] += 1
+        return _command_for_rewrite(), Path("splits.json")
+
+    monkeypatch.setattr(
+        runner_module,
+        "_load_source_api",
+        lambda stage_value: SimpleNamespace(
+            load_config=lambda path: object(),
+            apply_spatial_d4_patch=d4,
+            build_predict_command=builder,
+            write_submission_from_geff=lambda *args: {},
+        ),
+    )
+    with pytest.raises(ValueError, match="postimage"):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+        )
+    assert calls["builder"] == 0
+    failed = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed["phase"] == "patch"
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        subprocess.CalledProcessError(17, ["python", "predict"]),
+        subprocess.TimeoutExpired(["python", "predict"], 1.0),
+        MemoryError("synthetic OOM"),
+    ],
+)
+def test_subprocess_failures_are_nonreusable_and_phase_labeled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: BaseException
+) -> None:
+    sample = PANEL_V1[0]
+    stage = _FakeStage(tmp_path / "stage")
+    monkeypatch.setattr(runner_module, "_validate_selection_lock", lambda value: _lock())
+    monkeypatch.setattr(runner_module, "_preflight_images", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        runner_module,
+        "_prepare_image_data",
+        lambda image_root, sample_ids, max_frames, scratch: tmp_path / "input",
+    )
+    (tmp_path / "input").mkdir()
+
+    def d4(repo_dir: Path, prediction_script: str) -> bool:
+        (repo_dir / prediction_script).write_text("print('predictor')\n", encoding="utf-8")
+        return True
+
+    def builder(config: object, data_dir: Path, repo_dir: Path, weights: Path, stems: list[str]):
+        splits = repo_dir / "clean_v106_test_splits.json"
+        splits.write_text("[]\n", encoding="utf-8")
+        return _command_for_rewrite(), splits
+
+    monkeypatch.setattr(
+        runner_module,
+        "_load_source_api",
+        lambda stage_value: SimpleNamespace(
+            load_config=lambda path: object(),
+            apply_spatial_d4_patch=d4,
+            build_predict_command=builder,
+            write_submission_from_geff=lambda *args: {},
+        ),
+    )
+    monkeypatch.setattr(runner_module.subprocess, "run", lambda *args, **kwargs: (_ for _ in ()).throw(failure))
+    with pytest.raises(type(failure)):
+        run_recipe_c_inference(
+            tmp_path / "images", (sample,), stage, _lock(), tmp_path / "output", max_frames=2
+        )
+    failed_payload = json.loads((tmp_path / "output" / "FAILED.json").read_text(encoding="utf-8"))
+    assert failed_payload["phase"] == "subprocess"
+    assert failed_payload["reusable"] is False
 
 
 def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
@@ -248,3 +674,19 @@ def test_runner_calls_d4_builder_publish_and_direct_subprocess_once(
     assert len(stage.published) == 2
     assert (tmp_path / "output" / "receipt.json").is_file()
     assert not (tmp_path / "output" / "FAILED.json").exists()
+    assert len(receipt.command_sha256) == 64
+    assert len(receipt.execution_argv_sha256) == 64
+    manifest_path = tmp_path / "output" / "predictions" / f"{sample}.geff.manifest.json"
+    manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for key in (
+        "source_commit",
+        "config_sha256",
+        "predictor_sha256_before",
+        "predictor_sha256",
+        "primary_checkpoint_sha256",
+        "secondary_checkpoint_sha256",
+        "resolved_device",
+        "command_sha256",
+        "execution_argv_sha256",
+    ):
+        assert key in manifest_payload

@@ -232,9 +232,9 @@ def postprocessed_csv_to_geffs(
 
     csv_path = Path(csv_path)
     output_root = Path(output_root)
-    if output_root.exists() and not output_root.is_dir():
-        raise ValueError(f"prediction output root is not a directory: {output_root}")
-    output_root.mkdir(parents=True, exist_ok=False) if not output_root.exists() else None
+    if output_root.exists() or output_root.is_symlink():
+        raise FileExistsError(f"prediction output root must be fresh: {output_root.name}")
+    output_root.mkdir(parents=True, exist_ok=False)
     parsed = _parse_submission(csv_path, sample_ids, None)
     written: dict[str, Path] = {}
     try:
@@ -243,13 +243,33 @@ def postprocessed_csv_to_geffs(
             if final.exists() or final.is_symlink():
                 raise FileExistsError(final)
             temporary = output_root / f".{sample_id}.geff.{secrets.token_hex(8)}.tmp"
+            published = False
             try:
                 _build_geff(temporary, parsed[sample_id])
                 _rename_noreplace(temporary, final)
+                published = True
                 _fsync_directory(output_root)
+                signature = _read_prediction_signature(final)
+                expected_signature = {
+                    "nodes": {
+                        int(node_id): (
+                            int(attrs["t"]),
+                            int(attrs["z"]),
+                            int(attrs["y"]),
+                            int(attrs["x"]),
+                        )
+                        for node_id, attrs in parsed[sample_id]["nodes"].items()
+                    },
+                    "edges": sorted(tuple(map(int, edge)) for edge in parsed[sample_id]["edges"]),
+                }
+                signature["edges"] = sorted(signature["edges"])
+                if signature != expected_signature:
+                    raise ValueError("GEFF roundtrip is not lossless for CSV topology or coordinates")
             except BaseException:
                 if temporary.exists() and not temporary.is_symlink():
                     shutil.rmtree(temporary)
+                if published and final.is_dir() and not final.is_symlink():
+                    shutil.rmtree(final)
                 raise
             written[sample_id] = final
     except BaseException:
@@ -260,6 +280,33 @@ def postprocessed_csv_to_geffs(
                 shutil.rmtree(path)
         raise
     return written
+
+
+def _read_prediction_signature(path: Path) -> dict[str, object]:
+    import tracksdata as td
+
+    loaded = td.graph.IndexedRXGraph.from_geff(path)
+    graph = loaded[0] if isinstance(loaded, tuple) else loaded
+    nodes = list(graph.node_attrs().iter_rows(named=True))
+    if not nodes:
+        raise ValueError("prediction GEFF contains no nodes")
+    node_signature: dict[int, tuple[int, int, int, int]] = {}
+    for row in nodes:
+        node_id = int(row["node_id"])
+        if node_id in node_signature:
+            raise ValueError("prediction node IDs are duplicated")
+        node_signature[node_id] = tuple(int(row[field]) for field in ("t", "z", "y", "x"))
+    if sorted(node_signature) != list(range(len(node_signature))):
+        raise ValueError("prediction node IDs must be contiguous from zero")
+    edge_signature: list[tuple[int, int]] = []
+    seen_edges: set[tuple[int, int]] = set()
+    for row in list(graph.edge_attrs().iter_rows(named=True)):
+        edge = (int(row["source_id"]), int(row["target_id"]))
+        if edge in seen_edges:
+            raise ValueError("prediction edges are duplicated")
+        seen_edges.add(edge)
+        edge_signature.append(edge)
+    return {"nodes": node_signature, "edges": edge_signature}
 
 
 def validate_prediction_geff(
@@ -273,32 +320,24 @@ def validate_prediction_geff(
     path = Path(path)
     if path.name != f"{sample_id}.geff" or not path.is_dir() or path.is_symlink():
         raise ValueError(f"prediction GEFF path is not the expected regular directory: {path}")
-    import tracksdata as td
-
-    loaded = td.graph.IndexedRXGraph.from_geff(path)
-    graph = loaded[0] if isinstance(loaded, tuple) else loaded
-    nodes = list(graph.node_attrs().iter_rows(named=True))
-    edges = list(graph.edge_attrs().iter_rows(named=True))
+    signature = _read_prediction_signature(path)
+    nodes = signature["nodes"]
+    edges = signature["edges"]
     node_frames: dict[int, int] = {}
-    for row in nodes:
-        node_id = int(row["node_id"])
-        if node_id in node_frames:
-            raise ValueError("prediction node IDs are duplicated")
-        node_frames[node_id] = int(row["t"])
+    for node_id, values in nodes.items():
+        node_frames[int(node_id)] = int(values[0])
         for field in ("t", "z", "y", "x"):
-            value = int(row[field])
+            value = int(values[("t", "z", "y", "x").index(field)])
             if value < 0:
                 raise ValueError("prediction coordinates must be non-negative")
         if expected_volume_shape_tzyx is not None and any(
-            int(row[field]) >= int(limit)
-            for field, limit in zip(("t", "z", "y", "x"), expected_volume_shape_tzyx, strict=True)
+            value >= int(limit)
+            for value, limit in zip(values, expected_volume_shape_tzyx, strict=True)
         ):
             raise ValueError("prediction coordinate is outside the expected volume")
     incoming: defaultdict[int, int] = defaultdict(int)
     outgoing: defaultdict[int, int] = defaultdict(int)
-    for row in edges:
-        source = int(row["source_id"])
-        target = int(row["target_id"])
+    for source, target in edges:
         if source not in node_frames or target not in node_frames:
             raise ValueError("prediction edge endpoint is missing")
         if node_frames[target] != node_frames[source] + 1:

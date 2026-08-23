@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import biohub.recipe_c.geff_bridge as bridge_module
 from biohub.recipe_c.geff_bridge import (
     CSV_HEADER,
     postprocessed_csv_to_geffs,
@@ -136,3 +137,62 @@ def test_manifest_is_geff_sibling_and_contains_no_absolute_or_gt_path(tmp_path: 
     assert created <= datetime.now(UTC)
     assert str(tmp_path) not in json.dumps(payload)
     assert mint_prediction_token(prediction).directory_sha256 == payload["directory_sha256"]
+
+
+def test_bridge_rejects_existing_or_symlink_output_root_without_writing(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0)])
+    output_root = tmp_path / "predictions"
+    output_root.mkdir()
+    sentinel = output_root / "sentinel.txt"
+    sentinel.write_text("keep", encoding="utf-8")
+    with pytest.raises((FileExistsError, ValueError), match=r"fresh|exist|directory"):
+        postprocessed_csv_to_geffs(
+            csv_path, output_root, sample_ids=(SAMPLE,), provenance={}
+        )
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+
+    target = tmp_path / "target"
+    target.mkdir()
+    linked = tmp_path / "linked-predictions"
+    linked.symlink_to(target, target_is_directory=True)
+    with pytest.raises((FileExistsError, ValueError), match=r"fresh|symlink|exist"):
+        postprocessed_csv_to_geffs(
+            csv_path, linked, sample_ids=(SAMPLE,), provenance={}
+        )
+    assert not (target / f"{SAMPLE}.geff").exists()
+
+
+def test_bridge_rechecks_lossless_csv_topology_after_geff_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_node(0, 0, 0), _node(1, 1, 1), _edge(2, 0, 1)])
+    original = bridge_module._build_geff
+
+    def tampered(destination: Path, bucket: dict[str, object]) -> None:
+        altered = {
+            "nodes": {int(key): dict(value) for key, value in bucket["nodes"].items()},
+            "edges": list(bucket["edges"]),
+        }
+        altered["nodes"][0]["x"] = 99
+        original(destination, altered)
+
+    monkeypatch.setattr(bridge_module, "_build_geff", tampered)
+    with pytest.raises(ValueError, match=r"lossless|topology|coordinate"):
+        postprocessed_csv_to_geffs(
+            csv_path, tmp_path / "predictions", sample_ids=(SAMPLE,), provenance={}
+        )
+
+
+def test_validate_prediction_geff_rejects_empty_graph(tmp_path: Path) -> None:
+    td = pytest.importorskip("tracksdata")
+    import polars as pl
+
+    graph = td.graph.IndexedRXGraph()
+    for key in ("z", "y", "x"):
+        graph.add_node_attr_key(key, dtype=pl.Int64, default_value=0)
+    path = tmp_path / f"{SAMPLE}.geff"
+    graph.to_geff(path, overwrite=False)
+    with pytest.raises(ValueError, match=r"empty|node"):
+        validate_prediction_geff(path, SAMPLE, expected_volume_shape_tzyx=(2, 16, 16, 16))

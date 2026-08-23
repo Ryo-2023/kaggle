@@ -9,6 +9,7 @@ import os
 import py_compile
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -16,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
+import biohub.device as device_module
 from biohub.recipe_c.geff_bridge import (
     postprocessed_csv_to_geffs,
     validate_prediction_geff,
@@ -57,14 +59,23 @@ _VOLUME_SMOKE = (2, 64, 256, 256)
 class InferenceReceipt:
     status: Literal["READY", "FAILED"]
     selection_lock_id: str
+    source_commit: str
+    config_sha256: str
+    predictor_sha256_before: str
+    predictor_sha256_after: str
+    primary_checkpoint_sha256: str
+    secondary_checkpoint_sha256: str
     sample_ids: tuple[str, ...]
     mode: Literal["full", "smoke_2frame"]
     max_frames: int | None
     command: tuple[str, ...]
+    command_sha256: str
+    execution_argv_sha256: str
     cwd_role: str
     pythonpath: str
     resolved_device: str
     device_candidates: tuple[str, ...]
+    runtime_role: str
     patch_flags: Mapping[str, bool]
     raw_geffs: Mapping[str, str]
     postprocessed_csv: str | None
@@ -82,6 +93,11 @@ class _SourceApi:
     apply_spatial_d4_patch: Any
     build_predict_command: Any
     write_submission_from_geff: Any
+    _restore_modules: Any = None
+
+    def restore(self) -> None:
+        if self._restore_modules is not None:
+            self._restore_modules()
 
 
 def _validate_selection_lock(selection_lock: Mapping[str, object] | Path) -> dict[str, object]:
@@ -101,6 +117,9 @@ def _sample_selection(sample_ids: Sequence[str], lock: Mapping[str, object], max
     requested = tuple(sample_ids) or PANEL_V1
     if len(set(requested)) != len(requested) or any(sample not in PANEL_V1 for sample in requested):
         raise ValueError("sample_ids contain an unknown or duplicate panel sample")
+    for sample in requested:
+        if not sample or sample != sample.strip() or any(character in sample for character in ("/", "\\", ".")):
+            raise ValueError("sample_ids must be clean sample stems")
     panel_positions = {sample: index for index, sample in enumerate(PANEL_V1)}
     if tuple(sorted(requested, key=panel_positions.__getitem__)) != requested:
         raise ValueError("sample_ids are not in PANEL_V1 order")
@@ -108,17 +127,30 @@ def _sample_selection(sample_ids: Sequence[str], lock: Mapping[str, object], max
         raise ValueError("a panel subset is only permitted for the two-frame smoke")
     if max_frames is not None and max_frames != 2:
         raise ValueError("max_frames must be exactly 2 when provided")
+    if max_frames == 2 and len(requested) != 1:
+        raise ValueError("smoke_2frame requires exactly one sample")
     return requested
 
 
 def _assert_stage_lock_identity(stage: Any, lock: Mapping[str, object]) -> None:
     if lock.get("selection_lock_id") != getattr(stage, "selection_lock_id", None):
         raise ValueError("selection lock id does not match runtime stage")
+    if lock.get("source_commit") != RECIPE_C_SOURCE.source_commit:
+        raise ValueError("selection lock source commit does not match RECIPE_C_SOURCE")
     receipt = getattr(stage, "receipt", {})
     if not isinstance(receipt, Mapping):
-        receipt = {}
+        raise ValueError("runtime stage receipt is missing")
+    required_receipt_fields = (
+        "config_sha256",
+        "predictor_sha256_before",
+        "primary_checkpoint_sha256",
+        "secondary_checkpoint_sha256",
+        "resolved_device_candidates",
+    )
+    missing = [field for field in required_receipt_fields if field not in receipt]
+    if missing:
+        raise ValueError(f"runtime stage receipt identity is missing: {', '.join(missing)}")
     pairs = (
-        ("source_commit", "source_commit"),
         ("config_sha256", "config_sha256"),
         ("predictor_sha256", "predictor_sha256_before"),
         ("primary_checkpoint_sha256", "primary_checkpoint_sha256"),
@@ -127,16 +159,24 @@ def _assert_stage_lock_identity(stage: Any, lock: Mapping[str, object]) -> None:
     for lock_key, receipt_key in pairs:
         expected = lock.get(lock_key)
         actual = receipt.get(receipt_key)
-        if expected is not None and actual is not None and expected != actual:
+        if expected is None or actual != expected:
             raise ValueError(f"selection lock identity mismatch: {lock_key}")
+    candidates = tuple(receipt["resolved_device_candidates"])
+    stage_candidates = tuple(getattr(stage, "device_candidates", ()))
+    if candidates != device_module.DEVICE_SELECTION_ORDER or stage_candidates != candidates:
+        raise ValueError("runtime stage device candidates do not match the canonical order")
     preimage = getattr(stage, "predictor_sha256_preimage", None)
-    if lock.get("predictor_sha256") is not None and preimage is not None:
-        if lock["predictor_sha256"] != preimage:
-            raise ValueError("selection lock predictor preimage mismatch")
-    if lock.get("secondary_staging_relative_path") not in {
-        None,
-        RECIPE_C_SOURCE.secondary_staging_relative_path,
-    }:
+    postimage = getattr(stage, "predictor_sha256_postimage", None)
+    if (
+        not isinstance(preimage, str)
+        or len(preimage) != 64
+        or not isinstance(postimage, str)
+        or len(postimage) != 64
+    ):
+        raise ValueError("runtime stage predictor preimage/postimage identity is missing")
+    if lock["predictor_sha256"] != preimage:
+        raise ValueError("selection lock predictor preimage mismatch")
+    if lock.get("secondary_staging_relative_path") != RECIPE_C_SOURCE.secondary_staging_relative_path:
         raise ValueError("selection lock secondary checkpoint role mismatch")
 
 
@@ -148,12 +188,12 @@ def _preflight_images(image_root: Path, sample_ids: Sequence[str], max_frames: i
         image = image_root / f"{sample_id}.zarr"
         if image.is_symlink() or not image.is_dir():
             raise FileNotFoundError(f"image Zarr is missing: {sample_id}.zarr")
-    # Opening only the explicitly selected image stores is allowed.  Adjacent
-    # .geff files are intentionally never enumerated or opened.
     try:
         import zarr
-    except ModuleNotFoundError:
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("zarr is required for pinned image preflight") from exc
+    # Opening only the explicitly selected image stores is allowed.  Adjacent
+    # .geff files are intentionally never enumerated or opened.
     for sample_id in sample_ids:
         image = image_root / f"{sample_id}.zarr"
         root = zarr.open(str(image), mode="r")
@@ -162,16 +202,20 @@ def _preflight_images(image_root: Path, sample_ids: Sequence[str], max_frames: i
             raise ValueError(f"image shape is not the pinned (100,64,256,256): {sample_id}")
         metadata = dict(getattr(root, "attrs", {}))
         multiscales = metadata.get("multiscales")
-        if isinstance(multiscales, list) and multiscales:
-            datasets = multiscales[0].get("datasets") if isinstance(multiscales[0], Mapping) else None
-            transforms = (
-                datasets[0].get("coordinateTransformations")
-                if isinstance(datasets, list) and datasets
-                else None
-            )
-            scale = transforms[0].get("scale") if isinstance(transforms, list) and transforms else None
-            if scale != [1.0, 1.625, 0.40625, 0.40625]:
-                raise ValueError(f"image scale is not the pinned value: {sample_id}")
+        if not isinstance(multiscales, list) or not multiscales or not isinstance(multiscales[0], Mapping):
+            raise ValueError(f"image multiscales metadata is missing: {sample_id}")
+        datasets = multiscales[0].get("datasets")
+        transforms = (
+            datasets[0].get("coordinateTransformations")
+            if isinstance(datasets, list) and datasets and isinstance(datasets[0], Mapping)
+            else None
+        )
+        scale = transforms[0].get("scale") if isinstance(transforms, list) and transforms else None
+        if scale != [1.0, 1.625, 0.40625, 0.40625]:
+            raise ValueError(f"image scale is not the pinned value: {sample_id}")
+        statistics = metadata.get("image_statistics")
+        if not isinstance(statistics, Mapping) or "quantiles" not in statistics:
+            raise ValueError(f"image quantile metadata is missing: {sample_id}")
 
 
 def _prepare_image_data(
@@ -189,41 +233,95 @@ def _prepare_image_data(
     for sample_id in sample_ids:
         source = zarr.open(str(Path(image_root) / f"{sample_id}.zarr"), mode="r")
         source_array = source if hasattr(source, "shape") else source["0"]
-        destination = zarr.open_group(str(data_root / f"{sample_id}.zarr"), mode="w")
-        destination.attrs.update(dict(getattr(source, "attrs", {})))
-        destination_array = destination.create_dataset(
-            "0",
-            shape=(max_frames, *tuple(source_array.shape[1:])),
-            chunks=source_array.chunks,
-            dtype=source_array.dtype,
+        source_metadata = getattr(source, "metadata", None)
+        source_format = getattr(source_metadata, "zarr_format", None)
+        destination = zarr.open_group(
+            str(data_root / f"{sample_id}.zarr"),
+            mode="w",
+            **({"zarr_format": source_format} if source_format in {2, 3} else {}),
         )
+        destination.attrs.update(dict(getattr(source, "attrs", {})))
+        array_metadata = getattr(source_array, "metadata", None)
+        dimension_names = getattr(array_metadata, "dimension_names", None)
+        array_options: dict[str, object] = {
+            "shape": (max_frames, *tuple(source_array.shape[1:])),
+            "chunks": source_array.chunks,
+            "dtype": source_array.dtype,
+            "fill_value": getattr(source_array, "fill_value", None),
+        }
+        if dimension_names is not None:
+            array_options["dimension_names"] = dimension_names
+        if getattr(array_metadata, "zarr_format", None) == 3:
+            codecs = tuple(getattr(array_metadata, "codecs", ()))
+            # Zarr v3 supplies the bytes codec automatically; compressors are
+            # the remaining codec chain and are safe to pass through intact.
+            array_options["compressors"] = codecs[1:]
+        else:
+            for key in ("compressor", "filters"):
+                value = getattr(source_array, key, None)
+                if value is not None:
+                    array_options[key] = value
+        destination_array = destination.create_array("0", **array_options)
         destination_array.attrs.update(dict(source_array.attrs))
         destination_array[:] = source_array[:max_frames]
     return data_root
 
 
 def _load_source_api(stage: Any) -> _SourceApi:
+    source_root = Path(os.fspath(stage.source_root)).resolve()
+    source_src = source_root / "src"
+    if not source_root.is_dir() or not source_src.is_dir():
+        raise ValueError("pinned source root is not a regular source tree")
+    saved_modules = {
+        name: sys.modules[name]
+        for name in tuple(sys.modules)
+        if name == "biohub_pipeline" or name.startswith("biohub_pipeline.")
+    }
+    for name in tuple(saved_modules):
+        sys.modules.pop(name, None)
+    source_src_text = os.fspath(source_src)
+    sys.path.insert(0, source_src_text)
     try:
         config_module = importlib.import_module("biohub_pipeline.config")
         inference_module = importlib.import_module("biohub_pipeline.inference")
         submission_module = importlib.import_module("biohub_pipeline.submission")
-    except ModuleNotFoundError:
-        source_root = os.fspath(stage.source_root)
-        source_src = os.path.join(source_root, "src")
-        import sys
+        modules = (config_module, inference_module, submission_module)
+        for module in modules:
+            module_file = getattr(module, "__file__", None)
+            if not isinstance(module_file, str):
+                raise ValueError("pinned source module has no provenance file")
+            try:
+                Path(module_file).resolve(strict=True).relative_to(source_root)
+            except (OSError, ValueError) as exc:
+                raise ValueError("source module provenance is outside the pinned source root") from exc
+    except BaseException:
+        sys.path.remove(source_src_text)
+        for name in tuple(sys.modules):
+            if name == "biohub_pipeline" or name.startswith("biohub_pipeline."):
+                sys.modules.pop(name, None)
+        sys.modules.update(saved_modules)
+        raise
 
-        sys.path.insert(0, source_src)
-        try:
-            config_module = importlib.import_module("biohub_pipeline.config")
-            inference_module = importlib.import_module("biohub_pipeline.inference")
-            submission_module = importlib.import_module("biohub_pipeline.submission")
-        finally:
-            sys.path.remove(source_src)
+    restored = False
+
+    def restore_modules() -> None:
+        nonlocal restored
+        if restored:
+            return
+        restored = True
+        if source_src_text in sys.path:
+            sys.path.remove(source_src_text)
+        for name in tuple(sys.modules):
+            if name == "biohub_pipeline" or name.startswith("biohub_pipeline."):
+                sys.modules.pop(name, None)
+        sys.modules.update(saved_modules)
+
     return _SourceApi(
         config_module.load_config,
         inference_module.apply_spatial_d4_patch,
         inference_module.build_predict_command,
         submission_module.write_submission_from_geff,
+        restore_modules,
     )
 
 
@@ -248,6 +346,10 @@ def _write_scratch_repo(stage: Any, root: Path) -> tuple[Path, Path, Path, Path]
 
 def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _argv_sha256(argv: Sequence[str]) -> str:
+    return _sha256(json.dumps(list(argv), separators=(",", ":")).encode("utf-8"))
 
 
 def _publish_derived(stage: Any, relative: PurePosixPath, payload: bytes) -> dict[str, object]:
@@ -283,15 +385,48 @@ def _rewrite_command(
         "--weights": primary_relative.as_posix(),
         "--ensemble-weights": secondary_relative.as_posix(),
     }
+    flag_arity = {
+        "--data-dir": 1,
+        "--splits": 1,
+        "--weights": 1,
+        "--ensemble-weights": 1,
+        "--split": 1,
+        "--method": 1,
+        "--det-threshold": 1,
+        "--edge-threshold": 1,
+        "--ensemble-alpha": 1,
+        "--ilp-edge-weight": 1,
+        "--ilp-appearance-weight": 1,
+        "--ilp-disappearance-weight": 1,
+        "--ilp-division-weight": 1,
+        "--use-ilp": 0,
+        "--unet-batch-size": 1,
+        "--margin-gated-dist-lambda": 1,
+        "--margin-gated-dist-delta": 1,
+        "--margin-gated-dist-dens-min": 1,
+        "--margin-gated-dist-radius-um": 1,
+        "--pairwise-hardneg-weights": 1,
+        "--pairwise-hardneg-dens-min": 1,
+        "--pairwise-hardneg-gap-max": 1,
+        "--pairwise-hardneg-radius-um": 1,
+    }
     index = 2
     seen: set[str] = set()
     while index < len(values):
         flag = values[index]
-        if flag in replacements:
-            if index + 1 >= len(values):
+        if not flag.startswith("-"):
+            raise ValueError("command contains an unexpected positional role")
+        arity = flag_arity.get(flag)
+        if arity is None:
+            raise ValueError(f"command contains an unknown or untrusted flag: {flag}")
+        if flag in seen:
+            raise ValueError(f"command contains a duplicate role: {flag}")
+        seen.add(flag)
+        if arity:
+            if index + arity >= len(values) or values[index + 1].startswith("--"):
                 raise ValueError(f"command flag is missing a value: {flag}")
-            values[index + 1] = replacements[flag]
-            seen.add(flag)
+            if flag in replacements:
+                values[index + 1] = replacements[flag]
             index += 2
             continue
         index += 1
@@ -302,6 +437,11 @@ def _rewrite_command(
     for value in values:
         if value.startswith("/") or any(token in value.lower() for token in forbidden):
             raise ValueError("command contains an absolute, GT, or forbidden role")
+    for flag, expected in replacements.items():
+        index = values.index(flag)
+        actual = values[index + 1]
+        if actual != expected:
+            raise ValueError(f"command role mapping mismatch for {flag}")
     expected_flags = {
         "--det-threshold": "0.96875",
         "--edge-threshold": "0.4",
@@ -371,17 +511,12 @@ def _write_failed(output_root: Path, lock_id: str, phase: str, exc: BaseExceptio
     os.replace(temporary, output_root / "FAILED.json")
 
 
-def _resolve_device(candidates: Sequence[str]) -> str:
-    try:
-        import torch
-
-        if "cuda" in candidates and bool(torch.cuda.is_available()):
-            return "cuda"
-        if "mps" in candidates and bool(getattr(torch.backends, "mps", None)) and torch.backends.mps.is_available():
-            return "mps"
-    except (ImportError, AttributeError, RuntimeError):
-        pass
-    return "cpu" if "cpu" in candidates else str(candidates[-1])
+def _resolve_device(requested_device: str) -> str:
+    resolved = device_module.resolve_torch_device(requested_device)
+    device_name = getattr(resolved, "type", None)
+    if not isinstance(device_name, str) or not device_name:
+        raise ValueError("canonical device resolver returned an invalid device")
+    return device_name
 
 
 def _write_ready_receipt(output_root: Path, receipt: InferenceReceipt) -> None:
@@ -407,12 +542,20 @@ def run_recipe_c_inference(
     lock = _validate_selection_lock(selection_lock)
     chosen_samples = _sample_selection(sample_ids, lock, max_frames)
     _assert_stage_lock_identity(runtime_stage, lock)
+    requested_device = lock.get("requested_device")
+    if not isinstance(requested_device, str) or not requested_device:
+        raise ValueError("selection lock requested_device is missing")
+    resolved_device = _resolve_device(requested_device)
+    if resolved_device not in tuple(runtime_stage.device_candidates):
+        raise ValueError("resolved device is not present in the runtime stage candidates")
     output_root = Path(output_root)
     if output_root.exists() or output_root.is_symlink():
         raise FileExistsError(f"output root must be fresh: {output_root.name}")
     output_root.mkdir(parents=True, exist_ok=False)
     phase = "preflight"
     command: tuple[str, ...] = ()
+    execution_argv_sha256 = ""
+    source_api: Any = None
     try:
         _preflight_images(Path(image_root), chosen_samples, max_frames)
         with runtime_stage:
@@ -428,7 +571,14 @@ def run_recipe_c_inference(
                 if patched is not True:
                     raise RuntimeError("spatial D4 patch did not report a fresh postimage")
                 py_compile.compile(str(scratch_predictor), doraise=True)
-                phase = "builder"
+                predictor_payload = scratch_predictor.read_bytes()
+                expected_predictor_postimage = getattr(runtime_stage, "predictor_sha256_postimage", None)
+                if (
+                    isinstance(expected_predictor_postimage, str)
+                    and expected_predictor_postimage
+                    and _sha256(predictor_payload) != expected_predictor_postimage
+                ):
+                    raise ValueError("spatial D4 predictor postimage hash does not match the staged identity")
                 config = source_api.load_config(scratch_config)
                 raw_command, splits_path = source_api.build_predict_command(
                     config,
@@ -439,12 +589,21 @@ def run_recipe_c_inference(
                 )
                 if not isinstance(raw_command, (list, tuple)) or not isinstance(splits_path, Path):
                     raise TypeError("source builder returned an invalid command or splits path")
-                predictor_payload = scratch_predictor.read_bytes()
+                try:
+                    splits_path.resolve(strict=True).relative_to(scratch_repo.resolve())
+                except (OSError, ValueError) as exc:
+                    raise ValueError("source builder returned a splits path outside isolated scratch") from exc
+                if splits_path.is_symlink() or not splits_path.is_file():
+                    raise ValueError("source builder returned a non-regular splits artifact")
                 splits_payload = splits_path.read_bytes()
                 publish_predictor = _publish_derived(runtime_stage, _PREDICTOR_DERIVED, predictor_payload)
                 publish_splits = _publish_derived(runtime_stage, _SPLITS_DERIVED, splits_payload)
                 phase = "subprocess"
-                environment = {**os.environ, "PYTHONPATH": "src"}
+                environment = {
+                    **os.environ,
+                    "PYTHONPATH": "src",
+                    "BIOHUB_TORCH_DEVICE": resolved_device,
+                }
                 repo_cwd = os.fspath(runtime_stage.repo_dir)
                 execution_data_role = os.path.relpath(str(data_root), start=repo_cwd)
                 execution_command = _rewrite_command(
@@ -461,6 +620,7 @@ def run_recipe_c_inference(
                     _PRIMARY_RELATIVE,
                     _SECONDARY_RELATIVE,
                 )
+                execution_argv_sha256 = _argv_sha256(execution_command)
                 subprocess.run(
                     list(execution_command),
                     cwd=repo_cwd,
@@ -540,10 +700,26 @@ def run_recipe_c_inference(
                         final,
                         selection_lock_id=str(lock["selection_lock_id"]),
                         provenance={
-                            "source_commit": runtime_stage.receipt.get("source_commit", ""),
+                            "source_commit": str(lock["source_commit"]),
                             "config_sha256": runtime_stage.receipt.get("config_sha256", ""),
+                            "predictor_sha256_before": runtime_stage.receipt.get(
+                                "predictor_sha256_before", ""
+                            ),
                             "predictor_sha256": runtime_stage.predictor_sha256_postimage,
-                            "device": _resolve_device(runtime_stage.device_candidates),
+                            "predictor_sha256_after": runtime_stage.predictor_sha256_postimage,
+                            "primary_checkpoint_sha256": runtime_stage.receipt.get(
+                                "primary_checkpoint_sha256", ""
+                            ),
+                            "secondary_checkpoint_sha256": runtime_stage.receipt.get(
+                                "secondary_checkpoint_sha256", ""
+                            ),
+                            "resolved_device": resolved_device,
+                            "device_candidates": ",".join(runtime_stage.device_candidates),
+                            "patch_spatial_d4": True,
+                            "patch_builder": True,
+                            "runtime_role": "live_stage_repo",
+                            "command_sha256": _argv_sha256(command),
+                            "execution_argv_sha256": execution_argv_sha256,
                         },
                     )
                     mint_prediction_token(final)
@@ -552,14 +728,23 @@ def run_recipe_c_inference(
                 receipt = InferenceReceipt(
                     status="READY",
                     selection_lock_id=str(lock["selection_lock_id"]),
+                    source_commit=str(lock["source_commit"]),
+                    config_sha256=str(lock["config_sha256"]),
+                    predictor_sha256_before=str(lock["predictor_sha256"]),
+                    predictor_sha256_after=str(runtime_stage.predictor_sha256_postimage),
+                    primary_checkpoint_sha256=str(lock["primary_checkpoint_sha256"]),
+                    secondary_checkpoint_sha256=str(lock["secondary_checkpoint_sha256"]),
                     sample_ids=tuple(chosen_samples),
                     mode="smoke_2frame" if max_frames else "full",
                     max_frames=max_frames,
                     command=command,
+                    command_sha256=_argv_sha256(command),
+                    execution_argv_sha256=execution_argv_sha256,
                     cwd_role="repo",
                     pythonpath="src",
-                    resolved_device=_resolve_device(runtime_stage.device_candidates),
+                    resolved_device=resolved_device,
                     device_candidates=tuple(runtime_stage.device_candidates),
+                    runtime_role="live_stage_repo",
                     patch_flags={"spatial_d4": True, "builder": True},
                     raw_geffs={sample: _role_path(path, output_root) for sample, path in raw_geffs.items()},
                     postprocessed_csv=_role_path(csv_path, output_root),
@@ -582,6 +767,11 @@ def run_recipe_c_inference(
         except BaseException as cleanup_error:
             exc.add_note(f"failed receipt cleanup: {type(cleanup_error).__name__}")
         raise
+    finally:
+        if source_api is not None:
+            restore = getattr(source_api, "restore", None)
+            if callable(restore):
+                restore()
 
 
 __all__ = ["InferenceReceipt", "run_recipe_c_inference"]
