@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 from pathlib import Path
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 import biohub.recipe_c.diagnostics as diagnostics
-from biohub.recipe_c.geff_bridge import write_json_exclusive
+from biohub.recipe_c.geff_bridge import CSV_HEADER, write_json_exclusive
 
 
 def _line(sample: str = "sample") -> str:
@@ -114,6 +115,96 @@ def _graph(node_id: int = 0, *, frame: int = 0) -> tuple[dict[int, dict[str, obj
         },
         [],
     )
+
+
+def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CSV_HEADER)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _csv_node(row_id: int, node_id: int, t: int) -> dict[str, object]:
+    return {
+        "id": row_id,
+        "dataset": "sample",
+        "row_type": "node",
+        "node_id": node_id,
+        "t": t,
+        "z": 1,
+        "y": 2,
+        "x": 3,
+        "source_id": -1,
+        "target_id": -1,
+    }
+
+
+def _csv_edge(row_id: int, source_id: int, target_id: int) -> dict[str, object]:
+    return {
+        "id": row_id,
+        "dataset": "sample",
+        "row_type": "edge",
+        "node_id": -1,
+        "t": -1,
+        "z": -1,
+        "y": -1,
+        "x": -1,
+        "source_id": source_id,
+        "target_id": target_id,
+    }
+
+
+def test_csv_signatures_accept_sparse_node_ids_and_preserve_edges(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(
+        csv_path,
+        [
+            _csv_node(0, 7, 0),
+            _csv_node(1, 42, 1),
+            _csv_node(2, 99, 2),
+            _csv_edge(3, 7, 42),
+            _csv_edge(4, 42, 99),
+        ],
+    )
+
+    assert diagnostics._csv_signatures(csv_path, ("sample",)) == {
+        "sample": (
+            {
+                7: {"node_id": 7, "t": 0, "z": 1, "y": 2, "x": 3},
+                42: {"node_id": 42, "t": 1, "z": 1, "y": 2, "x": 3},
+                99: {"node_id": 99, "t": 2, "z": 1, "y": 2, "x": 3},
+            },
+            [
+                {"source_id": 7, "target_id": 42},
+                {"source_id": 42, "target_id": 99},
+            ],
+        )
+    }
+
+
+def test_csv_signatures_rejects_noncontiguous_row_ids(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_csv_node(1, 7, 0)])
+    with pytest.raises(ValueError, match="row IDs are not contiguous"):
+        diagnostics._csv_signatures(csv_path, ("sample",))
+
+
+def test_csv_signatures_rejects_duplicate_or_negative_node_ids(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_csv_node(0, 7, 0), _csv_node(1, 7, 1)])
+    with pytest.raises(ValueError, match="duplicated"):
+        diagnostics._csv_signatures(csv_path, ("sample",))
+
+    _write_csv(csv_path, [_csv_node(0, -7, 0)])
+    with pytest.raises(ValueError, match="non-negative"):
+        diagnostics._csv_signatures(csv_path, ("sample",))
+
+
+def test_csv_signatures_rejects_dangling_edge_endpoint(tmp_path: Path) -> None:
+    csv_path = tmp_path / "submission.csv"
+    _write_csv(csv_path, [_csv_node(0, 7, 0), _csv_node(1, 42, 1), _csv_edge(2, 7, 99)])
+    with pytest.raises(ValueError, match="endpoint"):
+        diagnostics._csv_signatures(csv_path, ("sample",))
 
 
 def test_child_stdout_parser_rejects_partial_and_non_exact_records() -> None:

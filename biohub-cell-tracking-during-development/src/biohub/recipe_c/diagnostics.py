@@ -1005,6 +1005,8 @@ def _csv_signatures(
         nodes, edges = by_sample[sample]
         if row.get("row_type") == "node":
             node_id = int(row["node_id"])
+            if node_id < 0:
+                raise ValueError("production CSV node IDs must be non-negative")
             if node_id in nodes:
                 raise ValueError("production CSV node IDs are duplicated")
             nodes[node_id] = {
@@ -1015,12 +1017,21 @@ def _csv_signatures(
                 "x": int(row["x"]),
             }
         elif row.get("row_type") == "edge":
-            edges.append({"source_id": int(row["source_id"]), "target_id": int(row["target_id"])})
+            source_id = int(row["source_id"])
+            target_id = int(row["target_id"])
+            if source_id < 0 or target_id < 0:
+                raise ValueError("production CSV edge endpoints must be non-negative")
+            edges.append({"source_id": source_id, "target_id": target_id})
         else:
             raise ValueError("production CSV row type is invalid")
     for sample, (nodes, edges) in by_sample.items():
-        if sorted(nodes) != list(range(len(nodes))) or not nodes:
-            raise ValueError(f"production CSV node IDs are not contiguous for {sample}")
+        if not nodes:
+            raise ValueError(f"production CSV has no nodes for {sample}")
+        if any(
+            int(edge["source_id"]) not in nodes or int(edge["target_id"]) not in nodes
+            for edge in edges
+        ):
+            raise ValueError(f"production CSV edge endpoint does not refer to a node for {sample}")
         _graph_signature(nodes, edges)
     return by_sample
 

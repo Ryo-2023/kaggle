@@ -160,10 +160,7 @@ def _parse_submission(
     parsed: dict[str, dict[str, Any]] = {}
     for dataset in expected:
         bucket = by_dataset[dataset]
-        node_ids = sorted(bucket["nodes"])
-        if node_ids != list(range(len(node_ids))):
-            raise ValueError("node IDs must be contiguous from zero")
-        if not node_ids:
+        if not bucket["nodes"]:
             raise ValueError(f"dataset {dataset!r} has no nodes")
         frame_by_id = {node_id: int(attrs["t"]) for node_id, attrs in bucket["nodes"].items()}
         incoming: defaultdict[int, int] = defaultdict(int)
@@ -412,11 +409,11 @@ def _read_prediction_signature(path: Path) -> dict[str, object]:
     node_signature: dict[int, tuple[int, int, int, int]] = {}
     for row in nodes:
         node_id = int(row["node_id"])
+        if node_id < 0:
+            raise ValueError("prediction node IDs must be non-negative")
         if node_id in node_signature:
             raise ValueError("prediction node IDs are duplicated")
         node_signature[node_id] = tuple(int(row[field]) for field in ("t", "z", "y", "x"))
-    if sorted(node_signature) != list(range(len(node_signature))):
-        raise ValueError("prediction node IDs must be contiguous from zero")
     edge_signature: list[tuple[int, int]] = []
     seen_edges: set[tuple[int, int]] = set()
     for row in list(graph.edge_attrs().iter_rows(named=True)):

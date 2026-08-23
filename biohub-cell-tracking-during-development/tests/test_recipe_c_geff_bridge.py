@@ -18,6 +18,7 @@ from biohub.recipe_c.geff_bridge import (
     write_prediction_manifest,
 )
 from biohub.reproducibility.gt_guard import mint_prediction_token, prediction_manifest_path
+from biohub.submission.packaging import write_submission_csv
 
 SAMPLE = "44b6_12dfb391"
 
@@ -83,6 +84,40 @@ def test_bridge_roundtrips_fork_and_uses_exact_sample_name(tmp_path: Path) -> No
     }
 
 
+def test_bridge_roundtrips_sparse_node_ids_from_raw_geff_via_source_csv(tmp_path: Path) -> None:
+    raw_geff = tmp_path / "raw.geff"
+    bridge_module._build_geff(
+        raw_geff,
+        {
+            "nodes": {
+                7: {"t": 0, "z": 1, "y": 2, "x": 3},
+                42: {"t": 1, "z": 2, "y": 3, "x": 4},
+                99: {"t": 2, "z": 3, "y": 4, "x": 5},
+            },
+            "edges": [(7, 42), (42, 99)],
+        },
+        overwrite=True,
+    )
+    source_csv = tmp_path / "submission.csv"
+    write_submission_csv({SAMPLE: raw_geff}, source_csv)
+
+    written = postprocessed_csv_to_geffs(
+        source_csv,
+        tmp_path / "predictions",
+        sample_ids=(SAMPLE,),
+        provenance={"recipe": "C"},
+    )
+
+    assert bridge_module._read_prediction_signature(written[SAMPLE]) == {
+        "nodes": {
+            7: (0, 1, 2, 3),
+            42: (1, 2, 3, 4),
+            99: (2, 3, 4, 5),
+        },
+        "edges": [(7, 42), (42, 99)],
+    }
+
+
 def test_bridge_rejects_invalid_sentinels_and_noncontiguous_rows(tmp_path: Path) -> None:
     csv_path = tmp_path / "bad.csv"
     bad_node = _node(0, 0, 0)
@@ -91,10 +126,28 @@ def test_bridge_rejects_invalid_sentinels_and_noncontiguous_rows(tmp_path: Path)
     with pytest.raises(ValueError, match="sentinel"):
         postprocessed_csv_to_geffs(csv_path, tmp_path / "predictions", sample_ids=(SAMPLE,), provenance={})
 
-    bad_ids = [_node(0, 1, 0)]
+    bad_ids = [_node(1, 1, 0)]
     _write_csv(csv_path, bad_ids)
-    with pytest.raises(ValueError, match="contiguous"):
+    with pytest.raises(ValueError, match=r"row id.*contiguous"):
         postprocessed_csv_to_geffs(csv_path, tmp_path / "predictions-2", sample_ids=(SAMPLE,), provenance={})
+
+
+def test_bridge_rejects_duplicate_or_negative_sparse_node_ids(tmp_path: Path) -> None:
+    csv_path = tmp_path / "bad.csv"
+    _write_csv(csv_path, [_node(0, 7, 0), _node(1, 7, 1)])
+    with pytest.raises(ValueError, match="unique"):
+        postprocessed_csv_to_geffs(csv_path, tmp_path / "duplicate", sample_ids=(SAMPLE,), provenance={})
+
+    _write_csv(csv_path, [_node(0, -7, 0)])
+    with pytest.raises(ValueError, match="unique and non-negative"):
+        postprocessed_csv_to_geffs(csv_path, tmp_path / "negative", sample_ids=(SAMPLE,), provenance={})
+
+
+def test_bridge_rejects_dangling_sparse_edge_endpoint(tmp_path: Path) -> None:
+    csv_path = tmp_path / "bad.csv"
+    _write_csv(csv_path, [_node(0, 7, 0), _node(1, 42, 1), _edge(2, 7, 99)])
+    with pytest.raises(ValueError, match="endpoint"):
+        postprocessed_csv_to_geffs(csv_path, tmp_path / "predictions", sample_ids=(SAMPLE,), provenance={})
 
 
 def test_bridge_rejects_whitespace_padded_integer_fields(tmp_path: Path) -> None:
