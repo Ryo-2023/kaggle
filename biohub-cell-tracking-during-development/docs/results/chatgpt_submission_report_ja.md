@@ -5,7 +5,7 @@
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新時点のlocal HEAD: `b2259c9`（sparse node ID fix、未push）。remote latest: `257ed74b46cbc402d590640d5e477614e2b13bc6`（push済み。Task5 `cedf36e`の承認・push済み状態を保持）
+本レポート更新時点のcode gate HEAD: `2e8ce61`（fd-backed GEFF publication fix round、二重独立review **APPROVED**、push済み）
 固定6-frame smoke contract: `e713a16`（push済み。Task4実装`42f9181`/`45423b0`、predictor SHA修正`421eedf`を含む）
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
@@ -29,7 +29,7 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
 - HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、入力契約・依存・checkpoint・source確認の不足により、今回の公式スコア比較には含めていない。
-- Task4のround-4/round-5 code reviewと固定6-frame smoke contractのfresh reviewは **APPROVED**。実画像2-frame smokeはGT-freeで実施し、0-nodeの根因はILPのraw段階における2-frame smoke horizonとの数学的非互換と確定した（postprocess/bridge未到達）。stage diagnostics fix `910419a`後のtrace artifact path fix `257ed74b46cbc402d590640d5e477614e2b13bc6`は独立レビュー **APPROVED（P0/P1/P2=0）**でpush済みであり、sparse node ID fix `b2259c9`も独立レビュー **APPROVED（open/new P0/P1/P2=0）**となった。指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile passを確認し、Task4 code gateは完了した。旧6-frameのraw_persist失敗artifactはfixed `validate_prediction_geff`でGT-freeに `1277 nodes / 1052 edges / forks 0 PASS`と再検証済みだが、clean commit後の新lock/new 6-frameの最終成功とCUDA A/Bは未実施で、`b2259c9`は未pushである。CPU/CUDA監査では、upstreamのCUDA hard guard、adapterの`CUDA → MPS → CPU`選択、現DockerのCPU-only実測を確認し、`cuda_equivalence_validated=false`を維持する。Recipe Cの本repo公式スコアはまだ得ていない。
+- Task4のround-4/round-5 code reviewと固定6-frame smoke contractのfresh reviewは **APPROVED**。実画像2-frame smokeはGT-freeで実施し、0-nodeの根因はILPのraw段階における2-frame smoke horizonとの数学的非互換と確定した（postprocess/bridge未到達）。stage diagnostics fix `910419a`、trace artifact path fix `257ed74b46cbc402d590640d5e477614e2b13bc6`、sparse node ID fix `b2259c9`は独立レビュー **APPROVED**で、`998fe32`までpush済みである。新規lock `d3a88a3ecbf327799a6f9ab7d2da2e38418f84cfc168878dccb4ccc48ae0eb93`の6-frame runでは、detector `1,314 nodes`、ILP/raw `1,277 nodes / 1,052 edges`、short-track filter後 `1,133 nodes / 944 edges`を得て、2-frame起因の0-node問題を解消した。約14分22秒のCPU実行後、bridgeが既存temporary directoryを`overwrite=True`でserializerへ渡したためinodeが置換され、`phase=bridge`でFAILEDとなった。GT open/metric callはともに0、OOM kill増分0、旧lock/outputは再利用不可である。CPU/CUDA監査では、upstreamのCUDA hard guard、adapterの`CUDA → MPS → CPU`選択、現DockerのCPU-only実測を確認し、`cuda_equivalence_validated=false`を維持する。Recipe Cの本repo公式スコアはまだ得ていない。
 - Task5 fix round 3 commit `cedf36e` は独立レビューで **APPROVED**（3/3 addressed、open 0、新規P0/P1/P2 0）となり、code gateを完了・push済みである。root fresh関連 `281 passed`、full `805 passed, 9 skipped, 5 warnings`、Ruff/py_compile/scoped diffはpassした。ただしCLI統合、実GT/metric、固定5件、公式scoreは未実行である。現CLIはfreeze/dry-run/inferのみで、`evaluate_panel` APIは安全性確認済み、後続の`infer-panel`/`evaluate-panel`が必要である。
 
 ### 1.1 0.95 Performance Goalの現在地
@@ -48,11 +48,11 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 | Recipe C source側5件参考macro（非公式・未測定） | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。本repoの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
 | Task4 fixed6契約 | `e713a16`（push済み）。fresh review **APPROVED**、root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（bool/float追加前）を確認済み |
-| Task4 stage diagnostics | trace artifact path fix `257ed74b46cbc402d590640d5e477614e2b13bc6`は独立レビュー **APPROVED（P0/P1/P2=0）**、sparse node ID fix `b2259c9`も独立レビュー **APPROVED（open/new P0/P1/P2=0）**。指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile pass。code gate完了、`b2259c9`は未push |
-| Task4 actual 6-frame | lock `30f550ccf414ab5f1ab36b7e0fbf3ea7494f6c7573b80424e832f9f119734159`は`phase=patch`でtrace parent欠落。lock `ffa14615818bc22b9a0c54ad4feb6c5a7fd35b95a3902737df383733b0c8749b`はCPU child/raw生成まで到達したが`raw_persist`でFAILED、GT open/metric call 0、再利用不可。fixed `validate_prediction_geff`によるGT-free再検証は `1277 nodes / 1052 edges / forks 0 PASS`、clean new lock/new 6-frameは未実施 |
+| Task4 stage diagnostics | trace artifact path fix `257ed74b46cbc402d590640d5e477614e2b13bc6`とsparse node ID fix `b2259c9`は独立レビュー **APPROVED（open/new P0/P1/P2=0）**。指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile pass。`998fe32`までpush済み |
+| Task4 actual 6-frame | 3本目のfresh lock `d3a88a3ecbf327799a6f9ab7d2da2e38418f84cfc168878dccb4ccc48ae0eb93`でdetector `1314`、candidate `1314/1074`、ILP/raw `1277/1052`、production `1133/944`まで到達。bridgeのtemporary directory inode置換でFAILED、GT open/metric call 0、再利用不可。最終persist/READYは未成立 |
 | CPU/CUDA受入 | CPU childは完走したが最終GEFF永続化未成立のため`CPU_PORTABLE`未成立。CUDA A/B・数値同値・性能同値は未検証、`cuda_equivalence_validated=false` |
 | Task5 metric boundary | `cedf36e`でfix round 3完了、独立review **APPROVED**、push済み。CLIはfreeze/dry-run/inferのみ、`evaluate_panel` API安全、`infer-panel`/`evaluate-panel`は後続実装 |
-| 現在の待機 | `b2259c9`でsparse node IDのcode gate完了・独立review APPROVED。clean commit後の新lock/outputでの再6-frame、CLI拡張、実GT/metric、固定5件、CUDA A/Bを待つ。旧FAILED/lock/outputは再利用しない |
+| 現在の待機 | 0-node原因とbridge code gateはclosure済み。承認・push済み`2e8ce61`から新lock/new outputをfreezeし、6-frameを再実行する。旧FAILED/lock/outputは再利用しない |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -130,7 +130,7 @@ GTは疎である。未注釈・未マッチのpredictionを自動的にfalse po
 | checkpoint SHA-256 | `347915de9c33883cb2ee69832a8e4552c88b1ec692d0fbfe956422467d3d4235` |
 | public baseline notebook | Kaggle notebook version `331429261` |
 | harmonic source | Yusuke Togashi、notebook v18、`scriptVersionId=338569479`、declared Apache-2.0 |
-| harmonic notebook JSON SHA-256 | `dd3819cff82851b491d9cbeb6f5f0fc36e8da3c5e9ca90a8b0d5284785a250d` |
+| harmonic notebook JSON source receipt | `dd3819cff82851b491d9cbeb6f5f0fc36e8da3c5e9ca90a8b0d5284785a250d`（保持receiptの記載値は63桁で、SHA-256として不正長・未検証。欠落文字を推測しない） |
 | harmonic setting | reverse harmonic weight `w=0.20` |
 
 harmonic v1では、image、detector、checkpoint、candidate construction、ILP costを変更せず、forward/reverse scoreのharmonic結合と再標準化を追加した。保存されたreceiptを根拠に結果を報告している。後続Lane F監査ではforward-only temperature variantでも同等以上のTPを回収したため、改善原因をreverse passそのものとは断定せず、再標準化に伴うtemperature/sharpening効果を含むものと解釈する。保持されたnotebook JSONからsource cellを独立監査するfixtureは不足しており、その監査はBLOCKEDである。source textを推測・捏造していない。
@@ -393,8 +393,8 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - historical race branch: `codex/biohub-multi-method-race`
 - current performance branch: `codex/biohub-095-performance`
 - 0.95 campaignの初期設計・計画commit: `de582ef`
-- 本レポート更新時点のlocal HEAD: `b2259c9`（sparse node ID fix、未push）、remote latest: `257ed74b46cbc402d590640d5e477614e2b13bc6`（push済み）
-- Task4 stage diagnostics履歴: `910419a`（scope rereview APPROVED）、`257ed74b46cbc402d590640d5e477614e2b13bc6`（独立review APPROVED、P0/P1/P2=0、push済み）、`b2259c9`（sparse node ID fix、独立review APPROVED、未push）
+- 本レポート更新時点のcode gate HEAD: `2e8ce61`（二重独立review APPROVED、push済み）
+- Task4 stage diagnostics/bridge履歴: `910419a`（scope rereview APPROVED）、`257ed74b46cbc402d590640d5e477614e2b13bc6`（独立review APPROVED）、`b2259c9`（sparse node ID fix、独立review APPROVED）、`2e8ce61`（fd-backed GEFF publication、二重独立review APPROVED）。すべてpush済み
 - Task5 metric boundary commits: `dd5ecbe`（元9件closed）、`03ad7a2`（device P1 closed）、`cedf36e`（fix round 3、独立review APPROVED、push済み）
 - 固定6-frame smoke contract: `e713a16`（push済み。Task4実装`42f9181`/`45423b0`、predictor SHA修正`421eedf`を含む）
 - Task3.5完了時点のremote commit: `e56e561`
@@ -460,19 +460,19 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 4. 旧official receiptにはraw candidate count/digestがなく、detector driftを完全には比較できない。detector-fixed cacheはcandidate digestとcache hashを保存している。
 5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の設定差があるが、現panelでは実効kernelが同じである。
 6. high-level viewerの`matched_node_id` / `match_node_id`不一致でGUI表示は未完了。ただしheadless overlay evidenceは保存済み。
-7. 現行Dockerは`torch 2.13.0+cpu`、CUDA 0台、MPS build/availableなしである。upstreamのCUDA hard guardは維持され、adapterだけが`CUDA → MPS → CPU`を選択する。2-frameは0-nodeで、固定6-frameの成功前なので`CPU_PORTABLE`は未成立、A/BによるCUDA output/numeric/performance同値も未検証であり、`cuda_equivalence_validated=false`を記録する。
+7. 現行Dockerは`torch 2.13.0+cpu`、CUDA 0台、MPS build/availableなしである。upstreamのCUDA hard guardは維持され、adapterだけが`CUDA → MPS → CPU`を選択する。6-frame CPU runではdetectorからproduction CSVまで正のgraphを生成したが、bridge後の最終GEFF永続化前に停止したため`CPU_PORTABLE`は未成立である。A/BによるCUDA output/numeric/performance同値も未検証で、`cuda_equivalence_validated=false`を記録する。
 8. 公開Recipe Cはsource側参考macro `0.9560058787896148`があるが、これは公式実測ではなく未測定の参考値である。本repoのRecipe C公式metric、5 sample macro、0.95達成は未評価・未達成である。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値もない。
 9. Kaggle competitionはnotebook-only submissionである。ローカルprediction生成は外部提出許可を意味せず、GPU runtimeとoffline packagingは未検証である。
 
 ### 次の一手
 
 1. GT-free direct diagnosticで、detector local peaksが`t0=217`、`t1=220`、合計`437`、candidate edge`213`であることを確認した。fixed ILP cost（edge `-p`、appearance `0`、disappearance `1.575`）では2-frameのtrack costが正となり、all-zero objectiveが最適になる。sourceの`output_min_track_len=6`とも整合せず、0-nodeの根因は2-frame horizonとILPの数学的非互換であり、postprocess/bridgeには到達していない。
-2. 固定6-frame smoke contractは`e713a16`で固定済みである。b1bf2c9のlock `30f550ccf414ab5f1ab36b7e0fbf3ea7494f6c7573b80424e832f9f119734159`は`phase=patch`でtrace parent欠落となり、`257ed74b46cbc402d590640d5e477614e2b13bc6`で`_TRACE_DERIVED`を既存scriptsへ移し、独立review **APPROVED（P0/P1/P2=0）**、full `806 passed, 9 skipped, 5 warnings`でpushした。後続lock `ffa14615818bc22b9a0c54ad4feb6c5a7fd35b95a3902737df383733b0c8749b`はCPU child完走・raw prediction生成まで到達したが、adapterの`raw_persist`で失敗した。sparse node ID fix `b2259c9`でcode gateは完了し、指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile pass、独立review **APPROVED（open/new P0/P1/P2=0）**を確認した。旧failed raw artifactもfixed `validate_prediction_geff`でGT-freeに `1277 nodes / 1052 edges / forks 0 PASS`と再検証済みだが、`b2259c9`は未pushである。
-3. `b2259c9`のcode gate完了を受け、clean commit後に新しいlock/outputで約12分の6-frame CPU runを再実行する。clean new lock/new 6-frameは未実施であり、旧FAILED/lock/outputは再利用しない。次にCLI統合、実GT/metric、固定5件、CUDA A/Bを、各prediction GEFF/manifestのhash検証後に進める。
+2. 固定6-frame smoke contractは`e713a16`で固定済みである。trace path fix `257ed74`、sparse node ID fix `b2259c9`を経て`998fe32`までpushした。新lock `d3a88a3ecbf327799a6f9ab7d2da2e38418f84cfc168878dccb4ccc48ae0eb93`ではdetector `1314`、ILP/raw `1277/1052`、production `1133/944`をGT-freeで得たため、0-nodeは解消した。bridgeだけがtemporary directoryのinode置換を検出してFAILEDとなった。
+3. bridge code gateはfd-backed pure Zarr v2 publication `2e8ce61`で二重独立review **APPROVED**、push済みとなった。次はこのclean commitから新lock/new outputをfreezeして6-frameを再実行する。旧FAILED/lock/outputは再利用しない。その後にCLI統合、固定5件のGT-free persist/hash検証、CUDA A/Bへ進む。
 4. 全5件の永続化・hash検証後にだけGTを開き、vendored official metricで評価する。GTは同じrunの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
 5. 本repoの実測macro `>=0.95` のreceiptが得られるまで、Recipe C参考値 `0.9560058787896148` を達成値とせず、0.95は未評価・未達成扱いにする。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task4 diagnosticsとsparse node IDのcode gateは`b2259c9`で完了し、独立review **APPROVED**、failed raw artifactのGT-free再検証も `1277 nodes / 1052 edges / forks 0 PASS`だったが、clean new lock/new 6-frame runとCUDA A/Bは未実施で、`b2259c9`は未pushである。Task5 code gateは**APPROVED**だがCLI統合・実GT/metric・固定5件は未実施である。Recipe Cの本repo公式評価は未実施、BestKnown `0.7944143977140719`、gap `0.1555856022859281`、0.95は未評価・未達成扱いである。division対応も未解決である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task4の2-frame 0-node原因とsparse node ID境界はclosure済みで、fresh 6-frameはproduction `1133 nodes / 944 edges`まで到達した。残る実行blockerはGEFF bridgeのtemporary inode設計であり、最終persist/READYとCUDA A/Bは未成立である。Task5 code gateは**APPROVED**だがCLI統合・実GT/metric・固定5件は未実施である。Recipe Cの本repo公式評価は未実施、BestKnown `0.7944143977140719`、gap `0.1555856022859281`、0.95は未評価・未達成扱いである。division対応も未解決である。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -708,14 +708,14 @@ Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を
 
 初回production freezeはDocker worktreeの`.git`がhostの絶対worktree pathを指すGit環境衝突でHEAD読取に失敗し、production selection lockは生成されなかった。この失敗をlockありとして扱わず、後続commitごとにwrite-once lockを新規作成した。
 
-以下のlock/FAILED receiptはすべて `artifacts/biohub_095/` 配下にあり、GT内容は開かずJSONメタデータだけを確認した。両FAILED receiptの `command_sha256` は `3752c31fe6d434db041b0b766d7bd570bd907195d87e3229bc4d7be92879b11a` である。
+以下の初期2-frame lock/FAILED receiptはすべて `artifacts/biohub_095/` 配下にあり、GT内容は開かずJSONメタデータだけを確認した。表内FAILED receiptの `command_sha256` は `3752c31fe6d434db041b0b766d7bd570bd907195d87e3229bc4d7be92879b11a` である。後続6-frame failureは23.3節に別記する。
 
 | code commit | selection lock ID | lock JSON SHA-256 | FAILED receipt（GT-free） |
 |---|---|---|---|
 | `42f918172a860f535b6f22abd2d9ec267612f076` | `8232fe546a0328440ec5b6b97e6866078c0a6fbb5cc3230bdf7a8e26b4614088` | `99a9072e1ae346ca7b678971d2ef7b97100451ba00243719f62472505c42dcb2` | `smoke-2frame-output/FAILED.json` と `smoke-debug1-output/FAILED.json`、receipt SHA-256 `3e1f847fc54485a424b28246311d56941602b7b212b1def4eb7c53784f975515`、`phase=subprocess` / `CalledProcessError` / `reusable=false` |
 | `45423b05fdb345b0e9ca7809948d29fcd054183d` | `3cc6240acb10cf9c526145354bc6733fb7d757329b7763c8ee6034b383d1d6ab` | `42b5b6af4931018406ec9ddb75167c8245e2239f23d29b272438c928ff8b9821` | `smoke-2frame-output/FAILED.json`、receipt SHA-256 `5df918e27dda21ed5dd92b80f5d3435c4d1c4d4cc77f45904085801f909d8de2`、`phase=raw_persist` / `ValueError` / `reusable=false` |
 
-`42f9181`の旧path smokeはchildが画像を開く前のsubprocess境界で失敗し、出力は再利用不可だった（旧path failure境界を含むround-4 evidenceは `4.24 s`）。data-role修正後の`45423b0` smokeはchild predictorが `device=cpu` を出力して完走したが、生成結果が0-nodeとなり、約 `195.59 s` のCPU実行後にraw persistenceでFAILEDとなった。いずれもGTを開かず、official metricも呼び出しておらず、Recipe Cのprediction score・5-panel macroは生成していない。
+`42f9181`の旧path smokeはchildが画像を開く前のsubprocess境界で失敗し、出力は再利用不可だった（旧path failure境界を含むround-4 evidenceは外部計測 `4.24 s`）。data-role修正後の`45423b0` smokeはchild predictorが `device=cpu` を出力して完走したが、生成結果が0-nodeとなり、外部計測約 `195.59 s` のCPU実行後にraw persistenceでFAILEDとなった。これらのwall timeはFAILED receipt内の永続fieldではない。いずれもGTを開かず、official metricも呼び出しておらず、Recipe Cのprediction score・5-panel macroは生成していない。
 
 ### 23.1 GT-free zero-node direct diagnostic（2026-08-23更新）
 
@@ -725,20 +725,20 @@ exact Recipe C ILPは edge cost `-p`、appearance `0`、disappearance `1.575` �
 
 同じsolver設定を使うGT-free synthetic確認でも、2-node/1-edge chainは `0 nodes / 0 edges`、6-node/5-edge chainは `6 nodes / 5 edges` となり、目的関数の説明と実挙動が一致した。
 
-CPU/CUDA監査では、upstream notebookのCUDA hard guard（CUDA unavailableなら推論前に停止）を確認した。adapterはupstreamの計算・config・threshold・ILPを変更せず、device選択だけを`CUDA → MPS → CPU`へ拡張する。現行`biohub-dev`は`torch 2.13.0+cpu`、`torch.version.cuda=None`、CUDA 0台、MPS build/availableなしである。最新6-frame runはCPU childが約12分で完走し、OOM killの増加もなかったが、raw prediction後の`raw_persist`で失敗したため`CPU_PORTABLE`は未成立、CUDA output/numeric/performance同値も未検証で、receiptの`cuda_equivalence_validated=false`を維持する。
+CPU/CUDA監査では、upstream notebookのCUDA hard guard（CUDA unavailableなら推論前に停止）を確認した。adapterはupstreamの計算・config・threshold・ILPを変更せず、device選択だけを`CUDA → MPS → CPU`へ拡張する。現行`biohub-dev`は`torch 2.13.0+cpu`、`torch.version.cuda=None`、CUDA 0台、MPS build/availableなしである。最新6-frame runはCPU childが約14分22秒で完走し、detectorからproduction CSVまで正のgraphを生成し、OOM kill増分も0だった。ただしbridge後の最終GEFF永続化前に失敗したため`CPU_PORTABLE`は未成立、CUDA output/numeric/performance同値も未検証で、receiptの`cuda_equivalence_validated=false`を維持する。
 
-A/B受入の要件は、同一input/config/checkpoint、CPU/CUDA child token、detector count・candidate pair set・ILP topology・final GEFF semantic outputの一致、logit/edge scoreの許容差、repeat determinismを確認することである。CUDA実行とこのA/Bは未実施であり、数値・性能同値を主張しない。sourceの`output_min_track_len=6`を根拠とする固定6-frame smoke contractは`e713a16`で固定済みである。stage diagnostics fix `910419a`後の`257ed74b46cbc402d590640d5e477614e2b13bc6`は独立review **APPROVED（P0/P1/P2=0）**、push済みであり、sparse node ID fix `b2259c9`も独立review **APPROVED（open/new P0/P1/P2=0）**、指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile passでcode gate完了した。failed raw artifactはfixed `validate_prediction_geff`でGT-freeに `1277 nodes / 1052 edges / forks 0 PASS`と再検証済みだが、clean new lock/new 6-frameとCUDA A/Bは未実施で、`b2259c9`は未pushである。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
+A/B受入の要件は、同一input/config/checkpoint、CPU/CUDA child token、detector count・candidate pair set・ILP topology・final GEFF semantic outputの一致、logit/edge scoreの許容差、repeat determinismを確認することである。CUDA実行とこのA/Bは未実施であり、数値・性能同値を主張しない。sourceの`output_min_track_len=6`を根拠とする固定6-frame smoke contractは`e713a16`で固定済みである。stage diagnostics fix `910419a`、trace path fix `257ed74`、sparse node ID fix `b2259c9`は独立review **APPROVED**で、`998fe32`までpush済みである。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
 
 | 受入レベル / 項目 | 現時点の判定 |
 |---|---|
-| `CPU_PORTABLE` | 未成立（旧runはCPU child/raw生成後に`raw_persist`で失敗。fixed validatorのGT-free再検証はPASSだが、clean new 6-frameの最終受入は未実施） |
+| `CPU_PORTABLE` | 未成立（fresh 6-frameはCPUでproduction `1133/944`まで正常だが、bridge temporary identity failureのため最終persist/reload未成立） |
 | `CUDA_OUTPUT_EQUIVALENT` | 未検証（CUDA child/A-B未実施） |
 | `CUDA_NUMERIC_EQUIVALENT` | 未検証（logit/score全列・repeat未実施） |
 | `cuda_equivalence_validated` | `false` |
 
 ### 23.2 Stage diagnostics実装と独立レビュー（2026-08-24更新）
 
-`79b6da4`でstage別GT-free diagnosticsを実装し、Sol fresh検証は `87/378 passed` だった。fix commit `910419a`後のSol fresh検証は `101/369 passed`、scope rereviewは **APPROVED（9/9 addressed、open/new 0）**だった。さらに`257ed74b46cbc402d590640d5e477614e2b13bc6`でtrace artifact publication pathを修正し、独立review **APPROVED（P0/P1/P2=0）**、push済みとなった。sparse node ID fix `b2259c9`は独立review `task-4-sparse-node-id-rereview.md`で **APPROVED（open/new P0/P1/P2=0）**、指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile passとなり、Task4 code gateは完了した。failed raw artifactのfixed `validate_prediction_geff`によるGT-free再検証も `1277 nodes / 1052 edges / forks 0 PASS`である。clean commit後の新lock/new 6-frame再runは未実施で、`b2259c9`は未push、CUDA A/B未実施である。
+`79b6da4`でstage別GT-free diagnosticsを実装し、Sol fresh検証はtargeted `87 passed`、Recipe C integration `378 passed`だった。fix commit `910419a`後のSol fresh検証はtargeted `101 passed`、Recipe C integration `369 passed`、scope rereviewは **APPROVED（9/9 addressed、open/new 0）**だった。さらに`257ed74b46cbc402d590640d5e477614e2b13bc6`でtrace artifact publication pathを修正し、独立review **APPROVED（P0/P1/P2=0）**となった。sparse node ID fix `b2259c9`は独立review `task-4-sparse-node-id-rereview.md`で **APPROVED（open/new P0/P1/P2=0）**、指定 `87 passed`、root関連 `230 passed, 3 warnings`、full `813 passed, 9 skipped, 5 warnings`、Ruff/py_compile passとなり、`998fe32`までpush済みである。fresh 6-frameで全stage diagnosticsを取得できたが、bridge後のpersist/reload snapshotはtemporary identity failureのため未取得である。CUDA A/Bも未実施である。
 
 - exact traceの順序・件数。
 - shadow traceの順序。
@@ -753,9 +753,28 @@ A/B受入の要件は、同一input/config/checkpoint、CPU/CUDA child token、d
 
 b1bf2c9の最初の6-frame lock `30f550ccf414ab5f1ab36b7e0fbf3ea7494f6c7573b80424e832f9f119734159`は、`phase=patch`でtrace parentが欠落し、GT open `0`・metric call `0`・`reusable=false`となった。`257ed74b46cbc402d590640d5e477614e2b13bc6`で`_TRACE_DERIVED`を既存scriptsへ移し、独立review **APPROVED（P0/P1/P2=0）**、full `806 passed, 9 skipped, 5 warnings`でpush済みである。
 
-同commitの新lock `ffa14615818bc22b9a0c54ad4feb6c5a7fd35b95a3902737df383733b0c8749b`では、CPU childが約12分で完走し、OOM kill増加なし、raw prediction `1277 nodes / 1052 edges`を生成した。frame別node数は `[208, 214, 221, 217, 212, 205]`、node IDは`0..1313`のsparse範囲で、dangling node/edgeは`0`だった。pinned sourceの`validate_graph`/`graph_rows`はPASS、`2329 rows`でnode IDを保持した。
+同commitの新lock `ffa14615818bc22b9a0c54ad4feb6c5a7fd35b95a3902737df383733b0c8749b`では、CPU childが外部監視で約12分で完走し、OOM kill増加なし、raw prediction `1277 nodes / 1052 edges`を生成した。wall timeとOOM差分はFAILED receipt内の永続fieldではない。frame別node数は `[208, 214, 221, 217, 212, 205]`、node IDは`0..1313`のsparse範囲で、dangling node/edgeは`0`だった。pinned sourceの`validate_graph`/`graph_rows`はPASS、`2329 rows`でnode IDを保持した。
 
-ただしadapterは、node IDをcontiguousにする過剰制約により`raw_persist`でFAILEDとなった。GT open `0`、metric call `0`、`reusable=false`であり、official scoreは生成していない。sparse node ID fix `b2259c9`でこの境界のcode gateは完了し、独立reviewは **APPROVED（open/new P0/P1/P2=0）**、failed raw artifactのfixed `validate_prediction_geff`によるGT-free再検証は `1277 nodes / 1052 edges / forks 0 PASS`だった。clean commit後の新lock/new 6-frame再runは未実施で、再run待ちである。
+このrunのFAILED receiptは `artifacts/biohub_095/runs/257ed74b46cbc402d590640d5e477614e2b13bc6/smoke-6frame-output/FAILED.json`、SHA-256 `b525aa09a77d305429149bffcfc9e7d662a55eb6d53067887a5924ca78d1c094`、`phase=raw_persist`、`error_type=ValueError`、`reusable=false`である。
+
+ただしadapterは、node IDをcontiguousにする過剰制約により`raw_persist`でFAILEDとなった。GT open `0`、metric call `0`、`reusable=false`であり、official scoreは生成していない。sparse node ID fix `b2259c9`でこの境界のcode gateは完了し、独立reviewは **APPROVED（open/new P0/P1/P2=0）**、failed raw artifactのfixed `validate_prediction_geff`によるGT-free再検証は `1277 nodes / 1052 edges / forks 0 PASS`だった。修正は`998fe32`までpush済みである。
+
+`998fe32983e8e94cbbeb8f1ab282e1deb7c91fce`から新規lock `d3a88a3ecbf327799a6f9ab7d2da2e38418f84cfc168878dccb4ccc48ae0eb93`（lock JSON SHA-256 `92fb8860c6234e9e29e491d10fd473e8f71f499e0e61098054ea8042af838c76`）をfreezeし、新規stage/outputで3本目の6-frame smokeを実行した。外部監視では約14分22秒、resolved/child deviceはCPU、OOM killは開始前後とも7で増分0だった。wall timeとOOM差分はFAILED receipt内の永続fieldではなく監視記録由来である。FAILED receiptは `artifacts/biohub_095/runs/998fe32983e8e94cbbeb8f1ab282e1deb7c91fce/smoke-6frame-output/FAILED.json`、SHA-256 `cb6f1b8f67754b04d4f60a06395451e1376a4b3e621206a06e52fbb76a1e1823`、`phase=bridge`、`error_type=OSError`、`reusable=false`である。
+
+| stage | nodes | edges | frame別nodes (`t=0..5`) |
+|---|---:|---:|---|
+| combined detector | `1314` | `0` | `217/220/224/220/217/216` |
+| candidate graph / ILP pre | `1314` | `1074` | `217/220/224/220/217/216` |
+| ILP post / raw GEFF | `1277` | `1052` | `208/214/221/217/212/205` |
+| production CSV / source postprocess final | `1133` | `944` | `189/189/189/189/189/188` |
+
+short-track filterは36 components、144 nodes、108 edgesを除去し、conservative rescueは1 component・5 nodesを救済した。したがって6-frameではminimum-track filter後も十分なgraphが残り、0-node failureではない。bridgeはtemporary GEFF directoryを先に作成してidentityを保存した後、`tracksdata/geff`へ`overwrite=True`で渡していた。libraryは既存rootを削除・再生成するため、bind mount上のGT-free最小再現で `(st_dev, st_ino)=(45,200227)→(45,200236)` とinodeだけが変化し、所有権guardが正しくFAILEDにした。修正方針は、owned private build parent内の不存在childへ`overwrite=False`でserializeし、生成後identityを取得してno-replace publishすることである。partial failure cleanupとcompetitor保持を弱めずTDDでclosureする。今回も`ground_truth_open_count=0`、`ground_truth_opened=false`、`metric_call_count=0`、`metric_status=not_run_gt_guard`である。
+
+初回bridge修正 `dccc949` はprivate build parentと不存在childを導入し、root検証でbind mount `1 passed`、Recipe C関連 `380 passed`、full `816 passed, 9 skipped, 5 warnings`、Ruff/compileを通した。しかし独立reviewは **NOT APPROVED** だった。serializer例外時にchild identity未取得のまま競合childを後からrestatして削除できるP1と、directory確認後にsymlinkへ置換するとsymlink finalを公開できるP1、non-dir partial残骸のP2が残ったためである。`dccc949`単独は使用不可であり、承認済みfix `2e8ce61`の祖先としてのみpushされた。新smokeのfreeze対象は`2e8ce61`以後に限定する。
+
+fix round `2e8ce61` はtemporary GEFFをexclusive作成後に`O_NOFOLLOW|O_DIRECTORY` fdでanchorし、fd-backed `LocalStore`へexplicit pure Zarr v2・`overwrite=False`でserializeする。publicationはdirectory-fd相対`renameat2(RENAME_NOREPLACE)`、semantic readbackも保持fdから行い、serializer、callback、fsync、roundtrip各境界でfinalとoutput rootのpublic path/fd identityを再検証する。Zarr v3 LocalStoreはv2/v3 metadata混在警告を再現したため採用しない。root検証は実bind mount bridge `71 passed`、Recipe C関連 `389 passed`、full `825 passed, 9 skipped, 5 warnings`、Ruff/compile passである。
+
+前回reviewerの再レビューは **APPROVED（P0/P1=0）**で、対象 `176 passed`、実`1133/944` sparse-ID roundtrip、成功/失敗各20回のFD leakなしを確認した。非blocking P2として、GEFF tree全体の再帰fsyncによるOS crash耐性が未証明であることと、所有権記録だけを行うcallback直前のpublic path再確認を追加できることを記録する。fresh second reviewerは **APPROVED（open/new P0/P1/P2=0）**で、bridge `71 passed`、Recipe C関連 `245 passed`、full `825 passed, 9 skipped, 5 warnings`、実raw `1277/1052` roundtripを確認した。二重承認後に`2e8ce61`をpush済みである。新smokeはまだ実行していない。
 
 Current BestKnownは既存実測の `0.7944143977140719`、target gapは `0.1555856022859281` のままである。Recipe C source側の `0.9560058787896148` は非公式・未測定の参考値であり、本repoの0.95到達値ではない。従って本repoの0.95目標は **未評価・未達成** である。
 
@@ -765,4 +784,4 @@ Task5 fix round 3 commitは `cedf36e` である。独立レビュー報告 `.sup
 
 CLI監査では、現行CLIの実行入口はfreeze/dry-run/inferのみで、`evaluate_panel` APIの安全性は確認済みである。後続で`infer-panel`/`evaluate-panel`をCLIへ追加する必要がある。
 
-ただし、実GT/metric、固定5件は未実行であり、Recipe C公式値は未測定、0.95は未達成扱いを維持する。実6-frame smokeはraw_persistで失敗したが、`b2259c9`のsparse node ID code gateは完了・独立review **APPROVED**である。clean commit後に新lock/outputで再実行するまで、旧FAILED/lock/outputは不変のまま保持し、再利用しない。`b2259c9`は未pushである。
+ただし、実GT/metric、固定5件は未実行であり、Recipe C公式値は未測定、0.95は未達成扱いを維持する。fresh 6-frameは0-nodeを解消してproduction `1133/944`まで到達し、GEFF bridge code gateも`2e8ce61`でclosureした。次は同commitから新lock/outputで再実行する。旧FAILED/lock/outputは不変のまま保持し、再利用しない。
