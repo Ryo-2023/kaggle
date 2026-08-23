@@ -184,11 +184,14 @@ def _parse_submission(
     return parsed
 
 
-def _rename_noreplace(source: Path, destination: Path) -> None:
-    """Publish a fresh directory without ever replacing a final entry."""
+def _rename_noreplace_at(
+    source_parent_fd: int,
+    source_name: str,
+    destination_parent_fd: int,
+    destination_name: str,
+) -> None:
+    """Publish by directory descriptors without replacing a final entry."""
 
-    source = Path(source)
-    destination = Path(destination)
     libc_name = ctypes.util.find_library("c")
     if not libc_name:
         raise OSError(errno.ENOTSUP, "renameat2 is unavailable")
@@ -199,15 +202,28 @@ def _rename_noreplace(source: Path, destination: Path) -> None:
     renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
     renameat2.restype = ctypes.c_int
     result = renameat2(
-        _AT_FDCWD,
-        os.fsencode(str(source)),
-        _AT_FDCWD,
-        os.fsencode(str(destination)),
+        source_parent_fd,
+        os.fsencode(source_name),
+        destination_parent_fd,
+        os.fsencode(destination_name),
         _RENAME_NOREPLACE,
     )
     if result != 0:
         error = ctypes.get_errno()
-        raise OSError(error, os.strerror(error), str(destination))
+        raise OSError(error, os.strerror(error), destination_name)
+
+
+def _rename_noreplace(source: Path, destination: Path) -> None:
+    """Publish a fresh directory without ever replacing a final entry."""
+
+    source = Path(source)
+    destination = Path(destination)
+    _rename_noreplace_at(
+        _AT_FDCWD,
+        str(source),
+        _AT_FDCWD,
+        str(destination),
+    )
 
 
 def publish_directory_noreplace(source: Path, destination: Path) -> None:
@@ -264,6 +280,10 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
+def _fsync_directory_fd(descriptor: int) -> None:
+    os.fsync(descriptor)
+
+
 def fsync_directory(path: Path) -> None:
     """Fsync one directory entry set for callers publishing sibling artifacts."""
 
@@ -273,6 +293,59 @@ def fsync_directory(path: Path) -> None:
 def _entry_identity(path: Path) -> tuple[int, int]:
     stat_result = Path(path).lstat()
     return stat_result.st_dev, stat_result.st_ino
+
+
+def _open_directory_fd(
+    path: Path, *, expected_identity: tuple[int, int] | None = None
+) -> tuple[int, tuple[int, int]]:
+    """Open a directory without following a symlink and retain its identity."""
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError(f"directory anchor is not a directory: {path}")
+        identity = metadata.st_dev, metadata.st_ino
+        if expected_identity is not None and identity != expected_identity:
+            raise OSError(f"directory anchor identity changed: {path}")
+        return descriptor, identity
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _entry_identity_at(parent_descriptor: int, name: str) -> tuple[int, int]:
+    metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    return metadata.st_dev, metadata.st_ino
+
+
+def _open_directory_fd_at(
+    parent_descriptor: int,
+    name: str,
+    *,
+    expected_identity: tuple[int, int] | None = None,
+) -> tuple[int, tuple[int, int]]:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ValueError(f"directory anchor is not a directory: {name}")
+        identity = metadata.st_dev, metadata.st_ino
+        if expected_identity is not None and identity != expected_identity:
+            raise OSError(f"directory anchor identity changed: {name}")
+        return descriptor, identity
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _fd_identity(descriptor: int) -> tuple[int, int]:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise ValueError("directory anchor descriptor is no longer a directory")
+    return metadata.st_dev, metadata.st_ino
 
 
 def _remove_owned_directory(path: Path, identity: tuple[int, int] | None) -> None:
@@ -303,6 +376,44 @@ def _remove_owned_empty_directory(path: Path, identity: tuple[int, int] | None) 
         pass
 
 
+def _assert_owned_final(path: Path, identity: tuple[int, int], *, stage: str) -> None:
+    try:
+        metadata = Path(path).lstat()
+    except OSError as exc:
+        raise OSError(f"final GEFF identity changed {stage}") from exc
+    current = metadata.st_dev, metadata.st_ino
+    if current != identity or not stat.S_ISDIR(metadata.st_mode):
+        raise OSError(f"final GEFF identity changed {stage}")
+
+
+def _assert_owned_final_at(
+    parent_descriptor: int, name: str, identity: tuple[int, int], *, stage: str
+) -> None:
+    try:
+        metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except OSError as exc:
+        raise OSError(f"final GEFF identity changed {stage}") from exc
+    current = metadata.st_dev, metadata.st_ino
+    if current != identity or not stat.S_ISDIR(metadata.st_mode):
+        raise OSError(f"final GEFF identity changed {stage}")
+
+
+def _assert_owned_root(
+    path: Path,
+    descriptor: int,
+    identity: tuple[int, int],
+    *,
+    stage: str,
+) -> None:
+    try:
+        fd_identity = _fd_identity(descriptor)
+        path_identity = _entry_identity(path)
+    except OSError as exc:
+        raise OSError(f"prediction output root identity changed {stage}") from exc
+    if fd_identity != identity or path_identity != identity:
+        raise OSError(f"prediction output root identity changed {stage}")
+
+
 def _cleanup_owned_build(
     parent: Path,
     parent_identity: tuple[int, int] | None,
@@ -313,32 +424,24 @@ def _cleanup_owned_build(
 
     The parent identity is the ownership anchor.  If a caller or competitor
     replaced it, even a child with the expected name must not be removed.
-    Before the serializer returns there is no child identity to compare, but
-    an intact private parent is still exclusively owned by this invocation;
-    in that case a partial child is safe to clean up.
+    The child identity is captured at exclusive creation, so an unclaimed
+    replacement is never restatted and deleted during cleanup.
     """
 
     if parent_identity is None:
         return
     try:
         current_parent = _entry_identity(parent)
-    except FileNotFoundError:
+    except OSError:
         return
     if current_parent != parent_identity:
         return
     if child_identity is not None:
         _remove_owned_directory(child, child_identity)
-    else:
-        try:
-            child_stat = child.lstat()
-        except FileNotFoundError:
-            child_stat = None
-        if child_stat is not None and stat.S_ISDIR(child_stat.st_mode):
-            _remove_owned_directory(child, (child_stat.st_dev, child_stat.st_ino))
     _remove_owned_empty_directory(parent, parent_identity)
 
 
-def _build_geff(destination: Path, bucket: Mapping[str, Any], *, overwrite: bool = False) -> None:
+def _build_geff(destination: Any, bucket: Mapping[str, Any], *, overwrite: bool = False) -> None:
     import polars as pl
     import tracksdata as td
 
@@ -355,7 +458,7 @@ def _build_geff(destination: Path, bucket: Mapping[str, Any], *, overwrite: bool
             raise RuntimeError("tracksdata assigned a non-deterministic node ID")
     for source_id, target_id in bucket["edges"]:
         graph.add_edge(int(source_id), int(target_id), {})
-    graph.to_geff(destination, overwrite=overwrite)
+    graph.to_geff(destination, overwrite=overwrite, zarr_format=2)
 
 
 def postprocessed_csv_to_geffs(
@@ -374,15 +477,26 @@ def postprocessed_csv_to_geffs(
         raise FileExistsError(f"prediction output root must be fresh: {output_root.name}")
     output_root.mkdir(parents=True, exist_ok=False)
     output_root_identity = _entry_identity(output_root)
+    output_root_descriptor: int | None = None
+    output_root_fd_identity: tuple[int, int] | None = None
     written: dict[str, Path] = {}
     published: dict[Path, tuple[int, int]] = {}
     try:
+        output_root_descriptor, output_root_fd_identity = _open_directory_fd(
+            output_root, expected_identity=output_root_identity
+        )
         if on_published is not None:
             on_published(output_root, output_root_identity)
         parsed = _parse_submission(csv_path, sample_ids, None)
         for sample_id in sample_ids:
-            if _entry_identity(output_root) != output_root_identity:
-                raise OSError("prediction output root identity changed during publication")
+            if output_root_descriptor is None or output_root_fd_identity is None:
+                raise OSError("prediction output root descriptor is unavailable")
+            _assert_owned_root(
+                output_root,
+                output_root_descriptor,
+                output_root_fd_identity,
+                stage="during publication",
+            )
             final = output_root / f"{sample_id}.geff"
             if final.exists() or final.is_symlink():
                 raise FileExistsError(final)
@@ -390,36 +504,104 @@ def postprocessed_csv_to_geffs(
             temporary = build_parent / f"{sample_id}.geff"
             build_parent_identity: tuple[int, int] | None = None
             temporary_identity: tuple[int, int] | None = None
+            build_parent_descriptor: int | None = None
+            temporary_descriptor: int | None = None
             final_identity: tuple[int, int] | None = None
             try:
-                build_parent.mkdir(mode=0o700, exist_ok=False)
-                build_parent_identity = _entry_identity(build_parent)
-                os.chmod(build_parent, 0o700)
-                # tracksdata deletes and recreates an existing GEFF directory
-                # even when overwrite=True.  Pass a fresh child and keep the
-                # private build parent as the ownership anchor instead.
-                _build_geff(temporary, parsed[sample_id], overwrite=False)
-                if temporary.is_symlink() or not temporary.is_dir():
-                    raise ValueError("serialized GEFF child is not a regular directory")
-                temporary_identity = _entry_identity(temporary)
-                if _entry_identity(build_parent) != build_parent_identity:
-                    raise OSError("GEFF build parent identity changed during serialization")
-                if _entry_identity(temporary) != temporary_identity:
+                if output_root_descriptor is None:
+                    raise OSError("prediction output root descriptor is unavailable")
+                os.mkdir(build_parent.name, 0o700, dir_fd=output_root_descriptor)
+                build_parent_identity = _entry_identity_at(output_root_descriptor, build_parent.name)
+                build_parent_descriptor, _ = _open_directory_fd_at(
+                    output_root_descriptor,
+                    build_parent.name,
+                    expected_identity=build_parent_identity,
+                )
+                os.fchmod(build_parent_descriptor, 0o700)
+                os.mkdir(temporary.name, 0o700, dir_fd=build_parent_descriptor)
+                temporary_identity = _entry_identity_at(build_parent_descriptor, temporary.name)
+                temporary_descriptor, _ = _open_directory_fd_at(
+                    build_parent_descriptor,
+                    temporary.name,
+                    expected_identity=temporary_identity,
+                )
+                from zarr.storage import LocalStore
+
+                # Keep the pre-owned child open while tracksdata/geff writes.
+                # LocalStore(/proc/self/fd/N) cannot follow a replacement of
+                # the named child or its parent.
+                _build_geff(
+                    LocalStore(Path(f"/proc/self/fd/{temporary_descriptor}")),
+                    parsed[sample_id],
+                    overwrite=False,
+                )
+                if _fd_identity(temporary_descriptor) != temporary_identity:
+                    raise OSError("temporary GEFF identity changed during serialization")
+                temporary_stat = os.stat(
+                    temporary.name,
+                    dir_fd=build_parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    temporary_stat.st_dev,
+                    temporary_stat.st_ino,
+                ) != temporary_identity or not stat.S_ISDIR(temporary_stat.st_mode):
                     raise OSError("temporary GEFF identity changed before publication")
-                if _entry_identity(output_root) != output_root_identity:
-                    raise OSError("prediction output root identity changed during publication")
-                _rename_noreplace(temporary, final)
-                published_identity = _entry_identity(final)
-                if published_identity != temporary_identity:
+                if _fd_identity(build_parent_descriptor) != build_parent_identity:
+                    raise OSError("GEFF build parent identity changed during serialization")
+                if _entry_identity_at(build_parent_descriptor, ".") != build_parent_identity:
+                    raise OSError("GEFF build parent identity changed before publication")
+                if output_root_descriptor is None or output_root_fd_identity is None:
+                    raise OSError("prediction output root descriptor is unavailable")
+                _assert_owned_root(
+                    output_root,
+                    output_root_descriptor,
+                    output_root_fd_identity,
+                    stage="during publication",
+                )
+                _rename_noreplace_at(
+                    build_parent_descriptor,
+                    temporary.name,
+                    output_root_descriptor,
+                    final.name,
+                )
+                if _fd_identity(temporary_descriptor) != temporary_identity:
                     raise OSError("temporary GEFF identity changed during publish")
+                published_identity = _entry_identity_at(output_root_descriptor, final.name)
+                _assert_owned_final_at(
+                    output_root_descriptor,
+                    final.name,
+                    temporary_identity,
+                    stage="during publish",
+                )
                 final_identity = published_identity
                 published[final] = final_identity
                 if on_published is not None:
                     on_published(final, final_identity)
-                if _entry_identity(output_root) != output_root_identity:
-                    raise OSError("prediction output root identity changed after publication")
-                _fsync_directory(output_root)
-                signature = _read_prediction_signature(final)
+                _assert_owned_final_at(output_root_descriptor, final.name, final_identity, stage="after callback")
+                _assert_owned_final(final, final_identity, stage="after callback")
+                if output_root_descriptor is None or output_root_fd_identity is None:
+                    raise OSError("prediction output root descriptor is unavailable")
+                _assert_owned_root(
+                    output_root,
+                    output_root_descriptor,
+                    output_root_fd_identity,
+                    stage="after publication",
+                )
+                if temporary_descriptor is None:
+                    raise OSError("temporary GEFF descriptor is unavailable")
+                _fsync_directory_fd(output_root_descriptor)
+                _assert_owned_final_at(output_root_descriptor, final.name, final_identity, stage="after fsync")
+                _assert_owned_final(final, final_identity, stage="after fsync")
+                _assert_owned_root(
+                    output_root,
+                    output_root_descriptor,
+                    output_root_fd_identity,
+                    stage="after fsync",
+                )
+                signature = _read_prediction_signature(
+                    LocalStore(Path(f"/proc/self/fd/{temporary_descriptor}"))
+                )
                 expected_signature = {
                     "nodes": {
                         int(node_id): (
@@ -435,11 +617,24 @@ def postprocessed_csv_to_geffs(
                 signature["edges"] = sorted(signature["edges"])
                 if signature != expected_signature:
                     raise ValueError("GEFF roundtrip is not lossless for CSV topology or coordinates")
+                _assert_owned_final_at(output_root_descriptor, final.name, final_identity, stage="after roundtrip")
+                _assert_owned_final(final, final_identity, stage="after roundtrip")
+                _assert_owned_root(
+                    output_root,
+                    output_root_descriptor,
+                    output_root_fd_identity,
+                    stage="after roundtrip",
+                )
             except BaseException:
                 _cleanup_owned_build(build_parent, build_parent_identity, temporary, temporary_identity)
                 _remove_owned_directory(final, final_identity)
                 published.pop(final, None)
                 raise
+            finally:
+                if temporary_descriptor is not None:
+                    os.close(temporary_descriptor)
+                if build_parent_descriptor is not None:
+                    os.close(build_parent_descriptor)
             _cleanup_owned_build(build_parent, build_parent_identity, temporary, temporary_identity)
             written[sample_id] = final
     except BaseException:
@@ -449,10 +644,13 @@ def postprocessed_csv_to_geffs(
             _remove_owned_directory(path, identity)
         _remove_owned_empty_directory(output_root, output_root_identity)
         raise
+    finally:
+        if output_root_descriptor is not None:
+            os.close(output_root_descriptor)
     return written
 
 
-def _read_prediction_signature(path: Path) -> dict[str, object]:
+def _read_prediction_signature(path: Any) -> dict[str, object]:
     import tracksdata as td
 
     loaded = td.graph.IndexedRXGraph.from_geff(path)
