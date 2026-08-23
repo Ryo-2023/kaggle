@@ -1,11 +1,13 @@
 # Biohub Cell Tracking — ChatGPT報告用・全結果統合版
 
 初版作成日: 2026-08-21（JST）
-最終更新日: 2026-08-23（JST）
+最終更新日: 2026-08-24（JST）
 対象: Kaggle **Biohub – Cell Tracking During Development**
 現在の性能改善ブランチ: `codex/biohub-095-performance`
 履歴上のraceブランチ: `codex/biohub-multi-method-race`
-本レポート更新直前の0.95 campaign remote HEAD: `e713a16`（Task4実装の`42f9181`/`45423b0`、predictor SHA修正`421eedf`、固定6-frame smoke contract `e713a16`はpush済み。Task3.5時点の`e56e561`から更新）
+本レポート更新時点のローカルHEAD: `cedf36e`（Task5 fix round 3完了、未push・未採用。Task4 `910419a`、Task5 `dd5ecbe`、`03ad7a2`も未push）
+本レポート更新時点のremote latest: `3d67669`（固定6-frame承認後の日本語レポート更新、push済み）
+固定6-frame smoke contract: `e713a16`（push済み。Task4実装`42f9181`/`45423b0`、predictor SHA修正`421eedf`を含む）
 Task1実装完了時のコードHEAD: `17135f0`
 Task2実装完了時のlocal HEAD: `e1416e4`
 本レポートが対象とするvalidation receipt実装commit: `fbfbf26`
@@ -28,7 +30,8 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 - 追加のNMS仮説（3.0→3.5 µm）は `0.9172062183593925` を得て、固定blob lane比 `+0.0031288920747277`。ただし単一sampleでharmonic v1未達のため、複数sample検証前の昇格候補として扱う。
 - `cc_flow` は detector の node recall が低く不採用、`motion_lap` は blob単独より悪化した。
 - HOCT、Trackastra、Ultrack、Linajea、DeepCenterは、入力契約・依存・checkpoint・source確認の不足により、今回の公式スコア比較には含めていない。
-- Task4のround-4/round-5 code reviewと固定6-frame smoke contractのfresh reviewは **APPROVED**。実画像2-frame smokeはGT-freeで実施し、0-nodeの根因はILPのraw段階における2-frame smoke horizonとの数学的非互換と確定した（postprocess/bridge未到達）。再smoke前に、ユーザー追加要件のstage別GT-free diagnosticsを実装中である。Recipe Cの本repo公式スコアはまだ得ていない。
+- Task4のround-4/round-5 code reviewと固定6-frame smoke contractのfresh reviewは **APPROVED**。実画像2-frame smokeはGT-freeで実施し、0-nodeの根因はILPのraw段階における2-frame smoke horizonとの数学的非互換と確定した（postprocess/bridge未到達）。stage diagnostics fix `910419a` はSol fresh `101/369 passed`、scope rereview **APPROVED（9/9 addressed、open/new 0）**、code gate承認済みである。ただし実6-frame smokeとCUDA A/Bは未実施で、`910419a`は未push・未採用である。CPU/CUDA監査では、upstreamのCUDA hard guard、adapterの`CUDA → MPS → CPU`選択、現DockerのCPU-only実測を確認し、`cuda_equivalence_validated=false`を維持する。Recipe Cの本repo公式スコアはまだ得ていない。
+- Task5 fix round 3 commit `cedf36e` は独立レビューで **APPROVED**（3/3 addressed、open 0、新規P0/P1/P2 0）となり、code gateを完了した。root fresh関連 `281 passed`、full `805 passed, 9 skipped, 5 warnings`、Ruff/py_compile/scoped diffはpassした。ただしCLI統合、実GT/metric、実6-frame smoke、固定5件は未実行で、`cedf36e`は未push・未採用である。
 
 ### 1.1 0.95 Performance Goalの現在地
 
@@ -45,7 +48,11 @@ Task2実装完了時のlocal HEAD: `e1416e4`
 | 固定config | `recipe_c_motion_off_edge_0_40_det0_96875.yaml`、SHA-256 `0e5758f3ea76ba015fb71c35bc749e136c009237e093d544a89a4b03a8c66ced` |
 | Recipe C source側5件参考macro（非公式・未測定） | `0.9560058787896148`（`official-spec-lite` recordsの算術平均。本repoの公式metricでは未再現） |
 | 本repoの0.95判定 | **未評価・未達成扱い**。実prediction GEFFとvendored official receiptが揃うまで合格としない |
-| 現在の作業 | Task1〜Task3.5完了。Task4 fixed6 contract `e713a16`はpush済み、fresh review APPROVED。root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）で、Ruff/compile/`git diff --check`もpass。2-frame根因はILP raw段階で確定し、再smoke前のstage別GT-free diagnosticsを実装中（未commit・未pass）。Task5 metric boundary初版はfresh review NOT APPROVEDでhardening中 |
+| Task4 fixed6契約 | `e713a16`（push済み）。fresh review **APPROVED**、root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（bool/float追加前）を確認済み |
+| Task4 stage diagnostics | `910419a`。Sol fresh `101/369 passed`。scope rereview **APPROVED（9/9 addressed、open/new 0）**、code gate承認済み、未push・未採用。実6-frame smoke/CUDA A/Bは未実施 |
+| CPU/CUDA受入 | 現Dockerは`torch 2.13.0+cpu`、CUDA 0台、MPSなし。2-frameが0-nodeで6-frame成功前のため`CPU_PORTABLE`未成立、A/B・CUDA数値同値・性能同値は未検証、`cuda_equivalence_validated=false` |
+| Task5 metric boundary | `cedf36e`でfix round 3完了。独立レビュー `3/3 ADDRESSED`、open 0、新規P0/P1/P2 0、**APPROVED**。root fresh関連 `281 passed`、full `805 passed, 9 skipped, 5 warnings`、Ruff/py_compile/scoped diff pass。code gate完了、未push・未採用 |
+| 現在の待機 | CLI統合、実GT/metric、実6-frame smoke、固定5件、CUDA A/Bを待機。旧FAILED/lock/outputは再利用しない |
 
 source側参考値は次のとおりである。0bのAdjusted値が1を超えることも含め、source recordをそのまま参照値として記録し、本repoの公式実測と混ぜない。
 
@@ -386,7 +393,11 @@ docker compose exec -T -w /workspace/biohub-cell-tracking-during-development/scr
 - historical race branch: `codex/biohub-multi-method-race`
 - current performance branch: `codex/biohub-095-performance`
 - 0.95 campaignの初期設計・計画commit: `de582ef`
-- 本レポート更新前に確認したremote commit: `e713a16`（Task4実装`42f9181`/`45423b0`、predictor SHA修正`421eedf`、固定6-frame smoke contract `e713a16`はpush済み）
+- 本レポート更新時点のlocal HEAD: `cedf36e`（Task5 fix round 3完了、未push・未採用）
+- Task4 stage diagnostics fix commit: `910419a`（scope rereview APPROVED、未push・未採用）
+- Task5 metric boundary commits: `dd5ecbe`（元9件closed）、`03ad7a2`（device P1 closed）、`cedf36e`（fix round 3、独立review APPROVED、未push・未採用）
+- 本レポート更新時点のremote latest: `3d67669`（固定6-frame承認後の日本語レポート更新、push済み）
+- 固定6-frame smoke contract: `e713a16`（push済み。Task4実装`42f9181`/`45423b0`、predictor SHA修正`421eedf`を含む）
 - Task3.5完了時点のremote commit: `e56e561`
 - Task1実装完了時のコードHEAD: `17135f0`
 - Task1完了履歴: `2a60cc0`、`87cf762`、`6887576`、`17135f0`
@@ -450,19 +461,19 @@ Kaggleへの外部提出は実施していない。prediction生成・local offi
 4. 旧official receiptにはraw candidate count/digestがなく、detector driftを完全には比較できない。detector-fixed cacheはcandidate digestとcache hashを保存している。
 5. official upstreamのconfigにpool kernel `5.0`とrun報告`3.0`の設定差があるが、現panelでは実効kernelが同じである。
 6. high-level viewerの`matched_node_id` / `match_node_id`不一致でGUI表示は未完了。ただしheadless overlay evidenceは保存済み。
-7. 現行Dockerの全laneはCPU-only。detector-fixedはCUDA→MPS→CPUの自動fallbackを実装済みだが、GPU実測性能はまだ主張していない。
-8. 公開Recipe Cは非公式・未測定のsource側参考macro `0.9560058787896148` があるが、本repoのvendored official metricは未取得である。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値もない。
+7. 現行Dockerは`torch 2.13.0+cpu`、CUDA 0台、MPS build/availableなしである。upstreamのCUDA hard guardは維持され、adapterだけが`CUDA → MPS → CPU`を選択する。2-frameは0-nodeで、固定6-frameの成功前なので`CPU_PORTABLE`は未成立、A/BによるCUDA output/numeric/performance同値も未検証であり、`cuda_equivalence_validated=false`を記録する。
+8. 公開Recipe Cはsource側参考macro `0.9560058787896148`があるが、これは公式実測ではなく未測定の参考値である。本repoのRecipe C公式metric、5 sample macro、0.95達成は未評価・未達成である。HOCT/Trackastra/Ultrack/Linajea/DeepCenterの性能数値もない。
 9. Kaggle competitionはnotebook-only submissionである。ローカルprediction生成は外部提出許可を意味せず、GPU runtimeとoffline packagingは未検証である。
 
 ### 次の一手
 
-1. GT-free direct diagnosticでdetector出力とILP objectiveを確認し、2-frame smoke horizonとILPの数学的非互換を0-nodeの根因として確定した。根因はILPのraw段階であり、postprocess/bridgeには到達していない。threshold、blank input、bridge消失を追加原因としない。
-2. sourceの`output_min_track_len=6`を根拠に固定6-frame smoke contractを`e713a16`で固定し、fresh review **APPROVED**、root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）、Ruff/compile/`git diff --check` passを確認した。再smoke前にユーザー追加要件のstage別GT-free diagnosticsを実装中（未commit・未pass）である。
-3. stage別diagnosticsと6-frame smokeがGT-freeで成功した後、新しいclean commit・selection lock・outputを作り、固定5 sampleを除外なし・逐次で推論し、各prediction GEFF/manifestをhash検証する。既存の失敗lock/outputは不変のまま保持する。
+1. GT-free direct diagnosticで、detector local peaksが`t0=217`、`t1=220`、合計`437`、candidate edge`213`であることを確認した。fixed ILP cost（edge `-p`、appearance `0`、disappearance `1.575`）では2-frameのtrack costが正となり、all-zero objectiveが最適になる。sourceの`output_min_track_len=6`とも整合せず、0-nodeの根因は2-frame horizonとILPの数学的非互換であり、postprocess/bridgeには到達していない。
+2. 固定6-frame smoke contractは`e713a16`で固定済み、承認後のレポートcommitは`3d67669`である。Task4 diagnostics fix `910419a`はscope rereview **APPROVED（9/9 addressed、open/new 0）**だが、実6-frame smokeとCUDA A/Bは未実施である。Task5 fix round 3 commit `cedf36e`は独立レビュー **APPROVED（3/3 addressed、open 0、新規P0/P1/P2 0）**でcode gate完了となった。
+3. 次にCLI統合、実GT/metric、実6-frame smoke、固定5件、CUDA A/Bを、承認済み境界と新しいclean lock/outputで検証する。旧FAILED/lock/outputは再利用せず、各prediction GEFF/manifestをhash検証する。
 4. 全5件の永続化・hash検証後にだけGTを開き、vendored official metricで評価する。GTは同じrunの推論、feature、cache、candidate、association input、parameter fitting、current-run branch調整へ戻さない。
 5. 本repoの実測macro `>=0.95` のreceiptが得られるまで、Recipe C参考値 `0.9560058787896148` を達成値とせず、0.95は未評価・未達成扱いにする。
 
-現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証とTask4 fixed6 contract reviewは完了したが、stage別GT-free diagnosticsは未pass、Task5 metric boundary初版はfresh review **NOT APPROVED** でhardening中である。Recipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
+現時点での採用判断は、**旧race全体Bestはharmonic v1、旧race新規Bestはblob_lap、detector-fixedの5 sampleではharmonic_v1が5/5でofficial ILPを上回った**である。Task1〜Task3.5の契約・境界検証とTask4 diagnostics scope review、Task5 metric boundary code gateは完了したが、実6-frame smoke/CUDA A/B、CLI統合、実GT/metric、固定5件は未実施である。Task5 `cedf36e`の独立reviewは **APPROVED**だが、local commitは未push・未採用である。Recipe Cの本repo公式評価は未実施、0.95は未評価・未達成扱いである。division対応も未解決である。
 
 ## 13. 2026-08-21 追補 — detector-fixed race とGPU自動選択
 
@@ -692,9 +703,9 @@ Task3.5は、`02a0b7f` の fd-backed derived publisher に、同一inode・同�
 
 root fresh verificationは source/protocol/staging combined `211 passed`、同時進行中のTask4 testsを明示除外したfull相当 `604 passed, 9 skipped, 2 warnings`、Ruff/compile passだった。今回のpayloadはcompileable smoke predictorとexact PANEL_V1 splitsであり、GT、画像/Zarr、実推論、official metric、Task4 full runnerは実行していない。したがって0.95は引き続き **未評価・未達成** である。
 
-## 23. Task4 Recipe C actual smoke 最新状態（2026-08-23更新）
+## 23. Task4 Recipe C actual smoke 最新状態（2026-08-24更新）
 
-Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を `42f9181`、data-role修正を `45423b0` としてpush済みである。predictor SHAの63桁記載は`421eedf`で正しい64桁 `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`へ修正済みであり、固定6-frame smoke contract `e713a16`もpush済みである。fixed6 contractのfresh reviewは **APPROVED**。root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）で、Ruff、compile、`git diff --check`もpassした。round-4/5の旧suite結果（targeted `123 passed` / `68 passed`、combined `335 passed`、full `727`→`728 passed`）は履歴として保持する。
+Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を `42f9181`、data-role修正を `45423b0` としてpush済みである。predictor SHAの63桁記載は`421eedf`で正しい64桁 `c44e771ba5980b820f93091e03a303c25dfe8f3232e501f54dc9565731c234b9`へ修正済みであり、固定6-frame smoke contract `e713a16`もpush済みである。fixed6 contractのfresh reviewは **APPROVED**、承認後の日本語レポート更新commitは `3d67669` である。root targeted `138 passed`、review combined `192 passed`、agent full `740 passed, 9 skipped`（fullはbool/float追加前）で、Ruff、compile、`git diff --check`もpassした。round-4/5の旧suite結果（targeted `123 passed` / `68 passed`、combined `335 passed`、full `727`→`728 passed`）は履歴として保持する。
 
 初回production freezeはDocker worktreeの`.git`がhostの絶対worktree pathを指すGit環境衝突でHEAD読取に失敗し、production selection lockは生成されなかった。この失敗をlockありとして扱わず、後続commitごとにwrite-once lockを新規作成した。
 
@@ -709,18 +720,40 @@ Task4 round-4/round-5のcode gateはともに **APPROVED** で、対象実装を
 
 ### 23.1 GT-free zero-node direct diagnostic（2026-08-23更新）
 
-同一weightsを使ったGT-free・先頭2-frameのdirect diagnosticでは、locked threshold `0.96875` を超えるdetector local peaksが `t0=217`、`t1=220`、合計nodes `437`、candidate edges `213` だった。all probability maxも `t0=0.9999966621`、`t1=0.9999970198` であり、threshold、blank input、bridge消失が原因ではない。
+同一weightsを使ったGT-free・先頭2-frameのdirect diagnosticでは、locked threshold `0.96875` を超えるdetector local peaksが `t0=217`、`t1=220`、合計nodes `437`、candidate edges `213` だった。all probability maxも `t0=0.9999966621`、`t1=0.9999970198` であり、threshold、blank input、bridge消失が原因ではない。source configの`output_min_track_len`は`6`である。
 
 exact Recipe C ILPは edge cost `-p`、appearance `0`、disappearance `1.575` である。2-frameの1-edge trackは `cost >= -1 + 1.575 = 0.575 > 0`、isolated nodeとdivisionも正コストとなるため、all-zero objective `0` が有利になる。raw GEFFが0-nodeとなる根因は、2-frame smoke horizonがILPと数学的に非互換なことであり、postprocess/bridgeには未到達だった。
 
 同じsolver設定を使うGT-free synthetic確認でも、2-node/1-edge chainは `0 nodes / 0 edges`、6-node/5-edge chainは `6 nodes / 5 edges` となり、目的関数の説明と実挙動が一致した。
 
-device policyは `CUDA → MPS → CPU` の優先順で、requestは`auto`。現行`biohub-dev`はCPU-onlyのため、実際のsmokeおよび今回の診断実測はCPUであり、CPU/CUDA同値は未検証でGPU性能も主張しない。sourceの`output_min_track_len=6`を根拠とする固定6-frame smoke contractは`e713a16`で固定済みだが、再smoke前にstage別GT-free diagnosticsを実装中（未commit・未pass）である。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
+CPU/CUDA監査では、upstream notebookのCUDA hard guard（CUDA unavailableなら推論前に停止）を確認した。adapterはupstreamの計算・config・threshold・ILPを変更せず、device選択だけを`CUDA → MPS → CPU`へ拡張する。現行`biohub-dev`は`torch 2.13.0+cpu`、`torch.version.cuda=None`、CUDA 0台、MPS build/availableなしであり、実際のsmokeと診断はCPUである。2-frameは0-nodeで固定6-frameの成功前なので`CPU_PORTABLE`は未成立、CUDA output/numeric/performance同値も未検証で、receiptの`cuda_equivalence_validated=false`を維持する。
+
+A/B受入の要件は、同一input/config/checkpoint、CPU/CUDA child token、detector count・candidate pair set・ILP topology・final GEFF semantic outputの一致、logit/edge scoreの許容差、repeat determinismを確認することである。CUDA実行とこのA/Bは未実施であり、数値・性能同値を主張しない。sourceの`output_min_track_len=6`を根拠とする固定6-frame smoke contractは`e713a16`で固定済みである。stage diagnostics fix `910419a`はSol fresh `101/369 passed`、scope rereview **APPROVED（9/9 addressed、open/new 0）**、code gate承認済みだが、未push・未採用である。GT/official metricは5件すべてのprediction GEFF/manifest永続化・hash検証後だけに行う。
+
+| 受入レベル / 項目 | 現時点の判定 |
+|---|---|
+| `CPU_PORTABLE` | 未成立（2-frame 0-node、6-frame成功なし） |
+| `CUDA_OUTPUT_EQUIVALENT` | 未検証（CUDA child/A-B未実施） |
+| `CUDA_NUMERIC_EQUIVALENT` | 未検証（logit/score全列・repeat未実施） |
+| `cuda_equivalence_validated` | `false` |
+
+### 23.2 Stage diagnostics実装と独立レビュー（2026-08-24更新）
+
+`79b6da4`でstage別GT-free diagnosticsを実装し、Sol fresh検証は `87/378 passed` だった。fix commit `910419a`後のSol fresh検証は `101/369 passed`、scope rereviewは **APPROVED（9/9 addressed、open/new 0）**、code gateも承認済みである。ただし`910419a`は未push・未採用で、実6-frame smokeとCUDA A/Bは未実施である。前回レビューの要点は全件対応済みである。
+
+- exact traceの順序・件数。
+- shadow traceの順序。
+- source round semantics。
+- detector / candidate / ILPのframe別記録。
+- zero GT count。
+- missing trace fallback。
+- real reload。
+- source before/after identity。
 
 Current BestKnownは既存実測の `0.7944143977140719`、target gapは `0.1555856022859281` のままである。Recipe C source側の `0.9560058787896148` は非公式・未測定の参考値であり、本repoの0.95到達値ではない。従って本repoの0.95目標は **未評価・未達成** である。
 
-## 24. Task5 metric boundary 最新状態（2026-08-23更新）
+## 24. Task5 metric boundary 最新状態（2026-08-24更新）
 
-Task5 metric boundary初版はfresh reviewで **NOT APPROVED** だった。実manifest不整合、guard外でのGT reopen、pin順序、lock bypass、receipt clobber、aggregate tamperを確認し、現在hardening中である。official metricおよびGT実データ評価はまだ実施していない。
+Task5 fix round 3 commitは `cedf36e` である。独立レビュー報告 `.superpowers/sdd/2026-08-22-biohub-095-performance/task-5-fix-round3-rereview.md` は **3/3 ADDRESSED、open 0、新規P0/P1/P2 0、APPROVED** と判定し、Task5 code gateは完了した。root fresh関連は `281 passed`、fullは `805 passed, 9 skipped, 5 warnings`、Ruff・py_compile・scoped diffはpassした。`dd5ecbe`（元9件closed）と`03ad7a2`（device P1 closed）を経た最終fixであり、`cedf36e`は未push・未採用である。
 
-再smokeは、ユーザー追加要件のstage別GT-free diagnosticsを実装・検証した後に行う。既存の失敗lock/outputは不変のまま保持し、新しいcommit・new lock・new outputで固定6-frame smokeを再実行する。CPU/CUDA同値は未検証で、device policyは引き続き `CUDA → MPS → CPU` である。
+ただし、CLI統合、実GT/metric、実6-frame smoke、固定5件、CUDA A/Bは未実行である。BestKnownは `0.7944143977140719`、Recipe Cの本repo公式値は未測定、0.95は未達成扱いを維持する。次の実行では、承認済みTask5境界を使い、新しいclean lock/outputで実データ検証を行う。旧FAILED/lock/outputは不変のまま保持し、再利用しない。
